@@ -1,3 +1,6 @@
+# don't check my config file into public Git
+config.json
+
 # Object files
 *.o
 *.ko

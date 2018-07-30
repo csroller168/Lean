@@ -1,5 +1,5 @@
 # don't check my config file into public Git
-config.json
+*.json
 
 # Object files
 *.o

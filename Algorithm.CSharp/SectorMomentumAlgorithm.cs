@@ -15,7 +15,8 @@
 
 using System.Collections.Generic;
 using QuantConnect.Data;
-using QuantConnect.Interfaces;
+using QuantConnect.Indicators;
+using System.Linq;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -25,40 +26,61 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="using data" />
     /// <meta name="tag" content="using quantconnect" />
     /// <meta name="tag" content="trading and orders" />
-    public class SectorMomentumAlgorithm : QCAlgorithm, IRegressionAlgorithmDefinition
+    public class SectorMomentumAlgorithm : QCAlgorithm //, IRegressionAlgorithmDefinition
     {
-        private Symbol _spy = QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA);
-        private Symbol _iym = QuantConnect.Symbol.Create("IYM", SecurityType.Equity, Market.USA);
-        private Symbol _iyc = QuantConnect.Symbol.Create("IYC", SecurityType.Equity, Market.USA);
-        private Symbol _iyk = QuantConnect.Symbol.Create("IYK", SecurityType.Equity, Market.USA);
-        private Symbol _iye = QuantConnect.Symbol.Create("IYE", SecurityType.Equity, Market.USA);
-        private Symbol _iyf = QuantConnect.Symbol.Create("IYF", SecurityType.Equity, Market.USA);
-        private Symbol _iyh = QuantConnect.Symbol.Create("IYH", SecurityType.Equity, Market.USA);
-        private Symbol _iyr = QuantConnect.Symbol.Create("IYR", SecurityType.Equity, Market.USA);
-        private Symbol _iyw = QuantConnect.Symbol.Create("IYW", SecurityType.Equity, Market.USA);
-        private Symbol _idu = QuantConnect.Symbol.Create("IDU", SecurityType.Equity, Market.USA);
+        public Language[] Languages { get; } = { Language.CSharp, Language.Python };
 
+        private int FastPeriod = 50;
+        private int SlowPeriod = 200;
+        private int MaxNumPositions = 6;
 
-        /// <summary>
-        /// Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.
-        /// </summary>
+        private string _benchmarkStr = "SPY";
+        private string[] _universeStr = {
+            "IYM",
+            "IYC",
+            "IYK",
+            "IYE",
+            "IYF",
+            "IYH",
+            "IYR",
+            "IYW",
+            "IDU"
+        };
+
+        private Symbol _benchmark;
+        private Dictionary<string, Symbol> _universe;
+
+        private Dictionary<string,SimpleMovingAverage> _fastUniverse;
+        private Dictionary<string, SimpleMovingAverage> _slowUniverse;
+        private SimpleMovingAverage _fastBenchmark;
+        private SimpleMovingAverage _slowBenchmark;
+
+        private bool IsMarketFavorable => _fastBenchmark > _slowBenchmark;
+
         public override void Initialize()
         {
-            SetStartDate(2013, 10, 07);
-            SetEndDate(2013, 10, 11);
+            SetStartDate(2015, 1, 02);
+            SetEndDate(2015, 10, 30);
             SetCash(100000);
 
-            // Find more symbols here: http://quantconnect.com/data
-            AddEquity("SPY", Resolution.Hour);
-            AddEquity("IYM", Resolution.Hour);
-            AddEquity("IYC", Resolution.Hour);
-            AddEquity("IYK", Resolution.Hour);
-            AddEquity("IYE", Resolution.Hour);
-            AddEquity("IYF", Resolution.Hour);
-            AddEquity("IYH", Resolution.Hour);
-            AddEquity("IYR", Resolution.Hour);
-            AddEquity("IYW", Resolution.Hour);
-            AddEquity("IDU", Resolution.Hour);
+            // Add benchmark
+            _benchmark = QuantConnect.Symbol.Create(_benchmarkStr, SecurityType.Equity, Market.USA);
+            _fastBenchmark = new SimpleMovingAverage(_benchmark.Value, FastPeriod);
+            _slowBenchmark = new SimpleMovingAverage(_benchmark.Value, SlowPeriod);
+            AddEquity(_benchmarkStr, Resolution.Hour);
+
+            // Add universe
+            _universe = new Dictionary<string, Symbol>();
+            _fastUniverse = new Dictionary<string, SimpleMovingAverage>();
+            _slowUniverse = new Dictionary<string, SimpleMovingAverage>();
+            foreach(var ticker in _universeStr)
+            {
+                var symbol = QuantConnect.Symbol.Create(ticker, SecurityType.Equity, Market.USA);
+                _universe[symbol.Value] = symbol;
+                _fastUniverse[symbol.Value] = new SimpleMovingAverage(symbol.Value, FastPeriod);
+                _slowUniverse[symbol.Value] = new SimpleMovingAverage(symbol.Value, SlowPeriod);
+                AddEquity(ticker, Resolution.Hour);
+            }
         }
 
         /// <summary>
@@ -67,51 +89,76 @@ namespace QuantConnect.Algorithm.CSharp
         /// <param name="slice">Slice object keyed by symbol containing the stock data</param>
         public override void OnData(Slice slice)
         {
+            // TODO: Cancel open orders and pair new ones with trailing stop
+            // TODO: warm sma?
+
             // Rebalance once per week
             if (Time.DayOfWeek != System.DayOfWeek.Monday)
                 return;
 
-            // Sell all in unfavorable market (spy sma(50) <= sma(200))
-            // Pick top 6 ranked by momentum (SMA(50) / SMA(200) where SMA(50) > SMA(200)
-            // Invest 100% of portfolio divided equally between picks
-
-            if (!Portfolio.Invested)
+            // Sell all if market momentum is down
+            if (!IsMarketFavorable)
             {
-                SetHoldings(_spy, 1);
-                Debug("Purchased Stock");
+                foreach (var symbol in Portfolio.Keys)
+                    Liquidate(symbol);
+                return;
+            }
+
+            // Figure out what to buy
+            var momentums = new Dictionary<string, decimal>();
+            foreach(KeyValuePair<string, Symbol> entry in _universe)
+            {
+                momentums[entry.Key] = _fastUniverse[entry.Value.Value] / _slowUniverse[entry.Value.Value];
+            }
+
+            var stocksToBuy = momentums
+                .Where(kvp => kvp.Value > 1)
+                .OrderByDescending(kvp => kvp.Value)
+                .Take(MaxNumPositions)
+                .Select(kvp => kvp.Key);
+
+            // Sell anything we aren't going to buy
+            Portfolio
+                .Keys
+                .Where(symbol => !stocksToBuy.Contains(symbol.Value))
+                .ToList()
+                .ForEach(symbol => Liquidate(symbol));
+
+            // Rebalance
+            foreach(var ticker in stocksToBuy)
+            {
+                var pct = 1.0 / stocksToBuy.Count();
+                var symbol = _universe[ticker];
+                SetHoldings(symbol, pct);
+                Debug("Buy " + ticker);
             }
         }
 
         /// <summary>
-        /// This is used by the regression test system to indicate which languages this algorithm is written in.
-        /// </summary>
-        public Language[] Languages { get; } = { Language.CSharp, Language.Python };
-
-        /// <summary>
         /// This is used by the regression test system to indicate what the expected statistics are from running the algorithm
         /// </summary>
-        public Dictionary<string, string> ExpectedStatistics => new Dictionary<string, string>
-        {
-            // TBD
-            {"Total Trades", "1"},
-            {"Average Win", "0%"},
-            {"Average Loss", "0%"},
-            {"Compounding Annual Return", "264.583%"},
-            {"Drawdown", "2.200%"},
-            {"Expectancy", "0"},
-            {"Net Profit", "1.668%"},
-            {"Sharpe Ratio", "4.41"},
-            {"Loss Rate", "0%"},
-            {"Win Rate", "0%"},
-            {"Profit-Loss Ratio", "0"},
-            {"Alpha", "0.007"},
-            {"Beta", "76.354"},
-            {"Annual Standard Deviation", "0.193"},
-            {"Annual Variance", "0.037"},
-            {"Information Ratio", "4.354"},
-            {"Tracking Error", "0.193"},
-            {"Treynor Ratio", "0.011"},
-            {"Total Fees", "$3.27"}
-        };
+        //public Dictionary<string, string> ExpectedStatistics => new Dictionary<string, string>
+        //{
+        //    // TBD
+        //    {"Total Trades", "1"},
+        //    {"Average Win", "0%"},
+        //    {"Average Loss", "0%"},
+        //    {"Compounding Annual Return", "264.583%"},
+        //    {"Drawdown", "2.200%"},
+        //    {"Expectancy", "0"},
+        //    {"Net Profit", "1.668%"},
+        //    {"Sharpe Ratio", "4.41"},
+        //    {"Loss Rate", "0%"},
+        //    {"Win Rate", "0%"},
+        //    {"Profit-Loss Ratio", "0"},
+        //    {"Alpha", "0.007"},
+        //    {"Beta", "76.354"},
+        //    {"Annual Standard Deviation", "0.193"},
+        //    {"Annual Variance", "0.037"},
+        //    {"Information Ratio", "4.354"},
+        //    {"Tracking Error", "0.193"},
+        //    {"Treynor Ratio", "0.011"},
+        //    {"Total Fees", "$3.27"}
+        //};
     }
 }

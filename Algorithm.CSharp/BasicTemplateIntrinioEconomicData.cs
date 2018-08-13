@@ -46,6 +46,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         private CompositeIndicator<IndicatorDataPoint> _spread;
 
+        private ExponentialMovingAverage _emaWti;
+
         /// <summary>
         ///     Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All
         ///     algorithms must initialized.
@@ -69,6 +71,8 @@ namespace QuantConnect.Algorithm.CSharp
             AddData<IntrinioEconomicData>(IntrinioEconomicDataSources.Commodities.CrudeOilWTI, Resolution.Daily);
             AddData<IntrinioEconomicData>(IntrinioEconomicDataSources.Commodities.CrudeOilBrent, Resolution.Daily);
             _spread = _brent.Minus(_wti);
+
+            _emaWti = EMA(Securities[IntrinioEconomicDataSources.Commodities.CrudeOilWTI].Symbol, 10);
         }
 
         /// <summary>
@@ -99,11 +103,16 @@ namespace QuantConnect.Algorithm.CSharp
                     new[] {"higher", "long", "short"} :
                     new[] {"lower", "short", "long"};
 
-                Log($"Brent Price is {logText[0]} than West Texas. Go {logText[1]} BNO and {logText[2]} USO.");
+                Log($"Brent Price is {logText[0]} than West Texas. Go {logText[1]} BNO and {logText[2]} USO. West Texas EMA: {_emaWti}");
                 SetHoldings(_bno, 0.25 * Math.Sign(_spread));
                 SetHoldings(_uso, -0.25 * Math.Sign(_spread));
             }
         }
+
+        /// <summary>
+        /// This is used by the regression test system to indicate if the open source Lean repository has the required data to run this algorithm.
+        /// </summary>
+        public bool CanRunLocally { get; } = true;
 
         /// <summary>
         /// This is used by the regression test system to indicate which languages this algorithm is written in.
@@ -115,25 +124,25 @@ namespace QuantConnect.Algorithm.CSharp
         /// </summary>
         public Dictionary<string, string> ExpectedStatistics => new Dictionary<string, string>
         {
-            {"Total Trades", "90"},
+            {"Total Trades", "91"},
             {"Average Win", "0.09%"},
             {"Average Loss", "-0.01%"},
-            {"Compounding Annual Return", "0.292%"},
-            {"Drawdown", "21.900%"},
-            {"Expectancy", "1.847"},
-            {"Net Profit", "1.175%"},
-            {"Sharpe Ratio", "0.087"},
+            {"Compounding Annual Return", "5.732%"},
+            {"Drawdown", "21.500%"},
+            {"Expectancy", "1.846"},
+            {"Net Profit", "24.996%"},
+            {"Sharpe Ratio", "0.416"},
             {"Loss Rate", "68%"},
             {"Win Rate", "32%"},
-            {"Profit-Loss Ratio", "7.98"},
-            {"Alpha", "-0.019"},
-            {"Beta", "1.451"},
-            {"Annual Standard Deviation", "0.107"},
-            {"Annual Variance", "0.012"},
-            {"Information Ratio", "-0.093"},
-            {"Tracking Error", "0.107"},
-            {"Treynor Ratio", "0.006"},
-            {"Total Fees", "$98.99"}
+            {"Profit-Loss Ratio", "7.97"},
+            {"Alpha", "0.097"},
+            {"Beta", "-1.612"},
+            {"Annual Standard Deviation", "0.16"},
+            {"Annual Variance", "0.025"},
+            {"Information Ratio", "0.295"},
+            {"Tracking Error", "0.16"},
+            {"Treynor Ratio", "-0.041"},
+            {"Total Fees", "$102.64"}
         };
     }
 }

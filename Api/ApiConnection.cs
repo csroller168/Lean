@@ -16,6 +16,7 @@
 using System;
 using Newtonsoft.Json;
 using QuantConnect.API;
+using QuantConnect.Configuration;
 using QuantConnect.Logging;
 using QuantConnect.Orders;
 using RestSharp;
@@ -46,7 +47,8 @@ namespace QuantConnect.Api
         {
             _token = token;
             _userId = userId.ToString();
-            Client = new RestClient("https://www.quantconnect.com/api/v2/");
+            var apiUrl = Config.Get("cloud-api-url", "https://www.quantconnect.com/api/v2/");
+            Client = new RestClient(apiUrl);
         }
 
         /// <summary>
@@ -115,7 +117,7 @@ namespace QuantConnect.Api
             }
             catch (Exception err)
             {
-                Log.Error("Api.ApiConnection.TryRequest(): Failed to make REST request. Response content: " + responseContent + ", Error: " + err);
+                Log.Error($"Api.ApiConnection.TryRequest({request.Resource}): Failed to make REST request. Response content: {responseContent}, Error: {err}");
                 result = null;
                 return false;
             }

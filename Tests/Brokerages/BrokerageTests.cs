@@ -449,6 +449,8 @@ namespace QuantConnect.Tests.Brokerages
 
             PlaceOrderWaitForStatus(new MarketOrder(Symbol, GetDefaultQuantity(), DateTime.Now));
 
+            Thread.Sleep(3000);
+
             var after = Brokerage.GetAccountHoldings();
 
             var beforeHoldings = before.FirstOrDefault(x => x.Symbol == Symbol);
@@ -484,6 +486,7 @@ namespace QuantConnect.Tests.Brokerages
             // pick a security with low, but some, volume
             var symbol = Symbols.EURUSD;
             var order = new MarketOrder(symbol, qty, DateTime.UtcNow) { Id = 1 };
+            OrderProvider.Add(order);
             Brokerage.PlaceOrder(order);
 
             // pause for a while to wait for fills to come in

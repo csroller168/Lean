@@ -54,6 +54,11 @@ namespace QuantConnect.Algorithm.CSharp
         }
 
         /// <summary>
+        /// This is used by the regression test system to indicate if the open source Lean repository has the required data to run this algorithm.
+        /// </summary>
+        public bool CanRunLocally { get; } = true;
+
+        /// <summary>
         /// This is used by the regression test system to indicate which languages this algorithm is written in.
         /// </summary>
         public Language[] Languages { get; } = { Language.CSharp, Language.Python };
@@ -66,22 +71,22 @@ namespace QuantConnect.Algorithm.CSharp
             {"Total Trades", "1"},
             {"Average Win", "0%"},
             {"Average Loss", "0%"},
-            {"Compounding Annual Return", "247.299%"},
+            {"Compounding Annual Return", "246.000%"},
             {"Drawdown", "1.100%"},
             {"Expectancy", "0"},
-            {"Net Profit", "3.470%"},
+            {"Net Profit", "3.459%"},
             {"Sharpe Ratio", "6.033"},
             {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "0.698"},
-            {"Beta", "17.65"},
+            {"Alpha", "0.696"},
+            {"Beta", "17.597"},
             {"Annual Standard Deviation", "0.16"},
             {"Annual Variance", "0.026"},
             {"Information Ratio", "5.939"},
             {"Tracking Error", "0.16"},
             {"Treynor Ratio", "0.055"},
-            {"Total Fees", "$3.27"}
+            {"Total Fees", "$3.26"}
         };
     }
 }

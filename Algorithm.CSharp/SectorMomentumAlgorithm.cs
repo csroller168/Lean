@@ -1,22 +1,13 @@
 /*
- * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
- * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright Chris Short 2018
+ * All rights reserved
 */
 
 using System.Collections.Generic;
-using QuantConnect.Data;
+using QuantConnect.Data.Market;
 using QuantConnect.Indicators;
 using System.Linq;
+using System;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -28,6 +19,7 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="trading and orders" />
     public class SectorMomentumAlgorithm : QCAlgorithm //, IRegressionAlgorithmDefinition
     {
+        public bool CanRunLocally { get; } = true;
         public Language[] Languages { get; } = { Language.CSharp, Language.Python };
 
         private int FastPeriod = 50;
@@ -35,7 +27,7 @@ namespace QuantConnect.Algorithm.CSharp
         private int MaxNumPositions = 6;
 
         private string _benchmarkStr = "SPY";
-        private string[] _universeStr = {
+        private List<string> _universe = new List<string> {
             "IYM",
             "IYC",
             "IYK",
@@ -47,15 +39,93 @@ namespace QuantConnect.Algorithm.CSharp
             "IDU"
         };
 
-        private Symbol _benchmark;
-        private Dictionary<string, Symbol> _universe;
+        private Dictionary<string, ExponentialMovingAverage> _fastIndicators;
+        private Dictionary<string, ExponentialMovingAverage> _slowIndicators;
+        private DateTime _lastTradeDt;
+        private static readonly int RebalanceIntervalDays = 7;
+        private static readonly decimal Tolerance = 0.00015m;
 
-        private Dictionary<string,SimpleMovingAverage> _fastUniverse;
-        private Dictionary<string, SimpleMovingAverage> _slowUniverse;
-        private SimpleMovingAverage _fastBenchmark;
-        private SimpleMovingAverage _slowBenchmark;
+        private bool IsMarketFavorable => _fastIndicators[_benchmarkStr] > _slowIndicators[_benchmarkStr] * (1 + Tolerance);
 
-        private bool IsMarketFavorable => _fastBenchmark > _slowBenchmark;
+        public override void Initialize()
+        {
+            // TODO: Set commission
+            SetStartDate(2014, 1, 02);
+            SetEndDate(2015, 10, 30);
+            SetCash(100000);
+
+            // Add securities
+            AddSecurity(SecurityType.Equity, _benchmarkStr, Resolution.Daily);
+            _universe.ForEach(x => AddSecurity(SecurityType.Equity, x, Resolution.Daily));
+
+            // Add indicators
+            _fastIndicators = new Dictionary<string, ExponentialMovingAverage>
+            {
+                {"SPY", EMA(_benchmarkStr, FastPeriod, Resolution.Daily) }
+            };
+            _slowIndicators = new Dictionary<string, ExponentialMovingAverage>
+            {
+                {"SPY", EMA(_benchmarkStr, SlowPeriod, Resolution.Daily) }
+            };
+            foreach(var symbol in _universe) 
+            {
+                _fastIndicators.Add(symbol, EMA(symbol, FastPeriod, Resolution.Daily));
+                _slowIndicators.Add(symbol, EMA(symbol, SlowPeriod, Resolution.Daily));
+            }
+        }
+
+
+        /// <summary>
+        /// OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
+        /// </summary>
+        /// <param name="data">TradeBars IDictionary object with your stock data</param>
+        public void OnData(TradeBars data)
+        {
+            if (!_slowIndicators[_benchmarkStr].IsReady) 
+                return;
+
+            // only once per week
+            if ((Time.Date - _lastTradeDt.Date).Days < RebalanceIntervalDays) 
+                return;
+
+            if(IsMarketFavorable)
+            {
+                var momentums = new Dictionary<string, decimal>();
+                _universe.ForEach(x => momentums[x] = _fastIndicators[x] / _slowIndicators[x]);
+                var stocksToBuy = momentums
+                    .Where(kvp => kvp.Value > 1)
+                    .OrderByDescending(kvp => kvp.Value)
+                    .Take(MaxNumPositions)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                stocksToBuy.ForEach(x => Rebalance(x, 1.0 / stocksToBuy.Count));
+            }
+            else
+            {
+                _universe.ForEach(x => Rebalance(x, 0.0));
+            }
+
+            _lastTradeDt = Time;
+        }
+
+        private void Rebalance(string symbol, double pct)
+        {
+            if (pct > 0)
+            {
+                Log($"{Time.Date}: BUY {symbol} @ {Securities[symbol].Price}");
+                SetHoldings(symbol, pct);
+            }
+            else
+            {
+                if (Portfolio.ContainsKey(symbol))
+                {
+                    Log($"{Time.Date}: SELL {symbol} @ {Securities[symbol].Price}");
+                    Liquidate(symbol);
+                }
+            }
+        }
+
+        /*
 
         public override void Initialize()
         {
@@ -67,7 +137,7 @@ namespace QuantConnect.Algorithm.CSharp
             _benchmark = QuantConnect.Symbol.Create(_benchmarkStr, SecurityType.Equity, Market.USA);
             _fastBenchmark = new SimpleMovingAverage(_benchmark.Value, FastPeriod);
             _slowBenchmark = new SimpleMovingAverage(_benchmark.Value, SlowPeriod);
-            AddEquity(_benchmarkStr, Resolution.Hour);
+            AddEquity(_benchmarkStr, Resolution.Daily);
 
             // Add universe
             _universe = new Dictionary<string, Symbol>();
@@ -79,7 +149,7 @@ namespace QuantConnect.Algorithm.CSharp
                 _universe[symbol.Value] = symbol;
                 _fastUniverse[symbol.Value] = new SimpleMovingAverage(symbol.Value, FastPeriod);
                 _slowUniverse[symbol.Value] = new SimpleMovingAverage(symbol.Value, SlowPeriod);
-                AddEquity(ticker, Resolution.Hour);
+                AddEquity(ticker, Resolution.Daily);
             }
         }
 
@@ -93,7 +163,7 @@ namespace QuantConnect.Algorithm.CSharp
             // TODO: warm sma?
 
             // Rebalance once per week
-            if (Time.DayOfWeek != System.DayOfWeek.Monday)
+            if (Time.DayOfWeek != System.DayOfWeek.Tuesday)
                 return;
 
             // Sell all if market momentum is down
@@ -133,6 +203,9 @@ namespace QuantConnect.Algorithm.CSharp
                 Debug("Buy " + ticker);
             }
         }
+        */
+
+
 
         /// <summary>
         /// This is used by the regression test system to indicate what the expected statistics are from running the algorithm

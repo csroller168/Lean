@@ -87,7 +87,8 @@ namespace QuantConnect.Queues
                 MinuteLimit = Config.GetInt("symbol-minute-limit", 10000),
                 SecondLimit = Config.GetInt("symbol-second-limit", 10000),
                 TickLimit = Config.GetInt("symbol-tick-limit", 10000),
-                RamAllocation = int.MaxValue
+                RamAllocation = int.MaxValue,
+                MaximumDataPointsPerChartSeries =  Config.GetInt("maximum-data-points-per-chart-series", 4000)
             };
 
             //If this isn't a backtesting mode/request, attempt a live job.
@@ -101,6 +102,7 @@ namespace QuantConnect.Queues
                     HistoryProvider = Config.Get("history-provider", DefaultHistoryProvider),
                     DataQueueHandler = Config.Get("data-queue-handler", DefaultDataQueueHandler),
                     Channel = AccessToken,
+                    UserToken = AccessToken,
                     UserId = UserId,
                     ProjectId = ProjectId,
                     Version = Globals.Version,
@@ -131,6 +133,7 @@ namespace QuantConnect.Queues
                 Algorithm = File.ReadAllBytes(AlgorithmLocation),
                 HistoryProvider = Config.Get("history-provider", DefaultHistoryProvider),
                 Channel = AccessToken,
+                UserToken = AccessToken,
                 UserId = UserId,
                 ProjectId = ProjectId,
                 Version = Globals.Version,

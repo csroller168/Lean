@@ -14,15 +14,15 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="trading and orders" />
     public class IbIndicatorIntegrationTest : QCAlgorithm
     {
-        //private Symbol _spy = QuantConnect.Symbol.Create("IYM", SecurityType.Equity, Market.USA);
-        //private Symbol _spy1 = QuantConnect.Symbol.Create("IYC", SecurityType.Equity, Market.USA);
+        private Symbol _spy = QuantConnect.Symbol.Create("IYM", SecurityType.Equity, Market.USA);
+        private Symbol _spy1 = QuantConnect.Symbol.Create("IYC", SecurityType.Equity, Market.USA);
         private Symbol _spy2 = QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA);
-        //private Symbol _spy3 = QuantConnect.Symbol.Create("IYE", SecurityType.Equity, Market.USA);
-        //private Symbol _spy4 = QuantConnect.Symbol.Create("IYF", SecurityType.Equity, Market.USA);
-        //private Symbol _spy5 = QuantConnect.Symbol.Create("IYH", SecurityType.Equity, Market.USA);
-        //private Symbol _spy6 = QuantConnect.Symbol.Create("IYR", SecurityType.Equity, Market.USA);
-        //private Symbol _spy7 = QuantConnect.Symbol.Create("IYW", SecurityType.Equity, Market.USA);
-        //private Symbol _spy8 = QuantConnect.Symbol.Create("IDU", SecurityType.Equity, Market.USA);
+        private Symbol _spy3 = QuantConnect.Symbol.Create("IYE", SecurityType.Equity, Market.USA);
+        private Symbol _spy4 = QuantConnect.Symbol.Create("IYF", SecurityType.Equity, Market.USA);
+        private Symbol _spy5 = QuantConnect.Symbol.Create("IYH", SecurityType.Equity, Market.USA);
+        private Symbol _spy6 = QuantConnect.Symbol.Create("IYR", SecurityType.Equity, Market.USA);
+        private Symbol _spy7 = QuantConnect.Symbol.Create("IYW", SecurityType.Equity, Market.USA);
+        private Symbol _spy8 = QuantConnect.Symbol.Create("IDU", SecurityType.Equity, Market.USA);
 
         //private int FastPeriod = 12;
         //private int SlowPeriod = 26;
@@ -44,15 +44,15 @@ namespace QuantConnect.Algorithm.CSharp
             // Forex, CFD, Equities Resolutions: Tick, Second, Minute, Hour, Daily.
             // Futures Resolution: Tick, Second, Minute
             // Options Resolution: Minute Only.
-            //AddEquity("IYM", Resolution.Minute);
-            //AddEquity("IYC", Resolution.Minute);
+            AddEquity("IYM", Resolution.Minute);
+            AddEquity("IYC", Resolution.Minute);
             AddEquity("SPY", Resolution.Minute); // IYK
-            //AddEquity("IYE", Resolution.Minute);
-            //AddEquity("IYF", Resolution.Minute);
-            //AddEquity("IYH", Resolution.Minute);
-            //AddEquity("IYR", Resolution.Minute);
-            //AddEquity("IYW", Resolution.Minute);
-            //AddEquity("IDU", Resolution.Minute);
+            AddEquity("IYE", Resolution.Minute);
+            AddEquity("IYF", Resolution.Minute);
+            AddEquity("IYH", Resolution.Minute);
+            AddEquity("IYR", Resolution.Minute);
+            AddEquity("IYW", Resolution.Minute);
+            AddEquity("IDU", Resolution.Minute);
 
             //_fast = EMA(_spy2, 15, Resolution.Daily);
             //_slow = EMA(_spy2, 30, Resolution.Daily);
@@ -69,15 +69,15 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (!Portfolio.Invested)
             {
-                //SetHoldings(_spy, 0.08);
-                //SetHoldings(_spy1, 0.08);
+                SetHoldings(_spy, 0.08);
+                SetHoldings(_spy1, 0.08);
                 SetHoldings(_spy2, 0.08);
-                //SetHoldings(_spy3, 0.08);
-                //SetHoldings(_spy4, 0.08);
-                //SetHoldings(_spy5, 0.08);
-                //SetHoldings(_spy6, 0.08);
-                //SetHoldings(_spy7, 0.08);
-                //SetHoldings(_spy8, 0.08);
+                SetHoldings(_spy3, 0.08);
+                SetHoldings(_spy4, 0.08);
+                SetHoldings(_spy5, 0.08);
+                SetHoldings(_spy6, 0.08);
+                SetHoldings(_spy7, 0.08);
+                SetHoldings(_spy8, 0.08);
                 Debug("Purchased Stock");
             }
             //Log("FAST: " + _fast.ToDetailedString());

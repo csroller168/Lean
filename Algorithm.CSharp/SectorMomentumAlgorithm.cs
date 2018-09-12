@@ -9,6 +9,12 @@ using QuantConnect.Indicators;
 using System.Linq;
 using System;
 
+using QuantConnect.Data;
+using QuantConnect.Interfaces;
+using QuantConnect.Indicators;
+using QuantConnect.Data.Market;
+using System;
+
 namespace QuantConnect.Algorithm.CSharp
 {
     /// <summary>
@@ -22,15 +28,15 @@ namespace QuantConnect.Algorithm.CSharp
         public bool CanRunLocally { get; } = true;
         public Language[] Languages { get; } = { Language.CSharp, Language.Python };
 
-        private int FastPeriod = 50;
-        private int SlowPeriod = 200;
+        private int FastPeriod = 10;
+        private int SlowPeriod = 15;
         private int MaxNumPositions = 6;
 
         private string _benchmarkStr = "SPY";
         private List<string> _universe = new List<string> {
             "IYM",
             "IYC",
-            "IYK",
+            //"IYK",
             "IYE",
             "IYF",
             "IYH",
@@ -55,22 +61,39 @@ namespace QuantConnect.Algorithm.CSharp
             SetCash(100000);
 
             // Add securities
-            AddSecurity(SecurityType.Equity, _benchmarkStr, Resolution.Daily);
-            _universe.ForEach(x => AddSecurity(SecurityType.Equity, x, Resolution.Daily));
+            AddEquity(_benchmarkStr, Resolution.Minute, null, true);
+            _universe.ForEach(x => AddEquity(x, Resolution.Minute, null, true));
+            //AddSecurity(SecurityType.Equity, _benchmarkStr, Resolution.Daily);
+            //_universe.ForEach(x => AddSecurity(SecurityType.Equity, x, Resolution.Daily));
 
             // Add indicators
             _fastIndicators = new Dictionary<string, ExponentialMovingAverage>
             {
-                {"SPY", EMA(_benchmarkStr, FastPeriod, Resolution.Daily) }
+                {"SPY", EMA(_benchmarkStr, FastPeriod, Resolution.Daily, x => ((TradeBar)x).Open) }
             };
             _slowIndicators = new Dictionary<string, ExponentialMovingAverage>
             {
-                {"SPY", EMA(_benchmarkStr, SlowPeriod, Resolution.Daily) }
+                {"SPY", EMA(_benchmarkStr, SlowPeriod, Resolution.Daily, x => ((TradeBar)x).Open) }
             };
             foreach(var symbol in _universe) 
             {
-                _fastIndicators.Add(symbol, EMA(symbol, FastPeriod, Resolution.Daily));
-                _slowIndicators.Add(symbol, EMA(symbol, SlowPeriod, Resolution.Daily));
+                _fastIndicators.Add(symbol, EMA(symbol, FastPeriod, Resolution.Daily, x => ((TradeBar)x).Open));
+                _slowIndicators.Add(symbol, EMA(symbol, SlowPeriod, Resolution.Daily, x => ((TradeBar)x).Open));
+            }
+
+            // Warm indicators
+            var allHistory = History(Securities.Keys, TimeSpan.FromDays(SlowPeriod));
+            foreach(var indicatorPair in _fastIndicators.Union(_slowIndicators)) 
+            {
+                allHistory.PushThrough(data => indicatorPair.Value.Update(
+                    new IndicatorDataPoint
+                    {
+                        Value = data.Price,
+                        DataType = data.DataType,
+                        Symbol = data.Symbol,
+                        Time = data.Time,
+                        EndTime = data.EndTime
+                    }));
             }
         }
 
@@ -79,7 +102,8 @@ namespace QuantConnect.Algorithm.CSharp
         /// OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
         /// </summary>
         /// <param name="data">TradeBars IDictionary object with your stock data</param>
-        public void OnData(TradeBars data)
+        //public void OnData(TradeBars data)
+        public override void OnData(Slice data)
         {
             if (!_slowIndicators[_benchmarkStr].IsReady) 
                 return;

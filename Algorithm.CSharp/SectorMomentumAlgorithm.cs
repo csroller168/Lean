@@ -4,15 +4,10 @@
 */
 
 using System.Collections.Generic;
+using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Indicators;
 using System.Linq;
-using System;
-
-using QuantConnect.Data;
-using QuantConnect.Interfaces;
-using QuantConnect.Indicators;
-using QuantConnect.Data.Market;
 using System;
 
 namespace QuantConnect.Algorithm.CSharp
@@ -63,8 +58,6 @@ namespace QuantConnect.Algorithm.CSharp
             // Add securities
             AddEquity(_benchmarkStr, Resolution.Minute, null, true);
             _universe.ForEach(x => AddEquity(x, Resolution.Minute, null, true));
-            //AddSecurity(SecurityType.Equity, _benchmarkStr, Resolution.Daily);
-            //_universe.ForEach(x => AddSecurity(SecurityType.Equity, x, Resolution.Daily));
 
             // Add indicators
             _fastIndicators = new Dictionary<string, ExponentialMovingAverage>
@@ -102,7 +95,6 @@ namespace QuantConnect.Algorithm.CSharp
         /// OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
         /// </summary>
         /// <param name="data">TradeBars IDictionary object with your stock data</param>
-        //public void OnData(TradeBars data)
         public override void OnData(Slice data)
         {
             if (!_slowIndicators[_benchmarkStr].IsReady) 
@@ -148,88 +140,6 @@ namespace QuantConnect.Algorithm.CSharp
                 }
             }
         }
-
-        /*
-
-        public override void Initialize()
-        {
-            SetStartDate(2015, 1, 02);
-            SetEndDate(2015, 10, 30);
-            SetCash(100000);
-
-            // Add benchmark
-            _benchmark = QuantConnect.Symbol.Create(_benchmarkStr, SecurityType.Equity, Market.USA);
-            _fastBenchmark = new SimpleMovingAverage(_benchmark.Value, FastPeriod);
-            _slowBenchmark = new SimpleMovingAverage(_benchmark.Value, SlowPeriod);
-            AddEquity(_benchmarkStr, Resolution.Daily);
-
-            // Add universe
-            _universe = new Dictionary<string, Symbol>();
-            _fastUniverse = new Dictionary<string, SimpleMovingAverage>();
-            _slowUniverse = new Dictionary<string, SimpleMovingAverage>();
-            foreach(var ticker in _universeStr)
-            {
-                var symbol = QuantConnect.Symbol.Create(ticker, SecurityType.Equity, Market.USA);
-                _universe[symbol.Value] = symbol;
-                _fastUniverse[symbol.Value] = new SimpleMovingAverage(symbol.Value, FastPeriod);
-                _slowUniverse[symbol.Value] = new SimpleMovingAverage(symbol.Value, SlowPeriod);
-                AddEquity(ticker, Resolution.Daily);
-            }
-        }
-
-        /// <summary>
-        /// OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
-        /// </summary>
-        /// <param name="slice">Slice object keyed by symbol containing the stock data</param>
-        public override void OnData(Slice slice)
-        {
-            // TODO: Cancel open orders and pair new ones with trailing stop
-            // TODO: warm sma?
-
-            // Rebalance once per week
-            if (Time.DayOfWeek != System.DayOfWeek.Tuesday)
-                return;
-
-            // Sell all if market momentum is down
-            if (!IsMarketFavorable)
-            {
-                foreach (var symbol in Portfolio.Keys)
-                    Liquidate(symbol);
-                return;
-            }
-
-            // Figure out what to buy
-            var momentums = new Dictionary<string, decimal>();
-            foreach(KeyValuePair<string, Symbol> entry in _universe)
-            {
-                momentums[entry.Key] = _fastUniverse[entry.Value.Value] / _slowUniverse[entry.Value.Value];
-            }
-
-            var stocksToBuy = momentums
-                .Where(kvp => kvp.Value > 1)
-                .OrderByDescending(kvp => kvp.Value)
-                .Take(MaxNumPositions)
-                .Select(kvp => kvp.Key);
-
-            // Sell anything we aren't going to buy
-            Portfolio
-                .Keys
-                .Where(symbol => !stocksToBuy.Contains(symbol.Value))
-                .ToList()
-                .ForEach(symbol => Liquidate(symbol));
-
-            // Rebalance
-            foreach(var ticker in stocksToBuy)
-            {
-                var pct = 1.0 / stocksToBuy.Count();
-                var symbol = _universe[ticker];
-                SetHoldings(symbol, pct);
-                Debug("Buy " + ticker);
-            }
-        }
-        */
-
-
 
         /// <summary>
         /// This is used by the regression test system to indicate what the expected statistics are from running the algorithm

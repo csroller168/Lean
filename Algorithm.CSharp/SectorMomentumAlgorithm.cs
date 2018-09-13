@@ -54,10 +54,12 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2014, 1, 02);
             SetEndDate(2015, 10, 30);
             SetCash(100000);
+            _lastTradeDt = DateTime.Now.AddDays(-1 - RebalanceIntervalDays);
 
             // Add securities
-            AddEquity(_benchmarkStr, Resolution.Minute, null, true);
-            _universe.ForEach(x => AddEquity(x, Resolution.Minute, null, true));
+            // CMS DEBUG - change resolution to minute for live trading
+            AddEquity(_benchmarkStr, Resolution.Daily, null, true);
+            _universe.ForEach(x => AddEquity(x, Resolution.Daily, null, true));
 
             // Add indicators
             _fastIndicators = new Dictionary<string, ExponentialMovingAverage>

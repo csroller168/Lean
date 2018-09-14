@@ -42,7 +42,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private Dictionary<string, ExponentialMovingAverage> _fastIndicators;
         private Dictionary<string, ExponentialMovingAverage> _slowIndicators;
-        private DateTime _lastTradeDt;
+        private DateTime _lastTradeDt = null;
         private static readonly int RebalanceIntervalDays = 7;
         private static readonly decimal Tolerance = 0.00015m;
 
@@ -54,7 +54,6 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2014, 1, 02);
             SetEndDate(2015, 10, 30);
             SetCash(100000);
-            _lastTradeDt = DateTime.Now.AddDays(-1 - RebalanceIntervalDays);
 
             // Add securities
             // CMS DEBUG - change resolution to minute for live trading
@@ -103,7 +102,7 @@ namespace QuantConnect.Algorithm.CSharp
                 return;
 
             // only once per week
-            if ((Time.Date - _lastTradeDt.Date).Days < RebalanceIntervalDays) 
+            if (_lastTradeDt != null && (Time.Date - _lastTradeDt.Date).Days < RebalanceIntervalDays) 
                 return;
 
             if(IsMarketFavorable)

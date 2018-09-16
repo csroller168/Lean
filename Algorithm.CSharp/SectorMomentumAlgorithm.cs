@@ -42,7 +42,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private Dictionary<string, ExponentialMovingAverage> _fastIndicators;
         private Dictionary<string, ExponentialMovingAverage> _slowIndicators;
-        private DateTime _lastTradeDt = null;
+        private DateTime _lastTradeDt = DateTime.MinValue;
         private static readonly int RebalanceIntervalDays = 7;
         private static readonly decimal Tolerance = 0.00015m;
 

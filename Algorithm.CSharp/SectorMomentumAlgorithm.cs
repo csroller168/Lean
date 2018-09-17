@@ -110,7 +110,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var momentums = new Dictionary<string, decimal>();
                 _universe.ForEach(x => momentums[x] = _fastIndicators[x] / _slowIndicators[x]);
                 var stocksToBuy = momentums
-                    .Where(kvp => kvp.Value > 1)
+                    .Where(kvp => kvp.Value > 0.7M)
                     .OrderByDescending(kvp => kvp.Value)
                     .Take(MaxNumPositions)
                     .Select(kvp => kvp.Key)

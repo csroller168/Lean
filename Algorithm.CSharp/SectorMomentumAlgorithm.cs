@@ -28,16 +28,18 @@ namespace QuantConnect.Algorithm.CSharp
         private int MaxNumPositions = 6;
 
         private string _benchmarkStr = "SPY";
-        private List<string> _universe = new List<string> {
-            "IYM",
-            "IYC",
-            //"IYK",
-            "IYE",
-            "IYF",
-            "IYH",
-            "IYR",
-            "IYW",
-            "IDU"
+        private Symbol _benchmark = QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA);
+        private Dictionary<string, Symbol> _universe = new Dictionary<string, Symbol> {
+            { "IYC", QuantConnect.Symbol.Create("IYC", SecurityType.Equity, Market.USA) },
+            { "IYE", QuantConnect.Symbol.Create("IYE", SecurityType.Equity, Market.USA) },
+            { "IYF", QuantConnect.Symbol.Create("IYF", SecurityType.Equity, Market.USA) },
+            { "IYH", QuantConnect.Symbol.Create("IYH", SecurityType.Equity, Market.USA) },
+            { "IYR", QuantConnect.Symbol.Create("IYR", SecurityType.Equity, Market.USA) },
+            { "IYM", QuantConnect.Symbol.Create("IYM", SecurityType.Equity, Market.USA) },
+            { "IYW", QuantConnect.Symbol.Create("IYW", SecurityType.Equity, Market.USA) },
+            { "IDU", QuantConnect.Symbol.Create("IDU", SecurityType.Equity, Market.USA) }
+            //{ "IYM", QuantConnect.Symbol.Create("IYM", SecurityType.Equity, Market.USA) },
+            // IYK
         };
 
         private Dictionary<string, ExponentialMovingAverage> _fastIndicators;
@@ -57,22 +59,22 @@ namespace QuantConnect.Algorithm.CSharp
 
             // Add securities
             // CMS DEBUG - change resolution to minute for live trading
-            AddEquity(_benchmarkStr, Resolution.Daily, null, true);
-            _universe.ForEach(x => AddEquity(x, Resolution.Daily, null, true));
+            AddEquity(_benchmarkStr, Resolution.Minute, null, true);
+            _universe.Keys.ToList().ForEach(x => AddEquity(x, Resolution.Minute, null, true));
 
             // Add indicators
             _fastIndicators = new Dictionary<string, ExponentialMovingAverage>
             {
-                {"SPY", EMA(_benchmarkStr, FastPeriod, Resolution.Daily, x => ((TradeBar)x).Open) }
+                {_benchmarkStr, EMA(_benchmark, FastPeriod, Resolution.Daily, x => ((TradeBar)x).Open) }
             };
             _slowIndicators = new Dictionary<string, ExponentialMovingAverage>
             {
-                {"SPY", EMA(_benchmarkStr, SlowPeriod, Resolution.Daily, x => ((TradeBar)x).Open) }
+                {_benchmarkStr, EMA(_benchmark, SlowPeriod, Resolution.Daily, x => ((TradeBar)x).Open) }
             };
-            foreach(var symbol in _universe) 
+            foreach(var equity in _universe) 
             {
-                _fastIndicators.Add(symbol, EMA(symbol, FastPeriod, Resolution.Daily, x => ((TradeBar)x).Open));
-                _slowIndicators.Add(symbol, EMA(symbol, SlowPeriod, Resolution.Daily, x => ((TradeBar)x).Open));
+                _fastIndicators.Add(equity.Key, EMA(equity.Value, FastPeriod, Resolution.Daily, x => ((TradeBar)x).Open));
+                _slowIndicators.Add(equity.Key, EMA(equity.Value, SlowPeriod, Resolution.Daily, x => ((TradeBar)x).Open));
             }
 
             // Warm indicators
@@ -95,8 +97,8 @@ namespace QuantConnect.Algorithm.CSharp
         /// <summary>
         /// OnData event is the primary entry point for your algorithm. Each new data point will be pumped in here.
         /// </summary>
-        /// <param name="data">TradeBars IDictionary object with your stock data</param>
-        public override void OnData(Slice data)
+        /// <param name="slice">TradeBars IDictionary object with your stock data</param>
+        public override void OnData(Slice slice)
         {
             if (!_slowIndicators[_benchmarkStr].IsReady) 
                 return;
@@ -104,13 +106,13 @@ namespace QuantConnect.Algorithm.CSharp
             // only once per week
             if (_lastTradeDt != null && (Time.Date - _lastTradeDt.Date).Days < RebalanceIntervalDays) 
                 return;
-
+            
             if(IsMarketFavorable)
             {
                 var momentums = new Dictionary<string, decimal>();
-                _universe.ForEach(x => momentums[x] = _fastIndicators[x] / _slowIndicators[x]);
+                _universe.Keys.ToList().ForEach(x => momentums[x] = _fastIndicators[x] / _slowIndicators[x]);
                 var stocksToBuy = momentums
-                    .Where(kvp => kvp.Value > 0.7M)
+                    .Where(kvp => kvp.Value > 1.0M)
                     .OrderByDescending(kvp => kvp.Value)
                     .Take(MaxNumPositions)
                     .Select(kvp => kvp.Key)
@@ -119,7 +121,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             else
             {
-                _universe.ForEach(x => Rebalance(x, 0.0));
+                _universe.Keys.ToList().ForEach(x => Rebalance(x, 0.0));
             }
 
             _lastTradeDt = Time;
@@ -130,14 +132,14 @@ namespace QuantConnect.Algorithm.CSharp
             if (pct > 0)
             {
                 Log($"{Time.Date}: BUY {symbol} @ {Securities[symbol].Price}");
-                SetHoldings(symbol, pct);
+                SetHoldings(_universe[symbol], pct);
             }
             else
             {
-                if (Portfolio.ContainsKey(symbol))
+                if (Portfolio.ContainsKey(_universe[symbol]))
                 {
                     Log($"{Time.Date}: SELL {symbol} @ {Securities[symbol].Price}");
-                    Liquidate(symbol);
+                    Liquidate(_universe[symbol]);
                 }
             }
         }

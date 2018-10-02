@@ -107,12 +107,13 @@ namespace QuantConnect.Algorithm.CSharp
             if (_lastTradeDt != null && (Time.Date - _lastTradeDt.Date).Days < RebalanceIntervalDays) 
                 return;
             
-            if(IsMarketFavorable)
+            //if(IsMarketFavorable)
+            if(true)
             {
                 var momentums = new Dictionary<string, decimal>();
                 _universe.Keys.ToList().ForEach(x => momentums[x] = _fastIndicators[x] / _slowIndicators[x]);
                 var stocksToBuy = momentums
-                    .Where(kvp => kvp.Value > 1.0M)
+                    .Where(kvp => kvp.Value > 0.0M) //1.0M)
                     .OrderByDescending(kvp => kvp.Value)
                     .Take(MaxNumPositions)
                     .Select(kvp => kvp.Key)

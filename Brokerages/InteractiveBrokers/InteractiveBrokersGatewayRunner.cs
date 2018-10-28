@@ -107,6 +107,7 @@ namespace QuantConnect.Brokerages.InteractiveBrokers
         /// </summary>
         public static void Stop()
         {
+            return;
             if (_scriptProcessId == 0)
             {
                 return;
@@ -162,7 +163,7 @@ namespace QuantConnect.Brokerages.InteractiveBrokers
                     try
                     {
                         Process.Start("pkill", "xvfb-run");
-                        Process.Start("pkill", "java");
+                        //Process.Start("pkill", "java");
                         Process.Start("pkill", "Xvfb");
                         Thread.Sleep(2500);
                     }

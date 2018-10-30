@@ -33,7 +33,7 @@
 *.hex
 
 # QC Cloud Setup Bash Files
-*.sh
+#*.sh
 
 # QC Config Files:
 config.json

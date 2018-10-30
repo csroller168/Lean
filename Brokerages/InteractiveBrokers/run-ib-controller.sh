@@ -15,13 +15,13 @@ LOG_PATH=$IBC_PATH/Logs
 DATE=`date +%Y%m%d%H%M`
 
 # Clean Process Space:
-kill -9 `pidof xvfb-run`
-kill -9 `pidof java`
-kill -9 `pidof Xvfb`
+#kill -9 `pidof xvfb-run`
+#kill -9 `pidof java`
+#kill -9 `pidof Xvfb`
 
 # Launch a virtual screen
-Xvfb :1 -screen 0 1024x768x24 2>&1 >/dev/null &
-export DISPLAY=:1
+#Xvfb :1 -screen 0 1024x768x24 2>&1 >/dev/null &
+#export DISPLAY=:1
 
 # Launch the IB Controller + IB Gateway
 
@@ -42,7 +42,7 @@ export FIXPASSWORD
 export JAVA_PATH
 export APP
 
-xvfb-run "${IBC_PATH}/Scripts/DisplayBannerAndLaunch.sh" &
+#xvfb-run "${IBC_PATH}/Scripts/DisplayBannerAndLaunch.sh" &
 
 history -c
 

@@ -15,7 +15,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2003, 8, 4);
             SetEndDate(2019, 8, 30);
             SetCash(100000);
-            var spy = AddEquity("SPY", Resolution.Daily);
+            var spy = AddEquity("MDY", Resolution.Daily);
             var tlt = AddEquity("TLT", Resolution.Daily);
             
             spy.SetDataNormalizationMode(DataNormalizationMode.Raw);
@@ -24,18 +24,18 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            var spyMomentum = Momentum("SPY", slowDays);
+            var spyMomentum = Momentum("MDY", slowDays);
             var tltMomentum = Momentum("TLT", slowDays);
             
             PlotPoints(spyMomentum, tltMomentum);
             
             if(spyMomentum > tltMomentum + flipMargin)
             {
-                Rebalance("SPY", "TLT");
+                Rebalance("MDY", "TLT");
             }
             else if (tltMomentum > spyMomentum + flipMargin)
             {
-                Rebalance("TLT", "SPY");
+                Rebalance("TLT", "MDY");
             }
         }
         
@@ -44,7 +44,7 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("momentum", "spyMomentum", (spyMomentum-1)*1);
             Plot("momentum", "tltMomentum", (tltMomentum-1)*1);
             
-            Plot("price", "spy", Securities["SPY"].Price);
+            Plot("price", "MDY", Securities["MDY"].Price);
             Plot("price", "tlt", Securities["TLT"].Price);
             
             Plot("leverage", "cash", Portfolio.Cash);

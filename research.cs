@@ -2,12 +2,8 @@ namespace QuantConnect.Algorithm.CSharp
 {
     public class HorizontalVerticalAtmosphericScrubbers : QCAlgorithm
     {
-        // TODO: 
-        // optimize parameters for above and best performance
-        // test MDY instead of SPY
-        
-        private static readonly int slowDays = 60;
-        private static readonly decimal flipMargin = 0.04m;
+        private static readonly int slowDays = 75;
+        private static readonly decimal flipMargin = 0.05m;
         private string symbolInMarket = string.Empty;
         
         public override void Initialize()

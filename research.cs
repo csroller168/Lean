@@ -3,21 +3,11 @@ namespace QuantConnect.Algorithm.CSharp
     public class HorizontalVerticalAtmosphericScrubbers : QCAlgorithm
     {
         // TODO: 
-        // Audit to be sure the algo behaves as intended
-            // issues
-                // still periods of low leverage
-                // long periods with nothing invested
         // optimize parameters for above and best performance
         // test MDY instead of SPY
-        // NOTE: compare final performance with 0.0 flipMargin and no stoploss behavior
         
         private static readonly int slowDays = 60;
         private static readonly decimal flipMargin = 0.04m;
-        //private static readonly decimal stopLossPct = 0.92m;
-        //private static readonly decimal stopLossLimitPct = 0.90m;
-        //private OrderTicket stopTicket = null; 
-        //private DateTime? stopFilledDt = null;
-        //private decimal peakPrice = Decimal.MinValue;
         private string symbolInMarket = string.Empty;
         
         public override void Initialize()
@@ -39,17 +29,6 @@ namespace QuantConnect.Algorithm.CSharp
             
             PlotPoints(spyMomentum, tltMomentum);
             
-            // If a stop hits, don't re-enter unless we'll flip
-            //if(stopFilledDt != null)
-            //{
-            //  var desiredMomentum = symbolInMarket == "SPY" ? tltMomentum : spyMomentum;
-            //  var stopMomentum = symbolInMarket == "SPY" ? spyMomentum : tltMomentum;
-            //  if(desiredMomentum <= stopMomentum + flipMargin)
-            //  {
-            //      return;
-            //  }
-            //}
-            
             if(spyMomentum > tltMomentum + flipMargin)
             {
                 Rebalance("SPY", "TLT");
@@ -58,42 +37,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 Rebalance("TLT", "SPY");
             }
-            
-            //if(!string.IsNullOrEmpty(symbolInMarket) &&
-            //  Securities[symbolInMarket].Price > peakPrice)
-            //{
-            //  peakPrice = Securities[symbolInMarket].Price;
-            //  stopTicket?.Update(new UpdateOrderFields() 
-            //  { 
-            //          StopPrice = stopLossPct * peakPrice
-            //  });
-            //}
         }
-        
-        //public override void OnOrderEvent(OrderEvent orderEvent)
-        //{
-            //return;
-        //    if (orderEvent.Status != OrderStatus.Filled)
-        //        return;
-            
-        //    if (stopTicket != null && orderEvent.OrderId == stopTicket.OrderId) 
-        //    {
-        //        stopFilledDt = Time;
-        //    } 
-        //    else if (orderEvent.Direction == OrderDirection.Buy) 
-        //    {
-        //      stopTicket = StopLimitOrder(
-        //          orderEvent.Symbol, 
-        //          Negative(orderEvent.FillQuantity), 
-        //          orderEvent.FillPrice * stopLossPct,
-        //          orderEvent.FillPrice * stopLossLimitPct);
-        //    } 
-        //    else 
-        //    {
-                // everything must go, all or nothing
-        //      Liquidate(orderEvent.Symbol);
-        //    }
-        //}
         
         private void PlotPoints(decimal spyMomentum, decimal tltMomentum)
         {
@@ -112,13 +56,7 @@ namespace QuantConnect.Algorithm.CSharp
             if(buySymbol == symbolInMarket && Portfolio.Cash < Portfolio.TotalHoldingsValue)
                 return;
             
-            //if(stopTicket?.Status != OrderStatus.Filled) 
-            //{
-            //  stopTicket?.Cancel();
-            //}
-            
             Liquidate(sellSymbol);
-            //stopFilledDt = null;
             SetHoldings(buySymbol, 1m, false);
             symbolInMarket = buySymbol;
         }
@@ -134,10 +72,5 @@ namespace QuantConnect.Algorithm.CSharp
             var h = History<TradeBar>(symbol, days);
             return Securities[symbol].Price / h.First().Close;
         }
-        
-        //private decimal Negative (decimal a)
-        //{
-       //   return a - a - a;
-        //}
     }
 }

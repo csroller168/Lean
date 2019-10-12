@@ -37,17 +37,17 @@ namespace QuantConnect.Algorithm.CSharp
             // Set requested data resolution
             UniverseSettings.Resolution = Resolution.Minute;
 
-            SetStartDate(2013, 10, 07);  //Set Start Date
-            SetEndDate(2013, 10, 11);    //Set End Date
+            SetStartDate(2018, 10, 08);  //Set Start Date
+            SetEndDate(2018, 10, 16);    //Set End Date
             SetCash(100000);             //Set Strategy Cash
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
-            AddEquity("SPY", resolution, null, true);
+            AddEquity("TLT", resolution, null, true);
         }
 
         public override void OnData(Slice slice)
         {
-            SetHoldings("SPY", 1m, false);
+            SetHoldings("TLT", 1m, false);
         }
 
         public override void OnOrderEvent(OrderEvent orderEvent)

@@ -23,6 +23,13 @@ using QuantConnect.Algorithm.Framework.Selection;
 using QuantConnect.Orders;
 using QuantConnect.Interfaces;
 
+using QuantConnect.Data;
+using QuantConnect.Data.Market;
+using QuantConnect.Indicators;
+using System.Linq;
+using System.Threading;
+using QuantConnect.Orders.Slippage;
+
 namespace QuantConnect.Algorithm.CSharp
 {
     /// <summary>
@@ -57,6 +64,8 @@ namespace QuantConnect.Algorithm.CSharp
             SetExecution(new ImmediateExecutionModel());
             SetRiskManagement(new MaximumDrawdownPercentPerSecurity(0.01m));
         }
+
+        
 
         public override void OnOrderEvent(OrderEvent orderEvent)
         {

@@ -12,6 +12,13 @@ using QuantConnect.Algorithm.Framework.Selection;
 using QuantConnect.Orders;
 using QuantConnect.Interfaces;
 
+using QuantConnect.Data;
+using QuantConnect.Data.Market;
+using QuantConnect.Indicators;
+using System.Linq;
+using System.Threading;
+using QuantConnect.Orders.Slippage;
+
 namespace QuantConnect.Algorithm.CSharp
 {
     /// <summary>
@@ -34,17 +41,13 @@ namespace QuantConnect.Algorithm.CSharp
             SetEndDate(2013, 10, 11);    //Set End Date
             SetCash(100000);             //Set Strategy Cash
 
-            // Find more symbols here: http://quantconnect.com/data
-            // Forex, CFD, Equities Resolutions: Tick, Second, Minute, Hour, Daily.
-            // Futures Resolution: Tick, Second, Minute
-            // Options Resolution: Minute Only.
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
+            AddEquity("SPY", resolution, null, true);
+        }
 
-            // set algorithm framework models
-            SetUniverseSelection(new ManualUniverseSelectionModel(QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA)));
-            SetAlpha(new ConstantAlphaModel(InsightType.Price, InsightDirection.Up, TimeSpan.FromMinutes(20), 0.025, null));
-            SetPortfolioConstruction(new EqualWeightingPortfolioConstructionModel());
-            SetExecution(new ImmediateExecutionModel());
-            SetRiskManagement(new MaximumDrawdownPercentPerSecurity(0.01m));
+        public override void OnData(Slice slice)
+        {
+            SetHoldings("SPY", 1m, false);
         }
 
         public override void OnOrderEvent(OrderEvent orderEvent)

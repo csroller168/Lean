@@ -1,0 +1,4 @@
+25 9 * * 1 /home/ubuntu/Lean/scripts/startTws.sh
+32 9 * * 1 /home/ubuntu/Lean/scripts/startTrading.sh
+40 10 * * 1 killall IBController.sh
+40 10 * * 1 killall QuantConnect.Lean.Launcher.exe

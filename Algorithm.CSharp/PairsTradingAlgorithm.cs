@@ -17,6 +17,9 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="trading and orders" />
     public class PairsTradingAlgorithm : QCAlgorithm
     {
+        // TODO: test adding SHY to universe (short term bond for inverted yield curve scenario)
+        // TODO: find a way to avoid high momentum due to big temporary drop 60 days ago (if that matters)
+
         private static readonly int slowDays = 60;
         private static readonly decimal flipMargin = 0.035m;
         private string symbolInMarket = string.Empty;
@@ -85,6 +88,7 @@ namespace QuantConnect.Algorithm.CSharp
         private decimal Momentum(string symbol, int days)
         {
             var h = History<TradeBar>(symbol, days);
+            Debug($"{symbol} momentum = {Securities[symbol].Price} / {h.First().Close}");
             return Securities[symbol].Price / h.First().Close;
         }
     }

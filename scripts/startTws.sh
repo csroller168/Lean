@@ -1,4 +1,4 @@
 #!/bin/bash
 export DISPLAY=:1
-export PATH=/home/ubuntu/bin:/home/ubuntu/.local/bin:/home/ubuntu/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+export PATH=/home/ubuntu/bin:/home/ubuntu/.local/bin:/home/ubuntu/miniconda3/bi$
 /opt/IBController/IBControllerStart.sh -inline &

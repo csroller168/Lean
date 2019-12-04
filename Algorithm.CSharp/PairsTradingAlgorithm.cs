@@ -88,7 +88,7 @@ namespace QuantConnect.Algorithm.CSharp
         private decimal Momentum(string symbol, int days)
         {
             var h = History<TradeBar>(symbol, days);
-            Debug($"{symbol} momentum = {Securities[symbol].Price} / {h.First().Close}");
+            //Debug($"{symbol} momentum = {Securities[symbol].Price} / {h.First().Close}");
             return Securities[symbol].Price / h.First().Close;
         }
     }

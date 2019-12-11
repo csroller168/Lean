@@ -50,7 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             var spy = AddEquity("SPY", resolution, null, true);
             spy.SetSlippageModel(SlippageModel);
-            var tlt = AddEquity("TLT", Resolution.Daily);
+            var tlt = AddEquity("TLT", resolution, null, true);
             tlt.SetSlippageModel(SlippageModel);
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));

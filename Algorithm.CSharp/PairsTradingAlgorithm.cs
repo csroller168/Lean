@@ -58,7 +58,11 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            SetHoldings("TLT", 1m, false);
+            var spyMomentum = Momentum("SPY", slowDays);
+            if(spyMomentum > 1)
+                SetHoldings("SPY", 1m, false);
+            else 
+                SetHoldings("TLT", 1m, false);
         }
 
         private void PlotPoints(decimal spyMomentum, decimal tltMomentum)
@@ -93,7 +97,6 @@ namespace QuantConnect.Algorithm.CSharp
         private decimal Momentum(string symbol, int days)
         {
             var h = History<TradeBar>(symbol, days);
-            //Debug($"{symbol} momentum = {Securities[symbol].Price} / {h.First().Close}");
             return Securities[symbol].Price / h.First().Close;
         }
     }

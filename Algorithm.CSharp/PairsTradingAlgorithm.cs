@@ -49,6 +49,7 @@ namespace QuantConnect.Algorithm.CSharp
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             var spy = AddEquity("SPY", resolution, null, true);
+            spy.SetSlippageModel(SlippageModel);
         }
 
         public override void OnData(Slice slice)

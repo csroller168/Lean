@@ -52,6 +52,8 @@ namespace QuantConnect.Algorithm.CSharp
             spy.SetSlippageModel(SlippageModel);
             var tlt = AddEquity("TLT", Resolution.Daily);
             tlt.SetSlippageModel(SlippageModel);
+
+            SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
         }
 
         public override void OnData(Slice slice)

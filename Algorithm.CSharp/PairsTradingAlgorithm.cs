@@ -43,12 +43,12 @@ namespace QuantConnect.Algorithm.CSharp
             // Set requested data resolution
             UniverseSettings.Resolution = Resolution.Minute;
 
-            SetStartDate(2013, 10, 07);  //Set Start Date
-            SetEndDate(2013, 10, 11);    //Set End Date
-            SetCash(100000);             //Set Strategy Cash
+            SetStartDate(2019, 8, 5);
+            SetEndDate(2019, 8, 30);
+            SetCash(100000);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
-            AddEquity("SPY", resolution, null, true);
+            var spy = AddEquity("SPY", resolution, null, true);
         }
 
         public override void OnData(Slice slice)

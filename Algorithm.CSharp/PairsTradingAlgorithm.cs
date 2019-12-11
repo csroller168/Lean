@@ -32,6 +32,8 @@ namespace QuantConnect.Algorithm.CSharp
         // TODO: test adding SHY to universe (short term bond for inverted yield curve scenario)
         // TODO: find a way to avoid high momentum due to big temporary drop 60 days ago (if that matters)
         // TODO: use trading day's open price as momenum numerator
+        // todo: in onData, if not invested, set tolerance to 0
+        // todo: email results on run/trade
 
         private static readonly int slowDays = 60;
         private static readonly decimal flipMargin = 0.035m;
@@ -40,7 +42,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            // Set requested data resolution
+            // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Minute;
 
             SetStartDate(2019, 8, 5);
@@ -59,10 +61,18 @@ namespace QuantConnect.Algorithm.CSharp
         public override void OnData(Slice slice)
         {
             var spyMomentum = Momentum("SPY", slowDays);
-            if(spyMomentum > 1)
-                SetHoldings("SPY", 1m, false);
-            else 
-                SetHoldings("TLT", 1m, false);
+            var tltMomentum = Momentum("TLT", slowDays);
+
+            PlotPoints(spyMomentum, tltMomentum);
+
+            if (spyMomentum > tltMomentum + flipMargin)
+            {
+                Rebalance("SPY", "TLT");
+            }
+            else if (tltMomentum > spyMomentum + flipMargin)
+            {
+                Rebalance("TLT", "SPY");
+            }
         }
 
         private void PlotPoints(decimal spyMomentum, decimal tltMomentum)
@@ -96,7 +106,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private decimal Momentum(string symbol, int days)
         {
-            var h = History<TradeBar>(symbol, days);
+            var h = History(symbol, TimeSpan.FromDays(days), Resolution.Daily).ToList();
             return Securities[symbol].Price / h.First().Close;
         }
     }

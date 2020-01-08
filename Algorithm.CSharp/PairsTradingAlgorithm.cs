@@ -34,7 +34,6 @@ namespace QuantConnect.Algorithm.CSharp
         // TODO: find a way to avoid high momentum due to big temporary drop 60 days ago (if that matters)
         // TODO: use trading day's open price as momenum numerator
         // todo: in onData, if not invested, set tolerance to 0
-        // todo: email results on run/trade
 
         private static readonly int slowDays = 60;
         private static readonly decimal flipMargin = 0.035m;
@@ -62,7 +61,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            SendEmail();
             var spyMomentum = Momentum("SPY", slowDays);
             var tltMomentum = Momentum("TLT", slowDays);
 
@@ -75,6 +73,18 @@ namespace QuantConnect.Algorithm.CSharp
             else if (tltMomentum > spyMomentum + flipMargin)
             {
                 Rebalance("TLT", "SPY");
+            }
+        }
+
+        public override void OnOrderEvent(OrderEvent orderEvent)
+        {
+            if(orderEvent.Status == OrderStatus.Filled
+                && orderEvent.Direction == OrderDirection.Buy)
+            {
+                var address = "chrisshort168@gmail.com";
+                var subject = "Trading app notification";
+                var body = $"The app is now long {orderEvent.Symbol}";
+                Notify.Email(address, subject, body);
             }
         }
 
@@ -111,38 +121,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             var h = History(symbol, TimeSpan.FromDays(days), Resolution.Daily).ToList();
             return Securities[symbol].Price / h.First().Close;
-        }
-
-        private void SendEmail()
-        {
-            if (Once == true) return;
-            Once = true;
-
-            var command = "mono ~/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe ~/git/GmailSender/GmailSender/content.txt chrisshort168@gmail.com";
-            using (var proc = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "/bin/bash",
-                    Arguments = "-c \"" + command + "\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                }
-            })
-            {
-                proc.Start();
-                proc.WaitForExit();
-            }
-
-            //using (var process = new System.Diagnostics.Process())
-            //{
-            //    process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-            //    process.StartInfo.FileName = "~/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe";
-            //    process.StartInfo.Arguments = "~/git/GmailSender/GmailSender/content.txt chrisshort168@gmail.com";
-            //    process.Start();
-            //    process.WaitForExit();
-            //}
         }
     }
 }

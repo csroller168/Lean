@@ -18,6 +18,7 @@ using QuantConnect.Indicators;
 using System.Linq;
 using System.Threading;
 using QuantConnect.Orders.Slippage;
+using System.Diagnostics;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -39,6 +40,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal flipMargin = 0.035m;
         private string symbolInMarket = string.Empty;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
+        private static bool Once = false;
 
         public override void Initialize()
         {
@@ -60,6 +62,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
+            SendEmail();
             var spyMomentum = Momentum("SPY", slowDays);
             var tltMomentum = Momentum("TLT", slowDays);
 
@@ -108,6 +111,38 @@ namespace QuantConnect.Algorithm.CSharp
         {
             var h = History(symbol, TimeSpan.FromDays(days), Resolution.Daily).ToList();
             return Securities[symbol].Price / h.First().Close;
+        }
+
+        private void SendEmail()
+        {
+            if (Once == true) return;
+            Once = true;
+
+            var command = "mono ~/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe ~/git/GmailSender/GmailSender/content.txt chrisshort168@gmail.com";
+            using (var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = "-c \"" + command + "\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                }
+            })
+            {
+                proc.Start();
+                proc.WaitForExit();
+            }
+
+            //using (var process = new System.Diagnostics.Process())
+            //{
+            //    process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            //    process.StartInfo.FileName = "~/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe";
+            //    process.StartInfo.Arguments = "~/git/GmailSender/GmailSender/content.txt chrisshort168@gmail.com";
+            //    process.Start();
+            //    process.WaitForExit();
+            //}
         }
     }
 }

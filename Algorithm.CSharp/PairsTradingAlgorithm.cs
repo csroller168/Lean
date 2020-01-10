@@ -20,8 +20,10 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // TODO: test adding SHY to universe (short term bond for inverted yield curve scenario)
         // TODO: find a way to avoid high momentum due to big temporary drop 60 days ago (if that matters)
+        //          test ratio of sma or ema from recent days to past days
         // TODO: use trading day's open price as momenum numerator
         // todo: in onData, if not invested, set tolerance to 0
+        // todo: get email notification working
 
         private static readonly int slowDays = 60;
         private static readonly decimal flipMargin = 0.035m;

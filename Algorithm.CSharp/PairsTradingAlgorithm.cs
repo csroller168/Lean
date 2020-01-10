@@ -3,22 +3,10 @@
 */
 
 using System;
-using System.Collections.Generic;
-using QuantConnect.Algorithm.Framework.Alphas;
-using QuantConnect.Algorithm.Framework.Execution;
-using QuantConnect.Algorithm.Framework.Portfolio;
-using QuantConnect.Algorithm.Framework.Risk;
-using QuantConnect.Algorithm.Framework.Selection;
 using QuantConnect.Orders;
-using QuantConnect.Interfaces;
-
 using QuantConnect.Data;
-using QuantConnect.Data.Market;
-using QuantConnect.Indicators;
 using System.Linq;
-using System.Threading;
 using QuantConnect.Orders.Slippage;
-using System.Diagnostics;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -109,12 +97,6 @@ namespace QuantConnect.Algorithm.CSharp
             Liquidate(sellSymbol);
             SetHoldings(buySymbol, 1m, false);
             symbolInMarket = buySymbol;
-        }
-
-        private int sharesToBuy(string symbol)
-        {
-            var value = Portfolio.Cash + Portfolio.TotalHoldingsValue;
-            return (int)(value / Securities[symbol].Price);
         }
 
         private decimal Momentum(string symbol, int days)

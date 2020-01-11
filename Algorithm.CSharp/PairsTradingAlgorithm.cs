@@ -19,9 +19,6 @@ namespace QuantConnect.Algorithm.CSharp
     public class PairsTradingAlgorithm : QCAlgorithm
     {
         // TODO: test adding SHY to universe (short term bond for inverted yield curve scenario)
-        // TODO: find a way to avoid high momentum due to big temporary drop 60 days ago (if that matters)
-        //          test ratio of sma or ema from recent days to past days
-        // TODO: use trading day's open price as momentum numerator
         // todo: in onData, if not invested, set tolerance to 0
         // todo: get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
         // todo: MFA on aws
@@ -69,7 +66,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnOrderEvent(OrderEvent orderEvent)
         {
-            if(orderEvent.Status == OrderStatus.Filled
+            if (orderEvent.Status == OrderStatus.Filled
                 && orderEvent.Direction == OrderDirection.Buy)
             {
                 var address = "chrisshort168@gmail.com";

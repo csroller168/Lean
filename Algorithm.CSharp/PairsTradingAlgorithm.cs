@@ -21,23 +21,24 @@ namespace QuantConnect.Algorithm.CSharp
         // TODO: test adding SHY to universe (short term bond for inverted yield curve scenario)
         // TODO: find a way to avoid high momentum due to big temporary drop 60 days ago (if that matters)
         //          test ratio of sma or ema from recent days to past days
-        // TODO: use trading day's open price as momenum numerator
+        // TODO: use trading day's open price as momentum numerator
         // todo: in onData, if not invested, set tolerance to 0
-        // todo: get email notification working
+        // todo: get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
+        // todo: MFA on aws
 
         private static readonly int slowDays = 60;
+        private static readonly int fastDays = 8;
         private static readonly decimal flipMargin = 0.035m;
         private string symbolInMarket = string.Empty;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
-        private static bool Once = false;
 
         public override void Initialize()
         {
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Minute;
 
-            SetStartDate(2019, 8, 5);
-            SetEndDate(2019, 8, 30);
+            SetStartDate(2003, 8, 1);
+            SetEndDate(2020, 1, 8);
             SetCash(100000);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
@@ -103,8 +104,10 @@ namespace QuantConnect.Algorithm.CSharp
 
         private decimal Momentum(string symbol, int days)
         {
-            var h = History(symbol, TimeSpan.FromDays(days), Resolution.Daily).ToList();
-            return Securities[symbol].Price / h.First().Close;
+            var numerator = Math.Min(Securities[symbol].Open, Securities[symbol].Price);
+            var pastPrices = History(symbol, TimeSpan.FromDays(days + fastDays / 2), Resolution.Daily).ToList();
+            var denominator = pastPrices.Take(fastDays).Average(x => x.Close);
+            return numerator / denominator;
         }
     }
 }

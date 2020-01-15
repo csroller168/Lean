@@ -7,6 +7,7 @@ using QuantConnect.Orders;
 using QuantConnect.Data;
 using System.Linq;
 using QuantConnect.Orders.Slippage;
+using System.Collections.Generic;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -26,6 +27,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int slowDays = 60;
         private static readonly int fastDays = 8;
         private static readonly decimal flipMargin = 0.035m;
+        private static readonly List<string> equities = new List<string> { "SPY", "TLT" };
         private string symbolInMarket = string.Empty;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
 
@@ -39,28 +41,32 @@ namespace QuantConnect.Algorithm.CSharp
             SetCash(100000);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
-            var spy = AddEquity("SPY", resolution, null, true);
-            spy.SetSlippageModel(SlippageModel);
-            var tlt = AddEquity("TLT", resolution, null, true);
-            tlt.SetSlippageModel(SlippageModel);
+            equities.ForEach(x =>
+            {
+                AddEquity(x, resolution, null, true)
+                    .SetSlippageModel(SlippageModel);
+            });
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
         }
 
         public override void OnData(Slice slice)
         {
-            var spyMomentum = Momentum("SPY", slowDays);
-            var tltMomentum = Momentum("TLT", slowDays);
+            PlotPoints();
 
-            PlotPoints(spyMomentum, tltMomentum);
-
-            if (spyMomentum > tltMomentum + flipMargin)
+            var momentums = equities
+                .Select(x => new KeyValuePair<string, decimal>(x, Momentum(x, slowDays)))
+                .OrderByDescending(x => x.Value)
+                .ToList();
+            var momentumInMarket = 0m;
+            if (!string.IsNullOrEmpty(symbolInMarket))
             {
-                Rebalance("SPY", "TLT");
+                momentumInMarket = momentums.Where(x => x.Key == symbolInMarket).Single().Value;
             }
-            else if (tltMomentum > spyMomentum + flipMargin)
+
+            if(momentums.First().Value > momentumInMarket + flipMargin)
             {
-                Rebalance("TLT", "SPY");
+                Rebalance(momentums[0].Key, symbolInMarket);
             }
         }
 
@@ -76,13 +82,13 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private void PlotPoints(decimal spyMomentum, decimal tltMomentum)
+        private void PlotPoints()
         {
-            Plot("momentum", "spyMomentum", (spyMomentum - 1) * 1);
-            Plot("momentum", "tltMomentum", (tltMomentum - 1) * 1);
-
-            Plot("price", "SPY", Securities["SPY"].Price);
-            Plot("price", "tlt", Securities["TLT"].Price);
+            equities.ForEach(x =>
+            {
+                Plot("momentum", $"{x}Momentum", (Momentum(x, slowDays) - 1));
+                Plot("price", x, Securities[x].Price);
+            });
 
             Plot("leverage", "cash", Portfolio.Cash);
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);

@@ -18,10 +18,16 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="trading and orders" />
     public class PairsTradingAlgorithm : QCAlgorithm
     {
-        // TODO: test adding SHY to universe (short term bond for inverted yield curve scenario)
-        // todo: in onData, if not invested, set tolerance to 0
-        // todo: get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
-        // todo: MFA on aws
+        // use list instead of hard-coded tlt/spy
+        // cleanup linq in Momentums
+        // don't rebalance if momentums.First().Key == symbolInMarket
+        // replace "symbolInMarket" with dynamic lookup in portfolio
+        // test different sets of equities
+        // test adding SHY to universe (short term bond for inverted yield curve scenario)
+        // in onData, if not invested, set tolerance to 0
+        // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
+        // MFA on aws
+        // trade with live $
 
         private static readonly int slowDays = 60;
         private static readonly int fastDays = 8;

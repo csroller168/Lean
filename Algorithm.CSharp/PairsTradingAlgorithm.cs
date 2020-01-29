@@ -66,12 +66,6 @@ namespace QuantConnect.Algorithm.CSharp
                 .Select(x => new { Symbol = x, Momentum = Momentum(x, slowDays) })
                 .OrderByDescending(x => x.Momentum);
             var selection = momentums.First();
-
-            if (!Portfolio.Invested)
-            {
-                Rebalance(selection.Symbol);
-                return;
-            }
                 
             if(Portfolio[selection.Symbol].Invested)
                 return;
@@ -79,7 +73,8 @@ namespace QuantConnect.Algorithm.CSharp
             var momentumInMarket = momentums
                 .Single(x => x.Symbol == SymbolInMarket)
                 .Momentum;
-            if (selection.Momentum > momentumInMarket + flipMargin)
+            if (selection.Momentum > momentumInMarket + flipMargin
+                || !Portfolio.Invested)
             {
                 Rebalance(selection.Symbol);
             }

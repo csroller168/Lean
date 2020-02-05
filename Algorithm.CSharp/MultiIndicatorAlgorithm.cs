@@ -17,7 +17,7 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="using data" />
     /// <meta name="tag" content="using quantconnect" />
     /// <meta name="tag" content="trading and orders" />
-    public class PairsTradingAlgorithm : QCAlgorithm
+    public class MultiIndicatorAlgorithm : QCAlgorithm
     {
         // TODOS:
         // strategic plans:
@@ -56,7 +56,7 @@ namespace QuantConnect.Algorithm.CSharp
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Minute;
 
-            SetStartDate(2003, 8, 1);
+            SetStartDate(2019, 8, 1);
             SetEndDate(2020, 1, 8);
             SetCash(100000);
 

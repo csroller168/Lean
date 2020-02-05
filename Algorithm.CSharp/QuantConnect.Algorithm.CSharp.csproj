@@ -323,6 +323,7 @@
     <Compile Include="Benchmarks\IndicatorRibbonBenchmark.cs" />
     <Compile Include="ZeroFeeRegressionAlgorithm.cs" />
     <Compile Include="PairsTradingAlgorithm.cs" />
+    <Compile Include="MultiIndicatorAlgorithm.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Algorithm.Framework\QuantConnect.Algorithm.Framework.csproj">

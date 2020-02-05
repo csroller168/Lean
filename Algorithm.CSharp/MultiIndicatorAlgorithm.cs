@@ -8,6 +8,7 @@ using QuantConnect.Data;
 using System.Linq;
 using QuantConnect.Orders.Slippage;
 using System.Collections.Generic;
+using QuantConnect.Indicators;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -23,9 +24,7 @@ namespace QuantConnect.Algorithm.CSharp
         // strategic plans:
             // start building collection of indicator delegates per ticker
             // find a better measure of momentum
-                // maybe compare highest and lowest N prices over short and long period?
-                // or average of short period / average of past short period
-                // maybe measure momentum velocity, not just momentum
+                // macd: https://tradingsim.com/blog/macd/#Chapter_1_What_is_the_MACD/
                 // bollinger bands or one of these: https://www.investopedia.com/ask/answers/05/measuringmomentum.asp
                     // or... maybe compute all, count the signals, and take whomever has most
                     // take top N stocks with decreasing % of portfolio (or base % on num signals)
@@ -43,13 +42,11 @@ namespace QuantConnect.Algorithm.CSharp
             // trade with live $
 
 
-        private static readonly int slowDays = 60;
-        private static readonly int fastDays = 8;
-        private static readonly decimal flipMargin = 0.035m;
+        private static readonly int slowDays = 26;
+        private static readonly int fastDays = 12;
         private static readonly List<string> universe = new List<string> { "SPY", "TLT" };
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
-
-        private string SymbolInMarket => Portfolio.OrderByDescending(y => y.Value.HoldingsValue).First().Key;
+        private Dictionary<string, MovingAverageConvergenceDivergence> Indicators = new Dictionary<string, MovingAverageConvergenceDivergence>();
 
         public override void Initialize()
         {
@@ -59,12 +56,14 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2019, 8, 1);
             SetEndDate(2020, 1, 8);
             SetCash(100000);
+            EnableAutomaticIndicatorWarmUp = true;
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             universe.ForEach(x =>
             {
                 var equity = AddEquity(x, resolution, null, true);
                 equity.SetSlippageModel(SlippageModel);
+                Indicators[x] = MACD(x, fastDays, slowDays, 9, MovingAverageType.Exponential, Resolution.Daily);
             });
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
@@ -75,21 +74,14 @@ namespace QuantConnect.Algorithm.CSharp
             PlotPoints();
 
             var momentums = universe
-                .Select(x => new { Symbol = x, Momentum = Momentum(x, slowDays) })
+                .Select(x => new { Symbol = x, Momentum = Momentum(x) })
                 .OrderByDescending(x => x.Momentum);
             var selection = momentums.First();
-                
-            if(Portfolio[selection.Symbol].Invested)
+
+            if (Portfolio[selection.Symbol].Invested)
                 return;
 
-            var momentumInMarket = momentums
-                .Single(x => x.Symbol == SymbolInMarket)
-                .Momentum;
-            if (selection.Momentum > momentumInMarket + flipMargin
-                || !Portfolio.Invested)
-            {
-                Rebalance(selection.Symbol);
-            }
+            Rebalance(selection.Symbol);
         }
 
         public override void OnOrderEvent(OrderEvent orderEvent)
@@ -108,7 +100,9 @@ namespace QuantConnect.Algorithm.CSharp
         {
             universe.ForEach(x =>
             {
-                Plot("momentum", $"{x}Momentum", Momentum(x, slowDays) - 1);
+                Plot($"{x}Macd", Indicators[x]);
+                Plot($"{x}Signal", Indicators[x].Signal);
+                Plot($"{x}Histogram", Indicators[x].Histogram);
                 Plot("price", x, Securities[x].Price);
                 Plot("invested", x, Securities[x].Invested ? 1 : 0);
             });
@@ -123,13 +117,11 @@ namespace QuantConnect.Algorithm.CSharp
             SetHoldings(buySymbol, 1m, false);
         }
 
-        private decimal Momentum(string symbol, int days)
+        private decimal Momentum(string symbol)
         {
-            var numerator = Math.Min(Securities[symbol].Open, Securities[symbol].Price);
-            var denominator = History(symbol, TimeSpan.FromDays(days + fastDays / 2), Resolution.Daily)
-                .Take(fastDays)
-                .Average(x => x.Close);
-            return numerator / denominator;
+            return Indicators[symbol].Histogram > 0
+                ? (Indicators[symbol]/Indicators[symbol].Histogram)-1
+                : 0m;
         }
     }
 }

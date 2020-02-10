@@ -16,7 +16,7 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="using data" />
     /// <meta name="tag" content="using quantconnect" />
     /// <meta name="tag" content="trading and orders" />
-    public class MultiIndicatorAlgorithm : QCAlgorithm
+    public class MovingMomentumAlgorithm : QCAlgorithm
     {
         // TODOS:
         // strategic plans:
@@ -35,12 +35,20 @@ namespace QuantConnect.Algorithm.CSharp
             // trade with live $
 
 
-        private static readonly int slowDays = 26;
-        private static readonly int fastDays = 12;
-        private static readonly int signalDays = 9;
+        private static readonly int slowMacdDays = 26;
+        private static readonly int fastMacdDays = 12;
+        private static readonly int signalMacdDays = 9;
+        private static readonly int slowSmaDays = 150;
+        private static readonly int fastSmaDays = 20;
+        private static readonly int stoPeriod = 20;
+
+
         private static readonly List<string> universe = new List<string> { "SPY", "TLT" };
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, MovingAverageConvergenceDivergence> Macds = new Dictionary<string, MovingAverageConvergenceDivergence>();
+        private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
+        private Dictionary<string, SimpleMovingAverage> FastSmas = new Dictionary<string, SimpleMovingAverage>();
+        private Dictionary<string, Stochastic> Stos = new Dictionary<string, Stochastic>();
 
         public override void Initialize()
         {
@@ -57,7 +65,10 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 var equity = AddEquity(x, resolution, null, true);
                 equity.SetSlippageModel(SlippageModel);
-                Macds[x] = MACD(x, fastDays, slowDays, signalDays, MovingAverageType.Exponential, Resolution.Daily);
+                Macds[x] = MACD(x, fastMacdDays, slowMacdDays, signalMacdDays, MovingAverageType.Exponential, Resolution.Daily);
+                SlowSmas[x] = SMA(x, slowSmaDays, Resolution.Daily);
+                FastSmas[x] = SMA(x, fastSmaDays, Resolution.Daily);
+                Stos[x] = STO(x, stoPeriod);
             });
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
@@ -65,15 +76,23 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            PlotPoints();
+            //PlotPoints();
+            var symbol = "SPY";
 
-            if (BuySignal("SPY"))
+            if (!Portfolio[symbol].Invested
+                && MacdBuySignal(symbol)
+                && StoBuySignal(symbol)
+                && SmaBuySignal(symbol))
             {
-                SetHoldings("SPY", 1m, false);
+                SetHoldings(symbol, 1m);
             }
-            else
+
+            if(Portfolio[symbol].Invested
+                && MacdSellSignal(symbol)
+                && StoSellSignal(symbol)
+                && SmaSellSignal(symbol))
             {
-                Liquidate();
+                SetHoldings(symbol, 0m);
             }
         }
 
@@ -104,17 +123,34 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);
         }
 
-        private void Rebalance(string buySymbol)
+        private bool MacdBuySignal(string symbol)
         {
-            Liquidate();
-            SetHoldings(buySymbol, 1m, false);
+            return Macds[symbol].Histogram > 0;
         }
 
-        private bool BuySignal(string symbol)
+        private bool SmaBuySignal(string symbol)
         {
-            var tolerance = 0m;
-            var indicator = Macds[symbol];
-            return indicator > tolerance;
+            return FastSmas[symbol] > SlowSmas[symbol];
+        }
+
+        private bool StoBuySignal(string signal)
+        {
+            return Stos[signal] < 20;
+        }
+
+        private bool MacdSellSignal(string symbol)
+        {
+            return Macds[symbol].Histogram < 0;
+        }
+
+        private bool SmaSellSignal(string symbol)
+        {
+            return FastSmas[symbol] < SlowSmas[symbol];
+        }
+
+        private bool StoSellSignal(string signal)
+        {
+            return Stos[signal] > 80;
         }
     }
 }

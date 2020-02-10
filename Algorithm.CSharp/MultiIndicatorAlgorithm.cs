@@ -4,7 +4,6 @@
 
 using QuantConnect.Orders;
 using QuantConnect.Data;
-using System.Linq;
 using QuantConnect.Orders.Slippage;
 using System.Collections.Generic;
 using QuantConnect.Indicators;
@@ -21,26 +20,19 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // TODOS:
         // strategic plans:
-        // start building collection of indicator delegates per ticker
-        // find a better measure of momentum
-        // macd: https://tradingsim.com/blog/macd/#Chapter_1_What_is_the_MACD/
-        // try double-cross for 2nd signal: https://www.investopedia.com/articles/trading/08/macd-stochastic-double-cross.asp
-        // once I have signaled "buys", rank them according to something (slope of macd or macd histogram?)
-        // bollinger bands or one of these: https://www.investopedia.com/ask/answers/05/measuringmomentum.asp
-        // or... maybe compute all, count the signals, and take whomever has most
-        // take top N stocks with decreasing % of portfolio (or base % on num signals)
-        // add my own "signal" of no big drop in last N days
-        // note: some of these may perform better in sideways markets vs. rocky ones.  assess, try to identify and switch
-        // Test a more diverse group of etfs, including different classes (equities, fixed income, commodities...)
-        // try picking multiple etfs
-        // possibly separate etfs into classes, then pick top 1 from each class
+            // try moving momentum strategy: https://school.stockcharts.com/doku.php?id=trading_strategies:moving_momentum
+            // use a diverse universe of sector etfs and bond etfs
+            // start using equal weight of all signaled buy
+            // then, test ranking (but these will signal oversold, so momentum may be bad way to rank)
+                // NOTE: PPO is apples to apples way to measure momentum
         // bugs
-        // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
+            // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
         // optimize
-        // liquidate if all momentums < 0 (and ema not trend up?)?
-        // test closing positions overnight
+            // liquidate if all momentums < 0 (and ema not trend up?)?
+            // test closing positions overnight
+            // try adding the morning's open into the indicators
         // deployment
-        // trade with live $
+            // trade with live $
 
 
         private static readonly int slowDays = 26;
@@ -83,16 +75,6 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 Liquidate();
             }
-
-            //var momentums = universe
-            //    .Select(x => new { Symbol = x, Momentum = Momentum(x) })
-            //    .OrderByDescending(x => x.Momentum);
-            //var selection = momentums.First();
-
-            //if (Portfolio[selection.Symbol].Invested)
-            //    return;
-
-            //Rebalance(selection.Symbol);
         }
 
         public override void OnOrderEvent(OrderEvent orderEvent)
@@ -130,17 +112,9 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool BuySignal(string symbol)
         {
-            var tolerance = .05m;
-            //var tolerance = 0m;
+            var tolerance = 0m;
             var indicator = Macds[symbol];
-            return indicator > tolerance && indicator.Histogram > tolerance;
+            return indicator > tolerance;
         }
-
-        //private decimal Momentum(string symbol)
-        //{
-        //    return Macds[symbol].Histogram > 0
-        //        ? (Macds[symbol]/Macds[symbol].Histogram)-1
-        //        : 0m;
-        //}
     }
 }

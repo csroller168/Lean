@@ -7,6 +7,7 @@ using QuantConnect.Data;
 using QuantConnect.Orders.Slippage;
 using System.Collections.Generic;
 using QuantConnect.Indicators;
+using System.Linq;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -41,9 +42,19 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int slowSmaDays = 150;
         private static readonly int fastSmaDays = 20;
         private static readonly int stoPeriod = 20;
-
-
-        private static readonly List<string> universe = new List<string> { "SPY", "TLT" };
+        private static readonly List<string> universe = new List<string>
+        {
+            "TLT",
+            "SHY",
+            "IYC",
+            "IYE",
+            "IYF",
+            "IYH",
+            "IYR",
+            "IYM",
+            "IYW",
+            "IDU"
+        };
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, MovingAverageConvergenceDivergence> Macds = new Dictionary<string, MovingAverageConvergenceDivergence>();
         private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
@@ -77,23 +88,35 @@ namespace QuantConnect.Algorithm.CSharp
         public override void OnData(Slice slice)
         {
             //PlotPoints();
-            var symbol = "SPY";
 
-            if (!Portfolio[symbol].Invested
+            var toBuy = universe.Where(x => BuySignal(x)).ToList();
+            var toSell = universe.Where(x => SellSignal(x));
+
+            foreach(var symbol in toSell)
+            {
+                Liquidate(symbol);
+            }
+            foreach (var symbol in toBuy)
+            {
+                var pct = 0.98m / toBuy.Count;
+                SetHoldings(symbol, pct);
+            }
+        }
+
+        private bool BuySignal(string symbol)
+        {
+            return !Portfolio[symbol].Invested
                 && MacdBuySignal(symbol)
                 && StoBuySignal(symbol)
-                && SmaBuySignal(symbol))
-            {
-                SetHoldings(symbol, 1m);
-            }
+                && SmaBuySignal(symbol);
+        }
 
-            if(Portfolio[symbol].Invested
+        private bool SellSignal(string symbol)
+        {
+            return Portfolio[symbol].Invested
                 && MacdSellSignal(symbol)
                 && StoSellSignal(symbol)
-                && SmaSellSignal(symbol))
-            {
-                SetHoldings(symbol, 0m);
-            }
+                && SmaSellSignal(symbol);
         }
 
         public override void OnOrderEvent(OrderEvent orderEvent)

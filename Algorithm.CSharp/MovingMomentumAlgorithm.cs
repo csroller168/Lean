@@ -28,17 +28,19 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int fastSmaDays = 20;
         private static readonly int stoPeriod = 20;
         private static readonly List<string> universe = new List<string>
-        {
+        {   
+            "IEF", // treasuries
             "TLT",
-            "SHY",
-            "IYC",
-            "IYE",
-            "IYF",
-            "IYH",
-            "IYR",
-            "IYM",
-            "IYW",
-            "IDU"
+            "SHY", 
+            "XLB", // etfs
+            "XLE",
+            "XLF",
+            "XLI",
+            "XLK",
+            "XLP",
+            "XLU",
+            "XLV",
+            "XLY"
         };
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, MovingAverageConvergenceDivergence> Macds = new Dictionary<string, MovingAverageConvergenceDivergence>();

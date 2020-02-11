@@ -33,10 +33,10 @@
 *.hex
 
 # QC Cloud Setup Bash Files
-*.sh
+#*.sh
 
 # QC Config Files:
-# config.json
+config.json
 
 # QC-C-Specific
 *Engine/bin/Debug/cache/data/*.zip

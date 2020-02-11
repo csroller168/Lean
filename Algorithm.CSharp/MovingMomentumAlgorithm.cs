@@ -11,30 +11,15 @@ using System.Linq;
 
 namespace QuantConnect.Algorithm.CSharp
 {
-    /// <summary>
-    /// Basic template framework algorithm uses framework components to define the algorithm.
-    /// </summary>
-    /// <meta name="tag" content="using data" />
-    /// <meta name="tag" content="using quantconnect" />
-    /// <meta name="tag" content="trading and orders" />
     public class MovingMomentumAlgorithm : QCAlgorithm
     {
         // TODOS:
-        // strategic plans:
-            // try moving momentum strategy: https://school.stockcharts.com/doku.php?id=trading_strategies:moving_momentum
-            // use a diverse universe of sector etfs and bond etfs
-            // start using equal weight of all signaled buy
-            // then, test ranking (but these will signal oversold, so momentum may be bad way to rank)
-                // NOTE: PPO is apples to apples way to measure momentum
+        // optimize
+            // https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         // bugs
             // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
-        // optimize
-            // liquidate if all momentums < 0 (and ema not trend up?)?
-            // test closing positions overnight
-            // try adding the morning's open into the indicators
         // deployment
             // trade with live $
-
 
         private static readonly int slowMacdDays = 26;
         private static readonly int fastMacdDays = 12;
@@ -65,6 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Minute;
+            SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
             SetEndDate(2020, 1, 8);

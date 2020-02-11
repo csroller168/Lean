@@ -16,7 +16,6 @@
 using System;
 using System.IO;
 using QuantConnect.Interfaces;
-using QuantConnect.Logging;
 
 namespace QuantConnect.Lean.Engine.DataFeeds
 {
@@ -41,9 +40,9 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                 if (exception is DirectoryNotFoundException
                     || exception is FileNotFoundException)
                 {
-                    Log.Error("DefaultDataProvider.Fetch(): The specified file was not found: {0}", key);
                     return null;
                 }
+
                 throw;
             }
         }

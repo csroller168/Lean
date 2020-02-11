@@ -68,19 +68,18 @@ namespace QuantConnect.Lean.Engine.DataFeeds.Enumerators.Factories
         /// <returns>An enumerator reading the subscription request</returns>
         public IEnumerator<BaseData> CreateEnumerator(SubscriptionRequest request, IDataProvider dataProvider)
         {
-            var sourceFactory = request.Configuration.Type.GetBaseDataInstance();
-            var useMapFiles = request.Configuration.TickerShouldBeMapped();
+            var sourceFactory = request.Configuration.GetBaseDataInstance();
 
             using (var dataCacheProvider = new SingleEntryDataCacheProvider(dataProvider))
             {
                 foreach (var date in _tradableDaysProvider(request))
                 {
-                    if (useMapFiles)
+                    if (sourceFactory.RequiresMapping())
                     {
                         request.Configuration.MappedSymbol = GetMappedSymbol(request.Configuration, date);
                     }
                     var source = sourceFactory.GetSource(request.Configuration, date, _isLiveMode);
-                    var factory = SubscriptionDataSourceReader.ForSource(source, dataCacheProvider, request.Configuration, date, _isLiveMode);
+                    var factory = SubscriptionDataSourceReader.ForSource(source, dataCacheProvider, request.Configuration, date, _isLiveMode, sourceFactory);
                     var entriesForDate = factory.Read(source);
                     foreach (var entry in entriesForDate)
                     {
@@ -92,11 +91,8 @@ namespace QuantConnect.Lean.Engine.DataFeeds.Enumerators.Factories
 
         private string GetMappedSymbol(SubscriptionDataConfig config, DateTime date)
         {
-            var mapFile = config.Symbol.HasUnderlying ?
-                    _mapFileResolver.ResolveMapFile(config.Symbol.Underlying.ID.Symbol, config.Symbol.Underlying.ID.Date) :
-                    _mapFileResolver.ResolveMapFile(config.Symbol.ID.Symbol, config.Symbol.ID.Date);
-
-            return mapFile.GetMappedSymbol(date, config.MappedSymbol);
+            return _mapFileResolver.ResolveMapFile(config.Symbol, config.Type)
+                .GetMappedSymbol(date, config.MappedSymbol);
         }
     }
 }

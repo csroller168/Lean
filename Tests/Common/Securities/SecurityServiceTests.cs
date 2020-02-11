@@ -65,7 +65,7 @@ namespace QuantConnect.Tests.Common.Securities
         {
             var optionSymbol = Symbol.Create("GOOG", SecurityType.Option, Market.USA);
 
-            var configs = _subscriptionManager.SubscriptionDataConfigService.Add(typeof(ZipEntryName), optionSymbol, Resolution.Second, false, false, false);
+            var configs = _subscriptionManager.SubscriptionDataConfigService.Add(typeof(ZipEntryName), optionSymbol, Resolution.Minute, false, false, false);
             var option = _securityService.CreateSecurity(optionSymbol, configs, 1.0m, false);
 
             Assert.AreEqual(option.Subscriptions.Count(), 1);
@@ -104,7 +104,7 @@ namespace QuantConnect.Tests.Common.Securities
         [Test]
         public void CanCreate_CustomSecurities_WithCorrectSubscriptions()
         {
-            var symbol = new Symbol(SecurityIdentifier.GenerateBase("BTC", Market.USA), "BTC");
+            var symbol = new Symbol(SecurityIdentifier.GenerateBase(null, "BTC", Market.USA), "BTC");
             _marketHoursDatabase.SetEntryAlwaysOpen(Market.USA, "BTC", SecurityType.Base, TimeZones.NewYork);
 
             var configs = _subscriptionManager.SubscriptionDataConfigService.Add(typeof(LiveTradingFeaturesAlgorithm.Bitcoin), symbol, Resolution.Second, false, false, false);
@@ -139,7 +139,7 @@ namespace QuantConnect.Tests.Common.Securities
                 new Tuple<Type, TickType>(typeof(OpenInterest), TickType.OpenInterest)
             };
 
-            var configs = _subscriptionManager.SubscriptionDataConfigService.Add(optionSymbol, Resolution.Second, false, false, false, false, false, subscriptionTypes);
+            var configs = _subscriptionManager.SubscriptionDataConfigService.Add(optionSymbol, Resolution.Minute, false, false, false, false, false, subscriptionTypes);
             var security = _securityService.CreateSecurity(optionSymbol, configs, 1.0m, false);
 
             Assert.IsFalse(optionSymbol.IsCanonical());

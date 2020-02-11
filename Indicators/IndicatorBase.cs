@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using QuantConnect.Data;
+using QuantConnect.Data.Market;
 using QuantConnect.Logging;
 
 namespace QuantConnect.Indicators
@@ -117,10 +118,8 @@ namespace QuantConnect.Indicators
             {
                 return Update((T)(object)new IndicatorDataPoint(time, value));
             }
-            else
-            {
-                throw new NotSupportedException(string.Format("{0} does not support Update(DateTime, decimal) method overload. Use Update({1}) instead.", GetType().Name, typeof(T).Name));
-            }
+
+            throw new NotSupportedException($"{GetType().Name} does not support Update(DateTime, decimal) method overload. Use Update({typeof(T).Name}) instead.");
         }
 
         /// <summary>
@@ -186,12 +185,22 @@ namespace QuantConnect.Indicators
             // solely relying on reference semantics (think hashset/dictionary impls)
 
             if (ReferenceEquals(obj, null)) return false;
-            if (obj.GetType().IsSubclassOf(typeof (IndicatorBase<>))) return ReferenceEquals(this, obj);
+            var type = obj.GetType();
 
+            while (type != null && type != typeof(object))
+            {
+                var cur = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+                if (typeof(IndicatorBase<>) == cur)
+                {
+                    return ReferenceEquals(this, obj);
+                }
+                type = type.BaseType;
+            }
+            
             try
             {
                 // the obj is not an indicator, so let's check for value types, try converting to decimal
-                var converted = Convert.ToDecimal(obj);
+                var converted = obj.ConvertInvariant<decimal>();
                 return Current.Value == converted;
             }
             catch (InvalidCastException)
@@ -207,7 +216,7 @@ namespace QuantConnect.Indicators
         /// <returns>String representation of the indicator</returns>
         public override string ToString()
         {
-            return Current.Value.ToString("#######0.0####");
+            return Current.Value.ToStringInvariant("#######0.0####");
         }
 
         /// <summary>
@@ -216,7 +225,7 @@ namespace QuantConnect.Indicators
         /// <returns>A detailed string of this indicator's current state</returns>
         public string ToDetailedString()
         {
-            return string.Format("{0} - {1}", Name, this);
+            return $"{Name} - {this}";
         }
 
         /// <summary>

@@ -14,6 +14,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -85,6 +86,13 @@ namespace QuantConnect.Data.Custom.USTreasury
         /// </summary>
         public decimal? ThirtyYear { get; private set; }
 
+        /// <summary>
+        /// Specifies the location of the data and directs LEAN where to load the data from
+        /// </summary>
+        /// <param name="config">Subscription configuration</param>
+        /// <param name="date">Algorithm date</param>
+        /// <param name="isLiveMode">Is live mode</param>
+        /// <returns>Subscription data source object pointing LEAN to the data location</returns>
         public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
         {
             return new SubscriptionDataSource(
@@ -171,6 +179,22 @@ namespace QuantConnect.Data.Custom.USTreasury
                 ThirtyYear = ThirtyYear,
                 Symbol = Symbol
             };
+        }
+
+        /// <summary>
+        /// Gets the default resolution for this data and security type
+        /// </summary>
+        public override Resolution DefaultResolution()
+        {
+            return Resolution.Daily;
+        }
+
+        /// <summary>
+        /// Gets the supported resolution for this data and security type
+        /// </summary>
+        public override List<Resolution> SupportedResolutions()
+        {
+            return DailyResolution;
         }
     }
 }

@@ -283,7 +283,7 @@ namespace QuantConnect.ToolBox.IQFeed
             var market = symbol.ID.Market;
             var securityType = symbol.ID.SecurityType;
 
-            if (symbol.Value.ToLower().IndexOf("universe") != -1) return false;
+            if (symbol.Value.IndexOfInvariant("universe", true) != -1) return false;
 
             return
                 (securityType == SecurityType.Equity && market == Market.USA) ||
@@ -321,6 +321,16 @@ namespace QuantConnect.ToolBox.IQFeed
         public IEnumerable<Symbol> LookupSymbols(string lookupName, SecurityType securityType, string securityCurrency = null, string securityExchange = null)
         {
             return _symbolUniverse.LookupSymbols(lookupName, securityType, securityCurrency, securityExchange);
+        }
+
+        /// <summary>
+        /// Returns whether the time can be advanced or not.
+        /// </summary>
+        /// <param name="securityType">The security type</param>
+        /// <returns>true if the time can be advanced</returns>
+        public bool CanAdvanceTime(SecurityType securityType)
+        {
+            return _symbolUniverse.CanAdvanceTime(securityType);
         }
     }
 
@@ -388,11 +398,9 @@ namespace QuantConnect.ToolBox.IQFeed
                 var ticksPerSecond = count / (DateTime.Now - start).TotalSeconds;
                 if (ticksPerSecond > 1000 || _dataQueue.Count > 31)
                 {
-                    Log.Trace(string.Format("IQFeed.OnSecond(): Ticks/sec: {0} Engine.Ticks.Count: {1} CPU%: {2}",
-                        ticksPerSecond.ToString("0000.00"),
-                        _dataQueue.Count,
-                        OS.CpuUsage.ToString("0.0") + "%"
-                        ));
+                    Log.Trace($"IQFeed.OnSecond(): Ticks/sec: {ticksPerSecond.ToStringInvariant("0000.00")} " +
+                        $"Engine.Ticks.Count: {_dataQueue.Count} CPU%: {OS.CpuUsage.ToStringInvariant("0.0") + "%"}"
+                    );
                 }
 
                 count = 0;
@@ -604,7 +612,9 @@ namespace QuantConnect.ToolBox.IQFeed
                 end = null;
             }
 
-            Log.Trace(string.Format("HistoryPort.ProcessHistoryJob(): Submitting request: {0}-{1}: {2} {3}->{4}", request.Symbol.SecurityType, ticker, request.Resolution, start, end ?? DateTime.UtcNow.AddMinutes(-1)));
+            Log.Trace($"HistoryPort.ProcessHistoryJob(): Submitting request: {request.Symbol.SecurityType.ToStringInvariant()}-{ticker}: " +
+                $"{request.Resolution.ToStringInvariant()} {start.ToStringInvariant()}->{(end ?? DateTime.UtcNow.AddMinutes(-1)).ToStringInvariant()}"
+            );
 
             int id;
             var reqid = string.Empty;
@@ -656,7 +666,7 @@ namespace QuantConnect.ToolBox.IQFeed
         /// <returns></returns>
         private static string CreateRequestID(LookupType lookupType, int id)
         {
-            return lookupType + id.ToString("0000000");
+            return lookupType + id.ToStringInvariant("0000000");
         }
 
 

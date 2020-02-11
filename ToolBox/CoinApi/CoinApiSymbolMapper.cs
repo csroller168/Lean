@@ -1,4 +1,4 @@
-﻿/*
+/*
  * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
  * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
  *
@@ -53,15 +53,18 @@ namespace QuantConnect.ToolBox.CoinApi
                     Market.Bitfinex,
                     new Dictionary<string, string>
                     {
-                        { "ANIO", "NIO" },
-                        { "BCHSV", "BSV" },
-                        { "DASH", "DSH" },
-                        { "IOTA", "IOT" },
-                        { "MANA", "MNA" },
-                        { "PKGO", "GOT" },
-                        { "QTUM", "QTM" },
-                        { "USDT", "UST" },
-                        { "YOYOW", "YYW" }
+                        { "ALGO", "ALO"},
+                        { "ANIO", "NIO"},
+                        { "BCHSV", "BSV"},
+                        { "DASH", "DSH"},
+                        { "IOTA", "IOT"},
+                        { "LINK", "LIK"},
+                        { "LOOM", "LOM"},
+                        { "MANA", "MNA"},
+                        { "PKGO", "GOT"},
+                        { "QTUM", "QTM"},
+                        { "USDT", "UST"},
+                        { "YOYOW", "YYW"}
                     }
                 }
             };
@@ -165,8 +168,11 @@ namespace QuantConnect.ToolBox.CoinApi
 
             var result = JsonConvert.DeserializeObject<List<CoinApiSymbol>>(json);
 
+            // There were cases of entries in the CoinApiSymbols list with the following pattern:
+            // <Exchange>_SPOT_<BaseCurrency>_<QuoteCurrency>_<ExtraSuffix>
+            // Those cases should be ignored for SPOT prices.
             _symbolMap = result
-                .Where(x => x.SymbolType == "SPOT")
+                .Where(x => x.SymbolType == "SPOT" && x.SymbolId.Split('_').Length == 4)
                 .ToDictionary(
                     x =>
                     {

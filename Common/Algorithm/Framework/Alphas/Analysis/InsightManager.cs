@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Linq;
 using QuantConnect.Logging;
 using QuantConnect.Util;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Algorithm.Framework.Alphas.Analysis
 {
@@ -159,7 +160,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas.Analysis
 
                         if (context.InitialValues.Price == 0)
                         {
-                            Log.Error($"InsightManager.Step(): Warning {frontierTimeUtc} UTC: insight {insight} initial price value is 0");
+                            Log.Error(Invariant($"InsightManager.Step(): Warning {frontierTimeUtc} UTC: insight {insight} initial price value is 0"));
                         }
 
                         // let everyone know we've received an insight
@@ -210,7 +211,9 @@ namespace QuantConnect.Algorithm.Framework.Alphas.Analysis
         /// </summary>
         private void UpdateScores(ReadOnlySecurityValuesCollection securityValuesCollection)
         {
-            var removals = new List<InsightAnalysisContext>();
+            // for performance be lazy to initialize collection
+            List<InsightAnalysisContext> removals = null;
+
             foreach (var context in _openInsightContexts)
             {
                 // was this insight period closed before we update the times?
@@ -254,6 +257,10 @@ namespace QuantConnect.Algorithm.Framework.Alphas.Analysis
                     var id = context.Insight.Id;
                     _closedInsightContexts[id] = context;
 
+                    if (removals == null)
+                    {
+                        removals = new List<InsightAnalysisContext>();
+                    }
                     removals.Add(context);
                 }
 
@@ -261,7 +268,10 @@ namespace QuantConnect.Algorithm.Framework.Alphas.Analysis
                 _updatedInsightContexts.Add(context);
             }
 
-            _openInsightContexts.RemoveWhere(removals.Contains);
+            if (removals != null)
+            {
+                _openInsightContexts.RemoveWhere(removals.Contains);
+            }
         }
 
         /// <summary>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</summary>

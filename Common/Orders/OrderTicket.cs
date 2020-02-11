@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using QuantConnect.Securities;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Orders
 {
@@ -254,9 +255,10 @@ namespace QuantConnect.Orders
                     break;
 
                 default:
-                    throw new ArgumentOutOfRangeException("field", field, null);
+                    throw new ArgumentOutOfRangeException(nameof(field), field, null);
             }
-            throw new ArgumentException("Unable to get field " + field + " on order of type " + _submitRequest.OrderType);
+
+            throw new ArgumentException(Invariant($"Unable to get field {field} on order of type {_submitRequest.OrderType}"));
         }
 
         /// <summary>
@@ -272,6 +274,72 @@ namespace QuantConnect.Orders
         }
 
         /// <summary>
+        /// Submits an <see cref="UpdateOrderRequest"/> with the <see cref="SecurityTransactionManager"/> to update
+        /// the ticket with tag specified in <paramref name="tag"/>
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns><see cref="OrderResponse"/> from updating the order</returns>
+        public OrderResponse UpdateTag(string tag)
+        {
+            var fields = new UpdateOrderFields()
+            {
+                Tag = tag
+            };
+            return Update(fields);
+        }
+
+        /// <summary>
+        /// Submits an <see cref="UpdateOrderRequest"/> with the <see cref="SecurityTransactionManager"/> to update
+        /// the ticket with quantity specified in <paramref name="quantity"/> and with tag specified in <paramref name="quantity"/>
+        /// </summary>
+        /// <param name="quantity"></param>
+        /// <param name="tag"></param>
+        /// <returns><see cref="OrderResponse"/> from updating the order</returns>
+        public OrderResponse UpdateQuantity(decimal quantity, string tag = null)
+        {
+            var fields = new UpdateOrderFields()
+            {
+                Quantity = quantity,
+                Tag = tag
+            };
+            return Update(fields);
+        }
+
+        /// <summary>
+        /// Submits an <see cref="UpdateOrderRequest"/> with the <see cref="SecurityTransactionManager"/> to update
+        /// the ticker with limitprice specified in <paramref name="limitPrice"/> and with tag specified in <paramref name="quantity"/>
+        /// </summary>
+        /// <param name="limitPrice"></param>
+        /// <param name="tag"></param>
+        /// <returns><see cref="OrderResponse"/> from updating the order</returns>
+        public OrderResponse UpdateLimitPrice(decimal limitPrice, string tag = null)
+        {
+            var fields = new UpdateOrderFields()
+            {
+                LimitPrice = limitPrice,
+                Tag = tag
+            };
+            return Update(fields);
+        }
+
+        /// <summary>
+        /// Submits an <see cref="UpdateOrderRequest"/> with the <see cref="SecurityTransactionManager"/> to update
+        /// the ticker with stopprice specified in <paramref name="stopPrice"/> and with tag specified in <paramref name="quantity"/>
+        /// </summary>
+        /// <param name="stopPrice"></param>
+        /// <param name="tag"></param>
+        /// <returns><see cref="OrderResponse"/> from updating the order</returns>
+        public OrderResponse UpdateStopPrice(decimal stopPrice, string tag = null)
+        {
+            var fields = new UpdateOrderFields()
+            {
+                StopPrice = stopPrice,
+                Tag = tag
+            };
+            return Update(fields);
+        }
+
+        /// <summary>
         /// Submits a new request to cancel this order
         /// </summary>
         public OrderResponse Cancel(string tag = null)
@@ -282,7 +350,9 @@ namespace QuantConnect.Orders
                 // don't submit duplicate cancel requests
                 if (_cancelRequest != null)
                 {
-                    return OrderResponse.Error(request, OrderResponseErrorCode.RequestCanceled, $"Order {OrderId} has already received a cancellation request.");
+                    return OrderResponse.Error(request, OrderResponseErrorCode.RequestCanceled,
+                        Invariant($"Order {OrderId} has already received a cancellation request.")
+                    );
                 }
             }
 
@@ -476,12 +546,13 @@ namespace QuantConnect.Orders
         /// <filterpriority>2</filterpriority>
         public override string ToString()
         {
-            var counts = "Request Count: " + RequestCount() + " Response Count: " + ResponseCount();
+            var counts = Invariant($"Request Count: {RequestCount()} Response Count: {ResponseCount()}");
             if (_order != null)
             {
-                return OrderId + ": " + _order + " " + counts;
+                return Invariant($"{OrderId}: {_order} {counts}");
             }
-            return OrderId + ": " + counts;
+
+            return Invariant($"{OrderId}: {counts}");
         }
 
         private int ResponseCount()
@@ -538,7 +609,7 @@ namespace QuantConnect.Orders
             {
                 return orderSelector(typedOrder);
             }
-            throw new ArgumentException(string.Format("Unable to access property {0} on order of type {1}", field, order.Type));
+            throw new ArgumentException(Invariant($"Unable to access property {field} on order of type {order.Type}"));
         }
     }
 }

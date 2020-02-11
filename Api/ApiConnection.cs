@@ -47,7 +47,7 @@ namespace QuantConnect.Api
         public ApiConnection(int userId, string token)
         {
             _token = token;
-            _userId = userId.ToString();
+            _userId = userId.ToStringInvariant();
             var apiUrl = Config.Get("cloud-api-url", "https://www.quantconnect.com/api/v2/");
             Client = new RestClient(apiUrl);
         }
@@ -88,7 +88,7 @@ namespace QuantConnect.Api
                 // Timestamps older than 1800 seconds will not work.
                 var timestamp = (int)Time.TimeStamp();
                 var hash = Api.CreateSecureHash(timestamp, _token);
-                request.AddHeader("Timestamp", timestamp.ToString());
+                request.AddHeader("Timestamp", timestamp.ToStringInvariant());
 
                 Client.Authenticator = new HttpBasicAuthenticator(_userId, hash);
 
@@ -109,11 +109,16 @@ namespace QuantConnect.Api
                     return false;
                 }
 
+                if (!restsharpResponse.IsSuccessful)
+                {
+                    Log.Error($"ApiConnect.TryRequest(): Content: {restsharpResponse.Content}");
+                }
+
                 responseContent = restsharpResponse.Content;
                 result = JsonConvert.DeserializeObject<T>(responseContent);
-                if (!result.Success)
+
+                if (result == null || !result.Success)
                 {
-                    //result;
                     return false;
                 }
             }

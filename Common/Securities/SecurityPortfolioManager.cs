@@ -16,7 +16,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using Python.Runtime;
 using QuantConnect.Data.Market;
@@ -24,6 +23,7 @@ using QuantConnect.Interfaces;
 using QuantConnect.Logging;
 using QuantConnect.Orders;
 using QuantConnect.Python;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Securities
 {
@@ -34,6 +34,7 @@ namespace QuantConnect.Securities
     public class SecurityPortfolioManager : IDictionary<Symbol, SecurityHolding>, ISecurityProvider
     {
         // flips to true when the user called SetCash(), if true, SetAccountCurrency will throw
+        private bool _setAccountCurrencyWasCalled;
         private bool _setCashWasCalled;
         private bool _isTotalPortfolioValueValid;
         private decimal _totalPortfolioValue;
@@ -463,9 +464,13 @@ namespace QuantConnect.Securities
                 foreach (var kvp in Securities)
                 {
                     var security = kvp.Value;
+                    if (security.Holdings.Quantity == 0)
+                    {
+                        continue;
+                    }
                     var context = new ReservedBuyingPowerForPositionParameters(security);
                     var reservedBuyingPower = security.BuyingPowerModel.GetReservedBuyingPowerForPosition(context);
-                    sum += reservedBuyingPower.Value;
+                    sum += reservedBuyingPower.AbsoluteUsedBuyingPower;
                 }
                 return sum;
             }
@@ -526,6 +531,22 @@ namespace QuantConnect.Securities
         /// <param name="accountCurrency">The account currency cash symbol to set</param>
         public void SetAccountCurrency(string accountCurrency)
         {
+            accountCurrency = accountCurrency.LazyToUpper();
+
+            // only allow setting account currency once
+            // we could try to set it twice when backtesting and the job packet specifies the initial CashAmount to use
+            if (_setAccountCurrencyWasCalled)
+            {
+                if (accountCurrency != CashBook.AccountCurrency)
+                {
+                    Log.Trace("SecurityPortfolioManager.SetAccountCurrency():" +
+                              $" account currency has already been set to {CashBook.AccountCurrency}." +
+                              $" Will ignore new value {accountCurrency}");
+                }
+                return;
+            }
+            _setAccountCurrencyWasCalled = true;
+
             if (Securities.Count > 0)
             {
                 throw new InvalidOperationException("SecurityPortfolioManager.SetAccountCurrency(): " +
@@ -539,7 +560,6 @@ namespace QuantConnect.Securities
                     "Cannot change AccountCurrency after setting cash. " +
                     "Please move SetAccountCurrency() before SetCash().");
             }
-            accountCurrency = accountCurrency.LazyToUpper();
 
             Log.Trace("SecurityPortfolioManager.SetAccountCurrency():" +
                 $" setting account currency to {accountCurrency}");
@@ -580,31 +600,6 @@ namespace QuantConnect.Securities
             {
                 CashBook.Add(symbol, cash, conversionRate);
             }
-        }
-
-        /// <summary>
-        /// Gets the margin available for trading a specific symbol in a specific direction.
-        /// </summary>
-        /// <param name="symbol">The symbol to compute margin remaining for</param>
-        /// <param name="direction">The order/trading direction</param>
-        /// <returns>The maximum order size that is currently executable in the specified direction</returns>
-        public decimal GetMarginRemaining(Symbol symbol, OrderDirection direction = OrderDirection.Buy)
-        {
-            var security = Securities[symbol];
-            var context = new BuyingPowerParameters(this, security, direction);
-            return security.BuyingPowerModel.GetBuyingPower(context).Value;
-        }
-
-        /// <summary>
-        /// Gets the margin available for trading a specific symbol in a specific direction.
-        /// Alias for <see cref="GetMarginRemaining"/>
-        /// </summary>
-        /// <param name="symbol">The symbol to compute margin remaining for</param>
-        /// <param name="direction">The order/trading direction</param>
-        /// <returns>The maximum order size that is currently executable in the specified direction</returns>
-        public decimal GetBuyingPower(Symbol symbol, OrderDirection direction = OrderDirection.Buy)
-        {
-            return GetMarginRemaining(symbol, direction);
         }
 
         /// <summary>
@@ -787,8 +782,9 @@ namespace QuantConnect.Securities
         public void LogMarginInformation(OrderRequest orderRequest = null)
         {
             Log.Trace("Total margin information: " +
-                      $"TotalMarginUsed: {TotalMarginUsed.ToString("F2", CultureInfo.InvariantCulture)}, " +
-                      $"MarginRemaining: {MarginRemaining.ToString("F2", CultureInfo.InvariantCulture)}");
+                  Invariant($"TotalMarginUsed: {TotalMarginUsed:F2}, ") +
+                  Invariant($"MarginRemaining: {MarginRemaining:F2}")
+              );
 
             var orderSubmitRequest = orderRequest as SubmitOrderRequest;
             if (orderSubmitRequest != null)
@@ -800,13 +796,9 @@ namespace QuantConnect.Securities
                     new ReservedBuyingPowerForPositionParameters(security)
                 );
 
-                var marginRemaining = security.BuyingPowerModel.GetBuyingPower(
-                    new BuyingPowerParameters(this, security, direction)
-                );
-
                 Log.Trace("Order request margin information: " +
-                          $"MarginUsed: {marginUsed.Value.ToString("F2", CultureInfo.InvariantCulture)}, " +
-                          $"MarginRemaining: {marginRemaining.Value.ToString("F2", CultureInfo.InvariantCulture)}");
+                    Invariant($"MarginUsed: {marginUsed.AbsoluteUsedBuyingPower:F2}")
+                );
             }
         }
 

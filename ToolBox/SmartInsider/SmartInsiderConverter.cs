@@ -17,7 +17,6 @@ using QuantConnect.Logging;
 using System;
 using System.Linq;
 using System.IO;
-using System.Text;
 using QuantConnect.Data.Custom.SmartInsider;
 using QuantConnect.Util;
 using QuantConnect.Interfaces;
@@ -31,17 +30,22 @@ namespace QuantConnect.ToolBox.SmartInsider
     {
         private readonly DirectoryInfo _sourceDirectory;
         private readonly DirectoryInfo _destinationDirectory;
+        private readonly DirectoryInfo _processedFilesDirectory;
+
         private readonly MapFileResolver _mapFileResolver;
 
         /// <summary>
         /// Creates an instance of the converter
         /// </summary>
-        /// <param name="sourceFile"></param>
-        /// <param name="destinationFile"></param>
-        public SmartInsiderConverter(DirectoryInfo sourceDirectory, DirectoryInfo destinationDirectory)
+        /// <param name="sourceDirectory">Directory to read raw data from</param>
+        /// <param name="destinationDirectory">Directory to write processed data to</param>
+        /// <param name="processedFilesDirectory">Directory to read existing processed data from</param>
+        public SmartInsiderConverter(DirectoryInfo sourceDirectory, DirectoryInfo destinationDirectory, DirectoryInfo processedFilesDirectory)
         {
             _sourceDirectory = sourceDirectory;
             _destinationDirectory = destinationDirectory;
+            _processedFilesDirectory = processedFilesDirectory;
+
             _mapFileResolver = Composer.Instance.GetExportedValueByTypeName<IMapFileProvider>(Config.Get("map-file-provider", "LocalDiskMapFileProvider"))
                 .Get(Market.USA);
 
@@ -134,94 +138,87 @@ namespace QuantConnect.ToolBox.SmartInsider
                     continue;
                 }
 
-                try
+                // Yes, there are ONE HUNDRED total fields in this dataset.
+                // However, we will only take the first 60 since the rest are reserved fields
+                var tsv = line.Split('\t')
+                    .Take(60)
+                    .Select(x => x.Replace("\"", ""))
+                    .ToList();
+
+                // If we have a null value on a non-nullable field, consider it invalid data and skip
+                if (string.IsNullOrWhiteSpace(tsv[2]))
                 {
-                    // Yes, there are ONE HUNDRED total fields in this dataset.
-                    // However, we will only take the first 60 since the rest are reserved fields
-                    var tsv = line.Split('\t')
-                        .Take(60)
-                        .Select(x => x.Replace("\"", ""))
-                        .ToList();
+                    Log.Trace($"SmartInsiderConverter.Process(): Null value encountered on non-nullable value on line {i}");
+                    continue;
+                }
 
-                    // If we have a null value on a non-nullable field, consider it invalid data
-                    if (string.IsNullOrWhiteSpace(tsv[2]))
+                // Remove in descending order to maintain index order
+                // while we delete lower indexed values
+                tsv.RemoveAt(46); // ShowOriginal
+                tsv.RemoveAt(36); // PreviousClosePrice
+                tsv.RemoveAt(14); // ShortCompanyName
+                tsv.RemoveAt(7);  // CompanyPageURL
+
+                var finalLine = string.Join("\t", tsv);
+
+                var dataInstance = new T();
+                dataInstance.FromRawData(finalLine);
+
+                var ticker = dataInstance.TickerSymbol;
+
+                // For now, only support US markets
+                if (dataInstance.TickerCountry != "US")
+                {
+                    if (dataInstance.TickerCountry != previousMarket && ticker != previousTicker)
                     {
-                        Log.Trace($"SmartInsiderConverter.Process(): Null value encountered on non-nullable value on line {i}");
-                        continue;
+                        Log.Error($"SmartInsiderConverter.Process(): Market {dataInstance.TickerCountry} is not supported at this time for ticker {ticker} on line {i}");
                     }
-
-                    // Remove in descending order to maintain index order
-                    // while we delete lower indexed values
-                    tsv.RemoveAt(46); // ShowOriginal
-                    tsv.RemoveAt(36); // PreviousClosePrice
-                    tsv.RemoveAt(14); // ShortCompanyName
-                    tsv.RemoveAt(7);  // CompanyPageURL
-
-                    var finalLine = string.Join("\t", tsv);
-
-                    var dataInstance = new T();
-                    dataInstance.FromRawData(finalLine);
-
-                    var ticker = dataInstance.TickerSymbol;
-
-                    // For now, only support US markets
-                    if (dataInstance.TickerCountry != "US")
-                    {
-                        if (dataInstance.TickerCountry != previousMarket && ticker != previousTicker)
-                        {
-                            Log.Error($"SmartInsiderConverter.Process(): Market {dataInstance.TickerCountry} is not supported at this time for ticker {ticker} on line {i}");
-                        }
-
-                        previousMarket = dataInstance.TickerCountry;
-                        previousTicker = ticker;
-
-                        continue;
-                    }
-
-                    var mapFile = _mapFileResolver.ResolveMapFile(ticker, dataInstance.LastUpdate);
-                    if (!mapFile.Any())
-                    {
-                        Log.Error($"SmartInsiderConverter.Process(): Failed to find mapfile for ticker {ticker} on {dataInstance.LastUpdate} on line {i}");
-
-                        previousMarket = dataInstance.TickerCountry;
-                        previousTicker = ticker;
-
-                        continue;
-                    }
-
-                    var newTicker = mapFile.GetMappedSymbol(dataInstance.LastUpdate);
-                    if (string.IsNullOrEmpty(newTicker))
-                    {
-                        Log.Error($"SmartInsiderConverter.Process(): Failed to resolve ticker for old ticker {ticker} on line {i}");
-
-                        previousMarket = dataInstance.TickerCountry;
-                        previousTicker = ticker;
-
-                        continue;
-                    }
-
-                    // Log any mapping events since this can be a point of failure
-                    if (ticker != newTicker)
-                    {
-                        Log.Trace($"SmartInsiderConverter.Process(): Mapped ticker from {ticker} to {newTicker}");
-                    }
-
-                    List<T> symbolLines;
-                    if (!lines.TryGetValue(newTicker, out symbolLines))
-                    {
-                        symbolLines = new List<T>();
-                        lines[newTicker] = symbolLines;
-                    }
-
-                    symbolLines.Add(dataInstance);
 
                     previousMarket = dataInstance.TickerCountry;
                     previousTicker = ticker;
+
+                    continue;
                 }
-                catch (Exception e)
+
+                var mapFile = _mapFileResolver.ResolveMapFile(ticker, dataInstance.LastUpdate);
+                if (!mapFile.Any())
                 {
-                    Log.Error(e, $"SmartInsiderConverter.Process(): Error on line {i}");
+                    Log.Error($"SmartInsiderConverter.Process(): Failed to find mapfile for ticker {ticker} on {dataInstance.LastUpdate} on line {i}");
+
+                    previousMarket = dataInstance.TickerCountry;
+                    previousTicker = ticker;
+
+                    continue;
                 }
+
+                var newTicker = mapFile.GetMappedSymbol(dataInstance.LastUpdate);
+                if (string.IsNullOrEmpty(newTicker))
+                {
+                    Log.Error($"SmartInsiderConverter.Process(): Failed to resolve ticker for old ticker {ticker} on line {i}");
+
+                    previousMarket = dataInstance.TickerCountry;
+                    previousTicker = ticker;
+
+                    continue;
+                }
+
+                // Log any mapping events since this can be a point of failure
+                if (ticker != newTicker)
+                {
+                    Log.Trace($"SmartInsiderConverter.Process(): Mapped ticker from {ticker} to {newTicker}");
+                }
+
+                List<T> symbolLines;
+                if (!lines.TryGetValue(newTicker, out symbolLines))
+                {
+                    symbolLines = new List<T>();
+                    lines[newTicker] = symbolLines;
+                }
+
+                symbolLines.Add(dataInstance);
+
+                previousMarket = dataInstance.TickerCountry;
+                previousTicker = ticker;
             }
 
             return lines;
@@ -230,22 +227,23 @@ namespace QuantConnect.ToolBox.SmartInsider
         /// <summary>
         /// Writes to a temp file and moves the content to the final directory
         /// </summary>
-        /// <param name="finalFile">Final file to write to</param>
+        /// <param name="destinationDirectory">Directory to write final file to</param>
         /// <param name="contents">Contents to write to file</param>
         private void WriteToFile<T>(DirectoryInfo destinationDirectory, Dictionary<string, List<T>> contents)
             where T : SmartInsiderEvent
         {
             foreach (var kvp in contents)
             {
-                var ticker = kvp.Key.ToLower();
+                var ticker = kvp.Key.ToLowerInvariant();
 
                 var finalFile = new FileInfo(Path.Combine(destinationDirectory.FullName, $"{ticker}.tsv"));
+                var processedFile = new FileInfo(Path.Combine(_processedFilesDirectory.FullName, destinationDirectory.Name, $"{ticker}.tsv"));
                 var fileContents = new List<T>();
 
-                if (finalFile.Exists)
+                if (processedFile.Exists)
                 {
-                    Log.Trace($"SmartInsiderConverter.WriteToFile(): Writing to existing file: {finalFile.FullName}");
-                    fileContents = File.ReadAllLines(finalFile.FullName)
+                    Log.Trace($"SmartInsiderConverter.WriteToFile(): Writing from existing processed contents to file: {finalFile.FullName}");
+                    fileContents = File.ReadAllLines(processedFile.FullName)
                         .Select(x => (T)CreateSmartInsiderInstance<T>(x))
                         .ToList();
                 }

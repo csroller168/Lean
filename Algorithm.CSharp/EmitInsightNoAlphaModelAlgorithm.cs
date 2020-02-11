@@ -1,4 +1,4 @@
-﻿/*
+/*
  * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
  * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
  *
@@ -17,7 +17,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuantConnect.Algorithm.Framework.Alphas;
-using QuantConnect.Algorithm.Framework.Execution;
 using QuantConnect.Algorithm.Framework.Portfolio;
 using QuantConnect.Algorithm.Framework.Selection;
 using QuantConnect.Data;
@@ -115,22 +114,29 @@ namespace QuantConnect.Algorithm.CSharp
             {"Total Trades", "4"},
             {"Average Win", "0%"},
             {"Average Loss", "-0.01%"},
-            {"Compounding Annual Return", "-72.251%"},
+            {"Compounding Annual Return", "-72.385%"},
             {"Drawdown", "2.800%"},
             {"Expectancy", "-1"},
-            {"Net Profit", "-1.741%"},
-            {"Sharpe Ratio", "-4.242"},
+            {"Net Profit", "-1.747%"},
+            {"Sharpe Ratio", "-4.618"},
+            {"Probabilistic Sharpe Ratio", "21.828%"},
             {"Loss Rate", "100%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "-0.647"},
-            {"Beta", "-0.872"},
-            {"Annual Standard Deviation", "0.171"},
-            {"Annual Variance", "0.029"},
-            {"Information Ratio", "-2.322"},
-            {"Tracking Error", "0.35"},
-            {"Treynor Ratio", "0.831"},
-            {"Total Fees", "$10.77"},
+            {"Alpha", "-0.752"},
+            {"Beta", "-0.142"},
+            {"Annual Standard Deviation", "0.189"},
+            {"Annual Variance", "0.036"},
+            {"Information Ratio", "-5.959"},
+            {"Tracking Error", "0.289"},
+            {"Treynor Ratio", "6.144"},
+            {"Total Fees", "$17.28"},
+            {"Fitness Score", "0.05"},
+            {"Kelly Criterion Estimate", "0"},
+            {"Kelly Criterion Probability Value", "0"},
+            {"Sortino Ratio", "-4.273"},
+            {"Return Over Maximum Drawdown", "-25.476"},
+            {"Portfolio Turnover", "0.989"},
             {"Total Insights Generated", "1"},
             {"Total Insights Closed", "0"},
             {"Total Insights Analysis Completed", "0"},

@@ -136,7 +136,9 @@ namespace QuantConnect.Lean.Engine.Setup
                 throw new ArgumentException("Expected BacktestNodePacket but received " + parameters.AlgorithmNodePacket.GetType().Name);
             }
 
-            Log.Trace(string.Format("BacktestingSetupHandler.Setup(): Setting up job: Plan: {0}, UID: {1}, PID: {2}, Version: {3}, Source: {4}", job.UserPlan, job.UserId, job.ProjectId, job.Version, job.RequestSource));
+            Log.Trace($"BacktestingSetupHandler.Setup(): Setting up job: Plan: {job.UserPlan}, UID: {job.UserId.ToStringInvariant()}, " +
+                $"PID: {job.ProjectId.ToStringInvariant()}, Version: {job.Version}, Source: {job.RequestSource}"
+            );
 
             if (algorithm == null)
             {
@@ -160,7 +162,6 @@ namespace QuantConnect.Lean.Engine.Setup
                 try
                 {
                     parameters.ResultHandler.SendStatusUpdate(AlgorithmStatus.Initializing, "Initializing algorithm...");
-
                     //Set our parameters
                     algorithm.SetParameters(job.Parameters);
 
@@ -176,8 +177,27 @@ namespace QuantConnect.Lean.Engine.Setup
                     // set the future chain provider
                     algorithm.SetFutureChainProvider(new CachingFutureChainProvider(new BacktestingFutureChainProvider()));
 
+                    // set the object store
+                    algorithm.SetObjectStore(parameters.ObjectStore);
+
+                    // before we call initialize
+                    BaseSetupHandler.LoadBacktestJobAccountCurrency(algorithm, job);
+
                     //Initialise the algorithm, get the required data:
                     algorithm.Initialize();
+
+                    // set start and end date if present in the job
+                    if (job.PeriodStart.HasValue)
+                    {
+                        algorithm.SetStartDate(job.PeriodStart.Value);
+                    }
+                    if (job.PeriodFinish.HasValue)
+                    {
+                        algorithm.SetEndDate(job.PeriodFinish.Value);
+                    }
+
+                    // after we call initialize
+                    BaseSetupHandler.LoadBacktestJobCashAmount(algorithm, job);
 
                     // finalize initialization
                     algorithm.PostInitialize();
@@ -194,12 +214,8 @@ namespace QuantConnect.Lean.Engine.Setup
             //Before continuing, detect if this is ready:
             if (!initializeComplete) return false;
 
-            // TODO: Refactor the BacktestResultHandler to use algorithm not job to set times
-            job.PeriodStart = algorithm.StartDate;
-            job.PeriodFinish = algorithm.EndDate;
-
             //Calculate the max runtime for the strategy
-            MaximumRuntime = GetMaximumRuntime(job.PeriodStart, job.PeriodFinish, algorithm.SubscriptionManager, algorithm.UniverseManager, parameters.AlgorithmNodePacket.Controls);
+            MaximumRuntime = GetMaximumRuntime(algorithm.StartDate, algorithm.EndDate, algorithm.SubscriptionManager, algorithm.UniverseManager, parameters.AlgorithmNodePacket.Controls);
 
             // Python takes forever; lets give it 10x longer to finish.
             if (job.Language == Language.Python)
@@ -209,6 +225,10 @@ namespace QuantConnect.Lean.Engine.Setup
 
             BaseSetupHandler.SetupCurrencyConversions(algorithm, parameters.UniverseSelection);
             StartingPortfolioValue = algorithm.Portfolio.Cash;
+
+            // we set the free portfolio value based on the initial total value and the free percentage value
+            algorithm.Settings.FreePortfolioValue =
+                algorithm.Portfolio.TotalPortfolioValue * algorithm.Settings.FreePortfolioValuePercentage;
 
             //Max Orders: 10k per backtest:
             if (job.UserPlan == UserPlan.Free)
@@ -227,11 +247,13 @@ namespace QuantConnect.Lean.Engine.Setup
             algorithm.SetMaximumOrders(MaxOrders);
 
             //Starting date of the algorithm:
-            StartingDate = job.PeriodStart;
+            StartingDate = algorithm.StartDate;
 
             //Put into log for debugging:
             Log.Trace("SetUp Backtesting: User: " + job.UserId + " ProjectId: " + job.ProjectId + " AlgoId: " + job.AlgorithmId);
-            Log.Trace("Dates: Start: " + job.PeriodStart.ToShortDateString() + " End: " + job.PeriodFinish.ToShortDateString() + " Cash: " + StartingPortfolioValue.ToString("C"));
+            Log.Trace($"Dates: Start: {algorithm.StartDate.ToStringInvariant("d")} " +
+                      $"End: {algorithm.EndDate.ToStringInvariant("d")} " +
+                      $"Cash: {StartingPortfolioValue.ToStringInvariant("C")}");
 
             if (Errors.Count > 0)
             {

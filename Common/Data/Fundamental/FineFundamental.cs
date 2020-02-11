@@ -16,6 +16,7 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Data.Fundamental
 {
@@ -35,6 +36,15 @@ namespace QuantConnect.Data.Fundamental
         }
 
         /// <summary>
+        /// Price * Total SharesOutstanding.
+        /// The most current market cap for example, would be the most recent closing price x the most recent reported shares outstanding.
+        /// For ADR share classes, market cap is price * (ordinary shares outstanding / adr ratio).
+        /// </summary>
+        [JsonIgnore]
+        public long MarketCap => CompanyProfile?.MarketCap ?? 0;
+
+
+        /// <summary>
         /// Creates the universe symbol used for fine fundamental data
         /// </summary>
         /// <param name="market">The market</param>
@@ -42,7 +52,7 @@ namespace QuantConnect.Data.Fundamental
         /// <returns>A fine universe symbol for the specified market</returns>
         public static Symbol CreateUniverseSymbol(string market, bool addGuid = true)
         {
-            market = market.ToLower();
+            market = market.ToLowerInvariant();
             var ticker = $"qc-universe-fine-{market}";
             if (addGuid)
             {
@@ -58,8 +68,9 @@ namespace QuantConnect.Data.Fundamental
         public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
         {
             var source =
-                Path.Combine(Globals.DataFolder,
-                    $"equity/{config.Market}/fundamental/fine/{config.Symbol.Value.ToLower()}/{date:yyyyMMdd}.zip");
+                Path.Combine(Globals.DataFolder, Invariant(
+                    $"equity/{config.Market}/fundamental/fine/{config.Symbol.Value.ToLowerInvariant()}/{date:yyyyMMdd}.zip"
+                ));
 
             return new SubscriptionDataSource(source, SubscriptionTransportMedium.LocalFile, FileFormat.Csv);
         }

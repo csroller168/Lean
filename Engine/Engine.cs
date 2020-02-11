@@ -15,7 +15,6 @@
 */
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -33,8 +32,8 @@ using QuantConnect.Logging;
 using QuantConnect.Orders;
 using QuantConnect.Packets;
 using QuantConnect.Securities;
-using QuantConnect.Statistics;
 using QuantConnect.Util;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Lean.Engine
 {
@@ -46,6 +45,7 @@ namespace QuantConnect.Lean.Engine
     /// </summary>
     public class Engine
     {
+        private bool _historyStartDateLimitedWarningEmitted;
         private readonly bool _liveMode;
         private readonly Lazy<StackExceptionInterpreter> _exceptionInterpreter;
 
@@ -79,9 +79,10 @@ namespace QuantConnect.Lean.Engine
         /// Runs a single backtest/live job from the job queue
         /// </summary>
         /// <param name="job">The algorithm job to be processed</param>
-        /// <param name="manager"></param>
+        /// <param name="manager">The algorithm manager instance</param>
         /// <param name="assemblyPath">The path to the algorithm's assembly</param>
-        public void Run(AlgorithmNodePacket job, AlgorithmManager manager, string assemblyPath)
+        /// <param name="workerThread">The worker thread instance</param>
+        public void Run(AlgorithmNodePacket job, AlgorithmManager manager, string assemblyPath, WorkerThread workerThread)
         {
             var marketHoursDatabaseTask = Task.Run(() => StaticInitializations());
 
@@ -96,7 +97,6 @@ namespace QuantConnect.Lean.Engine
                 Thread threadResults = null;
                 Thread threadRealTime = null;
                 Thread threadAlphas = null;
-                WorkerThread workerThread = null;
 
                 //-> Initialize messaging system
                 SystemHandlers.Notify.SetAuthentication(job);
@@ -116,8 +116,6 @@ namespace QuantConnect.Lean.Engine
                     // since the algorithm constructor will use it
                     var marketHoursDatabase = marketHoursDatabaseTask.Result;
 
-                    // start worker thread
-                    workerThread = new WorkerThread();
                     AlgorithmHandlers.Setup.WorkerThread = workerThread;
 
                     // Save algorithm to cache, load algorithm instance:
@@ -129,16 +127,25 @@ namespace QuantConnect.Lean.Engine
                     // initialize the alphas handler with the algorithm instance
                     AlgorithmHandlers.Alphas.Initialize(job, algorithm, SystemHandlers.Notify, SystemHandlers.Api);
 
+                    // initialize the object store
+                    AlgorithmHandlers.ObjectStore.Initialize(algorithm.Name, job.UserId, job.ProjectId, job.UserToken, job.Controls);
+
+                    // notify the user of any errors w/ object store persistence
+                    AlgorithmHandlers.ObjectStore.ErrorRaised += (sender, args) => algorithm.Debug($"ObjectStore Persistence Error: {args.Error.Message}");
+
                     // Initialize the brokerage
                     IBrokerageFactory factory;
                     brokerage = AlgorithmHandlers.Setup.CreateBrokerage(job, algorithm, out factory);
 
                     var symbolPropertiesDatabase = SymbolPropertiesDatabase.FromDataFolder();
 
+                    var registeredTypesProvider = new RegisteredSecurityDataTypesProvider();
                     var securityService = new SecurityService(algorithm.Portfolio.CashBook,
                         marketHoursDatabase,
                         symbolPropertiesDatabase,
-                        (ISecurityInitializerProvider)algorithm);
+                        algorithm,
+                        registeredTypesProvider,
+                        new SecurityCacheProvider(algorithm.Portfolio));
 
                     algorithm.Securities.SetSecurityService(securityService);
 
@@ -149,7 +156,8 @@ namespace QuantConnect.Lean.Engine
                         algorithm,
                         algorithm.TimeKeeper,
                         marketHoursDatabase,
-                        _liveMode);
+                        _liveMode,
+                        registeredTypesProvider);
 
                     AlgorithmHandlers.Results.SetDataManager(dataManager);
                     algorithm.SubscriptionManager.SetDataManager(dataManager);
@@ -193,9 +201,11 @@ namespace QuantConnect.Lean.Engine
                                 if (!algorithm.GetLocked() || algorithm.IsWarmingUp)
                                 {
                                     AlgorithmHandlers.Results.SendStatusUpdate(AlgorithmStatus.History,
-                                        $"Processing history {progress}%...");
+                                        Invariant($"Processing history {progress}%..."));
                                 }
-                            }
+                            },
+                            // disable parallel history requests for live trading
+                            parallelHistoryRequestsEnabled: !_liveMode
                         )
                     );
 
@@ -210,7 +220,7 @@ namespace QuantConnect.Lean.Engine
                     algorithm.BrokerageMessageHandler = factory.CreateBrokerageMessageHandler(algorithm, job, SystemHandlers.Api);
 
                     //Initialize the internal state of algorithm and job: executes the algorithm.Initialize() method.
-                    initializeComplete = AlgorithmHandlers.Setup.Setup(new SetupHandlerParameters(dataManager.UniverseSelection, algorithm, brokerage, job, AlgorithmHandlers.Results, AlgorithmHandlers.Transactions, AlgorithmHandlers.RealTime));
+                    initializeComplete = AlgorithmHandlers.Setup.Setup(new SetupHandlerParameters(dataManager.UniverseSelection, algorithm, brokerage, job, AlgorithmHandlers.Results, AlgorithmHandlers.Transactions, AlgorithmHandlers.RealTime, AlgorithmHandlers.ObjectStore));
 
                     // set this again now that we've actually added securities
                     AlgorithmHandlers.Results.SetAlgorithm(algorithm, AlgorithmHandlers.Setup.StartingPortfolioValue);
@@ -256,6 +266,7 @@ namespace QuantConnect.Lean.Engine
                 Log.Trace("         Results:      " + AlgorithmHandlers.Results.GetType().FullName);
                 Log.Trace("         Transactions: " + AlgorithmHandlers.Transactions.GetType().FullName);
                 Log.Trace("         Alpha:        " + AlgorithmHandlers.Alphas.GetType().FullName);
+                Log.Trace("         ObjectStore:  " + AlgorithmHandlers.ObjectStore.GetType().FullName);
                 if (algorithm?.HistoryProvider != null)
                 {
                     Log.Trace("         History Provider:     " + algorithm.HistoryProvider.GetType().FullName);
@@ -277,7 +288,7 @@ namespace QuantConnect.Lean.Engine
 
                     //Load the associated handlers for transaction and realtime events:
                     AlgorithmHandlers.Transactions.Initialize(algorithm, brokerage, AlgorithmHandlers.Results);
-                    AlgorithmHandlers.RealTime.Setup(algorithm, job, AlgorithmHandlers.Results, SystemHandlers.Api);
+                    AlgorithmHandlers.RealTime.Setup(algorithm, job, AlgorithmHandlers.Results, SystemHandlers.Api, algorithmManager.TimeLimit);
 
                     // wire up the brokerage message handler
                     brokerage.Message += (sender, message) =>
@@ -318,7 +329,7 @@ namespace QuantConnect.Lean.Engine
                         var isolator = new Isolator();
 
                         // Execute the Algorithm Code:
-                        var complete = isolator.ExecuteWithTimeLimit(AlgorithmHandlers.Setup.MaximumRuntime, algorithmManager.TimeLoopWithinLimits, () =>
+                        var complete = isolator.ExecuteWithTimeLimit(AlgorithmHandlers.Setup.MaximumRuntime, algorithmManager.TimeLimit.IsWithinLimit, () =>
                         {
                             try
                             {
@@ -342,8 +353,8 @@ namespace QuantConnect.Lean.Engine
 
                         if (!complete)
                         {
-                            Log.Error("Engine.Main(): Failed to complete in time: " + AlgorithmHandlers.Setup.MaximumRuntime.ToString("F"));
-                            throw new Exception("Failed to complete algorithm within " + AlgorithmHandlers.Setup.MaximumRuntime.ToString("F")
+                            Log.Error("Engine.Main(): Failed to complete in time: " + AlgorithmHandlers.Setup.MaximumRuntime.ToStringInvariant("F"));
+                            throw new Exception("Failed to complete algorithm within " + AlgorithmHandlers.Setup.MaximumRuntime.ToStringInvariant("F")
                                 + " seconds. Please make it run faster.");
                         }
 
@@ -356,6 +367,8 @@ namespace QuantConnect.Lean.Engine
                     catch (Exception err)
                     {
                         //Error running the user algorithm: purge datafeed, send error messages, set algorithm status to failed.
+                        algorithm.RunTimeError = err;
+                        algorithm.SetStatus(AlgorithmStatus.RuntimeError);
                         HandleAlgorithmError(job, err);
                     }
 
@@ -364,73 +377,22 @@ namespace QuantConnect.Lean.Engine
 
                     try
                     {
-                        var trades = algorithm.TradeBuilder.ClosedTrades;
-                        var charts = new Dictionary<string, Chart>(AlgorithmHandlers.Results.Charts);
-                        var orders = new Dictionary<int, Order>(AlgorithmHandlers.Transactions.Orders);
-                        var holdings = new Dictionary<string, Holding>();
-                        var banner = new Dictionary<string, string>();
-                        var statisticsResults = new StatisticsResults();
-
                         var csvTransactionsFileName = Config.Get("transaction-log");
                         if (!string.IsNullOrEmpty(csvTransactionsFileName))
                         {
                             SaveListOfTrades(AlgorithmHandlers.Transactions, csvTransactionsFileName);
                         }
 
-                        try
-                        {
-                            //Generates error when things don't exist (no charting logged, runtime errors in main algo execution)
-                            const string strategyEquityKey = "Strategy Equity";
-                            const string equityKey = "Equity";
-                            const string dailyPerformanceKey = "Daily Performance";
-                            const string benchmarkKey = "Benchmark";
-
-                            // make sure we've taken samples for these series before just blindly requesting them
-                            if (charts.ContainsKey(strategyEquityKey) &&
-                                charts[strategyEquityKey].Series.ContainsKey(equityKey) &&
-                                charts[strategyEquityKey].Series.ContainsKey(dailyPerformanceKey) &&
-                                charts.ContainsKey(benchmarkKey) &&
-                                charts[benchmarkKey].Series.ContainsKey(benchmarkKey)
-                            )
-                            {
-                                var equity = charts[strategyEquityKey].Series[equityKey].Values;
-                                var performance = charts[strategyEquityKey].Series[dailyPerformanceKey].Values;
-                                var profitLoss = new SortedDictionary<DateTime, decimal>(algorithm.Transactions.TransactionRecord);
-                                var totalTransactions = algorithm.Transactions.GetOrders(x => x.Status.IsFill()).Count();
-                                var benchmark = charts[benchmarkKey].Series[benchmarkKey].Values;
-
-                                statisticsResults = StatisticsBuilder.Generate(trades, profitLoss, equity, performance, benchmark,
-                                    AlgorithmHandlers.Setup.StartingPortfolioValue, algorithm.Portfolio.TotalFees, totalTransactions);
-
-                                //Some users have $0 in their brokerage account / starting cash of $0. Prevent divide by zero errors
-                                var netReturn = AlgorithmHandlers.Setup.StartingPortfolioValue > 0 ?
-                                                (algorithm.Portfolio.TotalPortfolioValue - AlgorithmHandlers.Setup.StartingPortfolioValue) / AlgorithmHandlers.Setup.StartingPortfolioValue
-                                                : 0;
-
-                                //Add other fixed parameters.
-                                banner.Add("Unrealized", "$" + algorithm.Portfolio.TotalUnrealizedProfit.ToString("N2"));
-                                banner.Add("Fees", "-$" + algorithm.Portfolio.TotalFees.ToString("N2"));
-                                banner.Add("Net Profit", "$" + algorithm.Portfolio.TotalProfit.ToString("N2"));
-                                banner.Add("Return", netReturn.ToString("P"));
-                                banner.Add("Equity", "$" + algorithm.Portfolio.TotalPortfolioValue.ToString("N2"));
-                            }
-                        }
-                        catch (Exception err)
-                        {
-                            Log.Error(err, "Error generating statistics packet");
-                        }
-
-                        //Diagnostics Completed, Send Result Packet:
-                        var totalSeconds = (DateTime.Now - startTime).TotalSeconds;
-                        var dataPoints = algorithmManager.DataPoints + algorithm.HistoryProvider.DataPointCount;
-
                         if (!_liveMode)
                         {
+                            //Diagnostics Completed, Send Result Packet:
+                            var totalSeconds = (DateTime.Now - startTime).TotalSeconds;
+                            var dataPoints = algorithmManager.DataPoints + algorithm.HistoryProvider.DataPointCount;
                             var kps = dataPoints / (double) 1000 / totalSeconds;
                             AlgorithmHandlers.Results.DebugMessage($"Algorithm Id:({job.AlgorithmId}) completed in {totalSeconds:F2} seconds at {kps:F0}k data points per second. Processing total of {dataPoints:N0} data points.");
                         }
 
-                        AlgorithmHandlers.Results.SendFinalResult(job, orders, algorithm.Transactions.TransactionRecord, holdings, algorithm.Portfolio.CashBook, statisticsResults, banner);
+                        AlgorithmHandlers.Results.SendFinalResult();
                     }
                     catch (Exception err)
                     {
@@ -532,7 +494,22 @@ namespace QuantConnect.Lean.Engine
             {
                 historyProvider = Config.Get("history-provider", "SubscriptionDataReaderHistoryProvider");
             }
-            return Composer.Instance.GetExportedValueByTypeName<IHistoryProvider>(historyProvider);
+            var provider = Composer.Instance.GetExportedValueByTypeName<IHistoryProvider>(historyProvider);
+
+            provider.InvalidConfigurationDetected += (sender, args) => { AlgorithmHandlers.Results.ErrorMessage(args.Message); };
+            provider.NumericalPrecisionLimited += (sender, args) => { AlgorithmHandlers.Results.DebugMessage(args.Message); };
+            provider.StartDateLimited += (sender, args) =>
+            {
+                if (!_historyStartDateLimitedWarningEmitted)
+                {
+                    _historyStartDateLimitedWarningEmitted = true;
+                    AlgorithmHandlers.Results.DebugMessage("Warning: when performing history requests, the start date will be adjusted if it is before the first known date for the symbol.");
+                }
+            };
+            provider.DownloadFailed += (sender, args) => { AlgorithmHandlers.Results.ErrorMessage(args.Message, args.StackTrace); };
+            provider.ReaderErrorDetected += (sender, args) => { AlgorithmHandlers.Results.RuntimeError(args.Message, args.StackTrace); };
+
+            return provider;
         }
 
         /// <summary>
@@ -552,12 +529,8 @@ namespace QuantConnect.Lean.Engine
             {
                 foreach (var order in orders)
                 {
-                    var line = string.Format("{0},{1},{2},{3},{4}",
-                        order.Time.ToString("yyyy-MM-dd HH:mm:ss"),
-                        order.Symbol.Value,
-                        order.Direction,
-                        order.Quantity,
-                        order.Price);
+                    var line = Invariant($"{order.Time.ToStringInvariant("yyyy-MM-dd HH:mm:ss")},") +
+                               Invariant($"{order.Symbol.Value},{order.Direction},{order.Quantity},{order.Price}");
                     writer.WriteLine(line);
                 }
             }

@@ -90,7 +90,7 @@ namespace QuantConnect.Data.Auxiliary
         /// <returns>The collection of map files capable of mapping equity symbols within the specified market</returns>
         public static MapFileResolver Create(string dataDirectory, string market)
         {
-            return Create(Path.Combine(dataDirectory, "equity", market.ToLower(), "map_files"));
+            return Create(Path.Combine(dataDirectory, "equity", market.ToLowerInvariant(), "map_files"));
         }
 
         /// <summary>
@@ -160,7 +160,8 @@ namespace QuantConnect.Data.Auxiliary
             }
             // secondary search for exact mapping, find path than ends with symbol.csv
             MapFile mapFile;
-            if (!_mapFilesByPermtick.TryGetValue(symbol, out mapFile))
+            if (!_mapFilesByPermtick.TryGetValue(symbol, out mapFile)
+                || mapFile.FirstDate > date)
             {
                 return new MapFile(symbol, new List<MapFileRow>());
             }

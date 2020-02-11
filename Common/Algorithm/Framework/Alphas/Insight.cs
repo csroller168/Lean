@@ -20,6 +20,7 @@ using Newtonsoft.Json;
 using QuantConnect.Algorithm.Framework.Alphas.Serialization;
 using QuantConnect.Interfaces;
 using QuantConnect.Securities;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Algorithm.Framework.Alphas
 {
@@ -205,8 +206,9 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         /// <param name="magnitude">The predicted magnitude as a percentage change</param>
         /// <param name="confidence">The confidence in this insight</param>
         /// <param name="sourceModel">An identifier defining the model that generated this insight</param>
-        public Insight(Symbol symbol, Func<DateTime, DateTime> expiryFunc, InsightType type, InsightDirection direction, double? magnitude, double? confidence, string sourceModel = null)
-            : this(symbol, new FuncPeriodSpecification(expiryFunc), type, direction, magnitude, confidence)
+        /// <param name="weight">The portfolio weight of this insight</param>
+        public Insight(Symbol symbol, Func<DateTime, DateTime> expiryFunc, InsightType type, InsightDirection direction, double? magnitude, double? confidence, string sourceModel = null, double? weight = null)
+            : this(symbol, new FuncPeriodSpecification(expiryFunc), type, direction, magnitude, confidence, sourceModel, weight)
         {
         }
 
@@ -318,7 +320,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         {
             if (barCount < 1)
             {
-                throw new ArgumentOutOfRangeException(nameof(barCount), $"Insight barCount must be greater than zero.");
+                throw new ArgumentOutOfRangeException(nameof(barCount), "Insight barCount must be greater than zero.");
             }
 
             var spec = new ResolutionBarCountPeriodSpecification(resolution, barCount);
@@ -375,10 +377,11 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         /// <param name="magnitude">The predicted magnitude as a percent change</param>
         /// <param name="confidence">The confidence in this insight</param>
         /// <param name="sourceModel">The model generating this insight</param>
+        /// <param name="weight">The portfolio weight of this insight</param>
         /// <returns>A new insight object for the specified parameters</returns>
-        public static Insight Price(Symbol symbol, Func<DateTime, DateTime> expiryFunc, InsightDirection direction, double? magnitude = null, double? confidence = null, string sourceModel = null)
+        public static Insight Price(Symbol symbol, Func<DateTime, DateTime> expiryFunc, InsightDirection direction, double? magnitude = null, double? confidence = null, string sourceModel = null, double? weight = null)
         {
-            return new Insight(symbol, expiryFunc, InsightType.Price, direction, magnitude, confidence, sourceModel);
+            return new Insight(symbol, expiryFunc, InsightType.Price, direction, magnitude, confidence, sourceModel, weight);
         }
 
         /// <summary>
@@ -419,7 +422,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         public static Insight FromSerializedInsight(SerializedInsight serializedInsight)
         {
             var insight = new Insight(
-                Time.UnixTimeStampToDateTime(serializedInsight.GeneratedTime),
+                Time.UnixTimeStampToDateTime(serializedInsight.CreatedTime),
                 new Symbol(SecurityIdentifier.Parse(serializedInsight.Symbol), serializedInsight.Ticker),
                 TimeSpan.FromSeconds(serializedInsight.Period),
                 serializedInsight.Type,
@@ -474,7 +477,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         {
             if (barCount < 1)
             {
-                throw new ArgumentOutOfRangeException(nameof(barCount), $"Insight barCount must be greater than zero.");
+                throw new ArgumentOutOfRangeException(nameof(barCount), "Insight barCount must be greater than zero.");
             }
 
             // remap ticks to seconds
@@ -504,7 +507,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         {
             if (period < Time.OneSecond)
             {
-                throw new ArgumentOutOfRangeException(nameof(period), $"Insight periods must be greater than or equal to 1 second.");
+                throw new ArgumentOutOfRangeException(nameof(period), "Insight periods must be greater than or equal to 1 second.");
             }
 
             var barSize = period.ToHigherResolutionEquivalent(false);
@@ -556,7 +559,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         {
             if (generatedTimeUtc > closeTimeUtc)
             {
-                throw new ArgumentOutOfRangeException(nameof(closeTimeUtc), $"Insight closeTimeUtc must be greater than generatedTimeUtc.");
+                throw new ArgumentOutOfRangeException(nameof(closeTimeUtc), "Insight closeTimeUtc must be greater than generatedTimeUtc.");
             }
 
             var generatedTimeLocal = generatedTimeUtc.ConvertFromUtc(exchangeHours.TimeZone);
@@ -600,18 +603,19 @@ namespace QuantConnect.Algorithm.Framework.Alphas
         /// <filterpriority>2</filterpriority>
         public override string ToString()
         {
-            var str = $"{Id}: {Symbol} {Type} {Direction} within {Period}";
+            var str = Invariant($"{Id:N}: {Symbol} {Type} {Direction} within {Period}");
+
             if (Magnitude.HasValue)
             {
-                str += $" by {Magnitude.Value}%";
+                str += Invariant($" by {Magnitude.Value}%");
             }
             if (Confidence.HasValue)
             {
-                str += $" with {Math.Round(100 * Confidence.Value, 1)}% confidence";
+                str += Invariant($" with {Math.Round(100 * Confidence.Value, 1)}% confidence");
             }
             if (Weight.HasValue)
             {
-                str += $" and {Math.Round(100 * Weight.Value, 1)}% weight";
+                str += Invariant($" and {Math.Round(100 * Weight.Value, 1)}% weight");
             }
 
             return str;
@@ -711,7 +715,7 @@ namespace QuantConnect.Algorithm.Framework.Alphas
 
         /// <summary>
         /// Special case for insights which close time is defined by a function
-        /// and want insights to expiry with calendar rules 
+        /// and want insights to expiry with calendar rules
         /// </summary>
         private class FuncPeriodSpecification : IPeriodSpecification
         {

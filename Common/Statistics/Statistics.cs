@@ -19,6 +19,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using MathNet.Numerics.Distributions;
 using MathNet.Numerics.Statistics;
 using QuantConnect.Logging;
 
@@ -56,7 +57,7 @@ namespace QuantConnect.Statistics
                             }
                             if (line == null) continue;
                             var csv = line.Split(',');
-                            benchmark.Add(DateTime.Parse(csv[0]), Convert.ToDecimal(csv[6], CultureInfo.InvariantCulture));
+                            benchmark.Add(Parse.DateTime(csv[0]), csv[6].ConvertInvariant<decimal>());
                         }
                     }
                 }
@@ -322,25 +323,25 @@ namespace QuantConnect.Statistics
 
                 //Add the over all results first, break down by year later:
                 statistics = new Dictionary<string, string> {
-                    { "Total Trades", Math.Round(totalTrades, 0).ToString(CultureInfo.InvariantCulture) },
-                    { "Average Win", Math.Round(averageWin * 100, 2) + "%"  },
-                    { "Average Loss", Math.Round(averageLoss * 100, 2) + "%" },
-                    { "Compounding Annual Return", Math.Round(algoCompoundingPerformance * 100, 3) + "%" },
-                    { "Drawdown", (DrawdownPercent(equity, 3) * 100) + "%" },
-                    { "Expectancy", Math.Round((winRate * averageWinRatio) - (lossRate), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Net Profit", Math.Round(totalNetProfit * 100, 3) + "%"},
-                    { "Sharpe Ratio", Math.Round(SharpeRatio(listPerformance, riskFreeRate), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Loss Rate", Math.Round(lossRate * 100) + "%" },
-                    { "Win Rate", Math.Round(winRate * 100) + "%" },
+                    { "Total Trades", Math.Round(totalTrades, 0).ToStringInvariant() },
+                    { "Average Win", Math.Round(averageWin * 100, 2).ToStringInvariant() + "%"  },
+                    { "Average Loss", Math.Round(averageLoss * 100, 2).ToStringInvariant() + "%" },
+                    { "Compounding Annual Return", Math.Round(algoCompoundingPerformance * 100, 3).ToStringInvariant() + "%" },
+                    { "Drawdown", (DrawdownPercent(equity, 3) * 100).ToStringInvariant() + "%" },
+                    { "Expectancy", Math.Round((winRate * averageWinRatio) - (lossRate), 3).ToStringInvariant() },
+                    { "Net Profit", Math.Round(totalNetProfit * 100, 3).ToStringInvariant() + "%"},
+                    { "Sharpe Ratio", Math.Round(SharpeRatio(listPerformance, riskFreeRate), 3).ToStringInvariant() },
+                    { "Loss Rate", Math.Round(lossRate * 100).ToStringInvariant() + "%" },
+                    { "Win Rate", Math.Round(winRate * 100).ToStringInvariant() + "%" },
                     { "Profit-Loss Ratio", profitLossRatioHuman },
-                    { "Alpha", Math.Round(Alpha(listPerformance, listBenchmark, riskFreeRate), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Beta", Math.Round(Beta(listPerformance, listBenchmark), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Annual Standard Deviation", Math.Round(AnnualStandardDeviation(listPerformance, tradingDaysPerYear), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Annual Variance", Math.Round(AnnualVariance(listPerformance, tradingDaysPerYear), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Information Ratio", Math.Round(InformationRatio(listPerformance, listBenchmark), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Tracking Error", Math.Round(TrackingError(listPerformance, listBenchmark), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Treynor Ratio", Math.Round(TreynorRatio(listPerformance, listBenchmark, riskFreeRate), 3).ToString(CultureInfo.InvariantCulture) },
-                    { "Total Fees", "$" + totalFees.ToString("0.00") }
+                    { "Alpha", Math.Round(Alpha(listPerformance, listBenchmark, riskFreeRate), 3).ToStringInvariant() },
+                    { "Beta", Math.Round(Beta(listPerformance, listBenchmark), 3).ToStringInvariant() },
+                    { "Annual Standard Deviation", Math.Round(AnnualStandardDeviation(listPerformance, tradingDaysPerYear), 3).ToStringInvariant() },
+                    { "Annual Variance", Math.Round(AnnualVariance(listPerformance, tradingDaysPerYear), 3).ToStringInvariant() },
+                    { "Information Ratio", Math.Round(InformationRatio(listPerformance, listBenchmark), 3).ToStringInvariant() },
+                    { "Tracking Error", Math.Round(TrackingError(listPerformance, listBenchmark), 3).ToStringInvariant() },
+                    { "Treynor Ratio", Math.Round(TreynorRatio(listPerformance, listBenchmark, riskFreeRate), 3).ToStringInvariant() },
+                    { "Total Fees", "$" + totalFees.ToStringInvariant("0.00") }
                 };
             }
             catch (Exception err)
@@ -557,6 +558,48 @@ namespace QuantConnect.Statistics
             return (AnnualPerformance(algoPerformance) - riskFreeRate) / (Beta(algoPerformance, benchmarkPerformance));
         }
 
+        /// <summary>
+        /// Helper method to calculate the probabilistic sharpe ratio
+        /// </summary>
+        /// <param name="listPerformance">The list of algorithm performance values</param>
+        /// <param name="benchmarkSharpeRatio">The benchmark sharpe ratio to use</param>
+        /// <returns>Probabilistic Sharpe Ratio</returns>
+        public static double ProbabilisticSharpeRatio(List<double> listPerformance,
+             double benchmarkSharpeRatio)
+        {
+            var observedSharpeRatio = ObservedSharpeRatio(listPerformance);
+
+            var skewness = listPerformance.Skewness();
+            var kurtosis = listPerformance.Kurtosis();
+
+            var operandA = skewness * observedSharpeRatio;
+            var operandB = ((kurtosis - 1) / 4) * (Math.Pow(observedSharpeRatio, 2));
+
+            // Calculated standard deviation of point estimate
+            var estimateStandardDeviation = Math.Pow((1 - operandA + operandB) / (listPerformance.Count - 1), 0.5);
+
+            if (double.IsNaN(estimateStandardDeviation))
+            {
+                return 0;
+            }
+
+            // Calculate PSR(benchmark)
+            var value = estimateStandardDeviation.IsNaNOrZero() ? 0 : (observedSharpeRatio - benchmarkSharpeRatio) / estimateStandardDeviation;
+            return (new Normal()).CumulativeDistribution(value);
+        }
+
+        /// <summary>
+        /// Calculates the observed sharpe ratio
+        /// </summary>
+        /// <param name="listPerformance">The performance samples to use</param>
+        /// <returns>The observed sharpe ratio</returns>
+        public static double ObservedSharpeRatio(List<double> listPerformance)
+        {
+            var performanceAverage = listPerformance.Average();
+            var standardDeviation = listPerformance.StandardDeviation();
+            // we don't annualize it
+            return standardDeviation.IsNaNOrZero() ? 0 : performanceAverage / standardDeviation;
+        }
     } // End of Statistics
 
 } // End of Namespace

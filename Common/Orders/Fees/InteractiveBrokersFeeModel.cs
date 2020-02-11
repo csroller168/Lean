@@ -17,7 +17,7 @@ using System;
 using System.Collections.Generic;
 using QuantConnect.Orders.Fills;
 using QuantConnect.Securities;
-
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Orders.Fees
 {
@@ -32,11 +32,6 @@ namespace QuantConnect.Orders.Fees
         // option commission function takes number of contracts and the size of the option premium and returns total commission
         private readonly Dictionary<string, Func<decimal, decimal, CashAmount>> _optionFee =
             new Dictionary<string, Func<decimal, decimal, CashAmount>>();
-
-        private readonly Dictionary<string, EquityFee> _equityFee =
-            new Dictionary<string, EquityFee> {
-                { Market.USA, new EquityFee("USD", feePerShare: 0.005m, minimumFee: 1, maximumFeeRate: 0.005m) }
-            };
 
         private readonly Dictionary<string, CashAmount> _futureFee =
             //                                                               IB fee + exchange fee
@@ -126,9 +121,13 @@ namespace QuantConnect.Orders.Fees
 
                 case SecurityType.Equity:
                     EquityFee equityFee;
-                    if (!_equityFee.TryGetValue(market, out equityFee))
+                    switch (market)
                     {
-                        throw new KeyNotFoundException($"InteractiveBrokersFeeModel(): unexpected equity Market {market}");
+                        case Market.USA:
+                            equityFee = new EquityFee("USD", feePerShare: 0.005m, minimumFee: 1, maximumFeeRate: 0.005m);
+                            break;
+                        default:
+                            throw new KeyNotFoundException($"InteractiveBrokersFeeModel(): unexpected equity Market {market}");
                     }
                     var tradeValue = Math.Abs(order.GetValue(security));
 
@@ -154,7 +153,7 @@ namespace QuantConnect.Orders.Fees
 
                 default:
                     // unsupported security type
-                    throw new ArgumentException($"Unsupported security type: {security.Type}");
+                    throw new ArgumentException(Invariant($"Unsupported security type: {security.Type}"));
             }
 
             return new OrderFee(new CashAmount(

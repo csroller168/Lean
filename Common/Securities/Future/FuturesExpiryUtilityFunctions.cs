@@ -1,11 +1,11 @@
 ﻿/*
  * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
  * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License"); 
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Linq.Expressions;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Securities.Future
 {
@@ -30,9 +31,18 @@ namespace QuantConnect.Securities.Future
         /// </summary>
         /// <param name="time">The current Time</param>
         /// <param name="n">Number of business days succeeding current time. Use negative value for preceding business days</param>
+        /// <param name="useEquityHolidays">Use LEAN's <see cref="USHoliday"/> definitions as holidays to exclude</param>
+        /// <param name="holidayList">Enumerable of holidays to exclude. These should be sourced from the <see cref="MarketHoursDatabase"/></param>
         /// <returns>The date-time after adding n business days</returns>
-        public static DateTime AddBusinessDays(DateTime time, int n)
+        public static DateTime AddBusinessDays(DateTime time, int n, bool useEquityHolidays = true, IEnumerable<DateTime> holidayList = null)
         {
+
+            var holidays = holidayList?.ToList() ?? new List<DateTime>();
+            if (useEquityHolidays)
+            {
+                holidays.AddRange(USHoliday.Dates);
+            }
+
             if (n < 0)
             {
                 var businessDays = (-1) * n;
@@ -40,10 +50,11 @@ namespace QuantConnect.Securities.Future
                 do
                 {
                     var previousDay = time.AddDays(-totalDays);
-                    if (NotHoliday(previousDay))
+                    if (!holidays.Contains(previousDay) && previousDay.IsCommonBusinessDay())
                     {
                         businessDays--;
                     }
+
                     if (businessDays > 0) totalDays++;
                 } while (businessDays > 0);
 
@@ -56,10 +67,11 @@ namespace QuantConnect.Securities.Future
                 do
                 {
                     var previousDay = time.AddDays(totalDays);
-                    if (NotHoliday(previousDay))
+                    if (!holidays.Contains(previousDay) && previousDay.IsCommonBusinessDay())
                     {
                         businessDays--;
                     }
+
                     if (businessDays > 0) totalDays++;
                 } while (businessDays > 0);
 
@@ -82,7 +94,9 @@ namespace QuantConnect.Securities.Future
 
             if(n > daysInMonth)
             {
-                throw new ArgumentOutOfRangeException("n",String.Format("Number of days ({0}) is larger than the size of month({1})", n, daysInMonth));
+                throw new ArgumentOutOfRangeException(nameof(n), Invariant(
+                    $"Number of days ({n}) is larger than the size of month({daysInMonth})"
+                ));
             }
             // Count the number of days in the month after the third to last business day
             var businessDays = n;
@@ -112,11 +126,15 @@ namespace QuantConnect.Securities.Future
             var daysInMonth = DateTime.DaysInMonth(time.Year, time.Month);
             if (nthBusinessDay > daysInMonth)
             {
-                throw new ArgumentOutOfRangeException($"Argument nthBusinessDay (${nthBusinessDay}) is larger than the amount of days in the current month (${daysInMonth})");
+                throw new ArgumentOutOfRangeException(Invariant(
+                    $"Argument nthBusinessDay (${nthBusinessDay}) is larger than the amount of days in the current month (${daysInMonth})"
+                ));
             }
             if (nthBusinessDay < 1)
             {
-                throw new ArgumentOutOfRangeException($"Argument nthBusinessDay (${nthBusinessDay}) is less than one. Provide a number greater than one and less than the days in month");
+                throw new ArgumentOutOfRangeException(Invariant(
+                    $"Argument nthBusinessDay (${nthBusinessDay}) is less than one. Provide a number greater than one and less than the days in month"
+                ));
             }
 
             time = new DateTime(time.Year, time.Month, 1);
@@ -130,7 +148,7 @@ namespace QuantConnect.Securities.Future
             while (daysCounted < nthBusinessDay || holidays.Contains(time) || USHoliday.Dates.Contains(time) || !time.IsCommonBusinessDay())
             {
                 // The asset continues trading on days contained within `USHoliday.Dates`, but
-                // the last trade date is affected by those holidays. We check for 
+                // the last trade date is affected by those holidays. We check for
                 // both MHDB entries and holidays to get accurate business days
                 if (holidays.Contains(time) || USHoliday.Dates.Contains(time))
                 {
@@ -159,7 +177,7 @@ namespace QuantConnect.Securities.Future
                 i++;
             }
 
-            return time; 
+            return time;
         }
 
         /// <summary>
@@ -207,7 +225,7 @@ namespace QuantConnect.Securities.Future
                                   where new DateTime(time.Year, time.Month, day).DayOfWeek == DayOfWeek.Wednesday
                                   select new DateTime(time.Year, time.Month, day)).ElementAt(2);
         }
-        
+
         /// <summary>
         /// Method to check whether a given time is holiday or not
         /// </summary>
@@ -254,7 +272,7 @@ namespace QuantConnect.Securities.Future
         /// <returns></returns>
         public static DateTime DairyLastTradeDate(DateTime time, TimeSpan? lastTradeTime = null)
         {
-            // Trading shall terminate on the business day immediately preceding the day on which the USDA announces the <DAIRY_PRODUCT> price for that contract month. (LTD 12:10 p.m.) 
+            // Trading shall terminate on the business day immediately preceding the day on which the USDA announces the <DAIRY_PRODUCT> price for that contract month. (LTD 12:10 p.m.)
             var contractMonth = new DateTime(time.Year, time.Month, 1);
             var lastTradeTs = lastTradeTime ?? new TimeSpan(17, 10, 0);
 
@@ -280,17 +298,33 @@ namespace QuantConnect.Securities.Future
         }
 
         /// <summary>
-        /// Returns true if the future expires in the month before the contract month
+        /// Returns the number of months prior to the contract month that the future expires
         /// </summary>
         /// <param name="underlying">The future symbol</param>
-        /// <returns>True if the future expires in the month before the contract month</returns>
-        public static bool ExpiresInPreviousMonth(string underlying)
+        /// <returns>The number of months prior it expires</returns>
+        public static int ExpiresInPreviousMonth(string underlying)
         {
-            return
-                underlying == Futures.Energies.CrudeOilWTI ||
-                underlying == Futures.Energies.Gasoline ||
-                underlying == Futures.Energies.HeatingOil ||
-                underlying == Futures.Energies.NaturalGas;
+            int value;
+            return ExpiriesPriorMonth.TryGetValue(underlying, out value) ? value : 0;
         }
+
+        private static readonly Dictionary<string, int> ExpiriesPriorMonth = new Dictionary<string, int>
+        {
+            { Futures.Energies.ArgusLLSvsWTIArgusTradeMonth, 1 },
+            { Futures.Energies.ArgusPropaneSaudiAramco, 1 },
+            { Futures.Energies.BrentCrude, 2 },
+            { Futures.Energies.BrentLastDayFinancial, 2 },
+            { Futures.Energies.CrudeOilWTI, 1 },
+            { Futures.Energies.Gasoline, 1 },
+            { Futures.Energies.HeatingOil, 1 },
+            { Futures.Energies.MarsArgusVsWTITradeMonth, 1 },
+            { Futures.Energies.NaturalGas, 1 },
+            { Futures.Energies.NaturalGasHenryHubLastDayFinancial, 1 },
+            { Futures.Energies.NaturalGasHenryHubPenultimateFinancial, 1 },
+            { Futures.Energies.WTIHoustonArgusVsWTITradeMonth, 1 },
+            { Futures.Energies.WTIHoustonCrudeOil, 1 },
+            { Futures.Softs.Sugar11, 1 },
+            { Futures.Softs.Sugar11CME, 1 }
+        };
     }
 }

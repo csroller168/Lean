@@ -17,6 +17,7 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize
             // https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         // bugs
+            // algo isn't using all cash
             // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
         // deployment
             // trade with live $
@@ -75,19 +76,26 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            //PlotPoints();
-
-            var toBuy = universe.Where(x => BuySignal(x)).ToList();
-            var toSell = universe.Where(x => SellSignal(x));
-
+            PlotPoints();
+            var toSell = universe
+                .Where(x => SellSignal(x));
+            var toBuy = universe
+                .Where(x => BuySignal(x));
+            var toOwn = toBuy
+                .Union(Portfolio.Securities.Select(y => y.ToString()))
+                .Except(toSell);
+            
             foreach(var symbol in toSell)
             {
                 Liquidate(symbol);
             }
-            foreach (var symbol in toBuy)
+            if(toBuy.Any() || toSell.Any())
             {
-                var pct = 0.98m / toBuy.Count;
-                SetHoldings(symbol, pct);
+                foreach (var symbol in toOwn)
+                {
+                    var pct = 0.98m / toOwn.Count();
+                    SetHoldings(symbol, pct);
+                }
             }
         }
 
@@ -121,14 +129,14 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void PlotPoints()
         {
-            universe.ForEach(x =>
-            {
-                Plot($"{x}-MACD", "macd", Macds[x]);
-                Plot($"{x}-MACD", "signal", Macds[x].Signal);
-                Plot($"{x}-MACD", "signal", Macds[x].Histogram);
-                Plot("price", x, Securities[x].Price);
-                Plot("invested", x, Securities[x].Invested ? 1 : 0);
-            });
+            //universe.ForEach(x =>
+            //{
+            //    Plot($"{x}-MACD", "macd", Macds[x]);
+            //    Plot($"{x}-MACD", "signal", Macds[x].Signal);
+            //    Plot($"{x}-MACD", "signal", Macds[x].Histogram);
+            //    Plot("price", x, Securities[x].Price);
+            //    Plot("invested", x, Securities[x].Invested ? 1 : 0);
+            //});
 
             Plot("leverage", "cash", Portfolio.Cash);
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);

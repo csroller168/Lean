@@ -5,6 +5,7 @@
 using QuantConnect.Orders;
 using QuantConnect.Data;
 using QuantConnect.Orders.Slippage;
+using QuantConnect.Algorithm.Framework.Portfolio;
 using System.Collections.Generic;
 using QuantConnect.Indicators;
 using System.Linq;
@@ -17,7 +18,6 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize
             // https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         // bugs
-            // algo isn't using all cash
             // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
         // deployment
             // trade with live $
@@ -78,39 +78,37 @@ namespace QuantConnect.Algorithm.CSharp
         {
             PlotPoints();
             var toSell = universe
-                .Where(x => SellSignal(x));
+                .Where(x => Portfolio[x].Invested && SellSignal(x));
             var toBuy = universe
-                .Where(x => BuySignal(x));
+                .Where(x => !Portfolio[x].Invested && BuySignal(x));
             var toOwn = toBuy
-                .Union(Portfolio.Securities.Select(y => y.ToString()))
+                .Union(universe.Where(x => Portfolio[x].Invested))
                 .Except(toSell);
             
-            foreach(var symbol in toSell)
-            {
-                Liquidate(symbol);
-            }
             if(toBuy.Any() || toSell.Any())
             {
-                foreach (var symbol in toOwn)
+                foreach (var symbol in toSell)
                 {
-                    var pct = 0.98m / toOwn.Count();
-                    SetHoldings(symbol, pct);
+                    Liquidate(symbol);
                 }
+                var pct = 0.98m / toOwn.Count();
+                var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
+                SetHoldings(targets.ToList());
             }
         }
 
         private bool BuySignal(string symbol)
         {
-            return !Portfolio[symbol].Invested
-                && MacdBuySignal(symbol)
+            return
+                MacdBuySignal(symbol)
                 && StoBuySignal(symbol)
                 && SmaBuySignal(symbol);
         }
 
         private bool SellSignal(string symbol)
         {
-            return Portfolio[symbol].Invested
-                && MacdSellSignal(symbol)
+            return
+                MacdSellSignal(symbol)
                 && StoSellSignal(symbol)
                 && SmaSellSignal(symbol);
         }
@@ -129,15 +127,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void PlotPoints()
         {
-            //universe.ForEach(x =>
-            //{
-            //    Plot($"{x}-MACD", "macd", Macds[x]);
-            //    Plot($"{x}-MACD", "signal", Macds[x].Signal);
-            //    Plot($"{x}-MACD", "signal", Macds[x].Histogram);
-            //    Plot("price", x, Securities[x].Price);
-            //    Plot("invested", x, Securities[x].Invested ? 1 : 0);
-            //});
-
             Plot("leverage", "cash", Portfolio.Cash);
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);
         }

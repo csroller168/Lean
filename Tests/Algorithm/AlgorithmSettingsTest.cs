@@ -16,8 +16,8 @@ using System;
 using NUnit.Framework;
 using QuantConnect.Algorithm;
 using QuantConnect.Data.Market;
-using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Tests.Common.Securities;
+using QuantConnect.Tests.Engine.DataFeeds;
 using QuantConnect.Util;
 
 namespace QuantConnect.Tests.Algorithm
@@ -54,7 +54,7 @@ namespace QuantConnect.Tests.Algorithm
         public void SettingDataSubscriptionLimitWorksCorrectly()
         {
             var algo = new QCAlgorithm();
-            algo.SubscriptionManager.SetDataManager(new DataManager());
+            algo.SubscriptionManager.SetDataManager(new DataManagerStub(algo));
             algo.Settings.DataSubscriptionLimit = 1;
 
             var tickers = new[] { "SPY", "AAPL" };
@@ -79,7 +79,7 @@ namespace QuantConnect.Tests.Algorithm
         public void DefaultValueOfDataSubscriptionLimitWorksCorrectly()
         {
             var algo = new QCAlgorithm();
-            algo.SubscriptionManager.SetDataManager(new DataManager());
+            algo.SubscriptionManager.SetDataManager(new DataManagerStub(algo));
 
             var tickers = new[] { "SPY", "AAPL" };
 
@@ -102,7 +102,7 @@ namespace QuantConnect.Tests.Algorithm
         public void SettingSetHoldingsBufferWorksCorrectly()
         {
             var algo = new QCAlgorithm();
-            algo.Settings.FreePortfolioValuePercentage = 0;
+            algo.Settings.FreePortfolioValue = 0;
             InitializeAndGetFakeOrderProcessor(algo);
 
             var actual = algo.CalculateOrderQuantity(Symbols.SPY, 1m);
@@ -117,6 +117,9 @@ namespace QuantConnect.Tests.Algorithm
 
             InitializeAndGetFakeOrderProcessor(algo);
 
+            algo.Settings.FreePortfolioValue =
+                algo.Portfolio.TotalPortfolioValue * algo.Settings.FreePortfolioValuePercentage;
+
             var actual = algo.CalculateOrderQuantity(Symbols.SPY, 1m);
             // 100000 / 20 - 1 due to fee - effect of the target being reduced because of FreePortfolioValuePercentage
             Assert.AreEqual(4986m, actual);
@@ -124,7 +127,7 @@ namespace QuantConnect.Tests.Algorithm
 
         private FakeOrderProcessor InitializeAndGetFakeOrderProcessor(QCAlgorithm algo)
         {
-            algo.SubscriptionManager.SetDataManager(new DataManager());
+            algo.SubscriptionManager.SetDataManager(new DataManagerStub(algo));
             algo.SetFinishedWarmingUp();
             algo.SetCash(100000);
             algo.AddEquity("SPY");

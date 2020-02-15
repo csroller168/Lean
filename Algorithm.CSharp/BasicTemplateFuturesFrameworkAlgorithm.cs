@@ -15,15 +15,12 @@
 
 using System;
 using System.Collections.Generic;
-using QuantConnect.Algorithm.Framework;
 using QuantConnect.Algorithm.Framework.Alphas;
 using QuantConnect.Algorithm.Framework.Execution;
 using QuantConnect.Algorithm.Framework.Portfolio;
 using QuantConnect.Algorithm.Framework.Risk;
 using QuantConnect.Algorithm.Framework.Selection;
-using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Interfaces;
-using QuantConnect.Orders;
 using QuantConnect.Securities;
 
 namespace QuantConnect.Algorithm.CSharp
@@ -32,7 +29,7 @@ namespace QuantConnect.Algorithm.CSharp
     /// Basic template futures framework algorithm uses framework components to define an algorithm
     /// that trades futures.
     /// </summary>
-    public class BasicTemplateFuturesFrameworkAlgorithm : QCAlgorithmFramework, IRegressionAlgorithmDefinition
+    public class BasicTemplateFuturesFrameworkAlgorithm : QCAlgorithm, IRegressionAlgorithmDefinition
     {
         public override void Initialize()
         {
@@ -114,7 +111,7 @@ namespace QuantConnect.Algorithm.CSharp
         /// </summary>
         class SingleSharePortfolioConstructionModel : PortfolioConstructionModel
         {
-            public override IEnumerable<IPortfolioTarget> CreateTargets(QCAlgorithmFramework algorithm, Insight[] insights)
+            public override IEnumerable<IPortfolioTarget> CreateTargets(QCAlgorithm algorithm, Insight[] insights)
             {
                 foreach (var insight in insights)
                 {
@@ -141,31 +138,38 @@ namespace QuantConnect.Algorithm.CSharp
             {"Total Trades", "2"},
             {"Average Win", "0%"},
             {"Average Loss", "0%"},
-            {"Compounding Annual Return", "-95.923%"},
-            {"Drawdown", "5.400%"},
+            {"Compounding Annual Return", "-92.656%"},
+            {"Drawdown", "5.000%"},
             {"Expectancy", "0"},
-            {"Net Profit", "-4.044%"},
-            {"Sharpe Ratio", "-24.479"},
+            {"Net Profit", "-3.312%"},
+            {"Sharpe Ratio", "-17.41"},
+            {"Probabilistic Sharpe Ratio", "0.164%"},
             {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "0.164"},
-            {"Beta", "-202.262"},
-            {"Annual Standard Deviation", "0.085"},
-            {"Annual Variance", "0.007"},
-            {"Information Ratio", "-24.505"},
-            {"Tracking Error", "0.085"},
-            {"Treynor Ratio", "0.01"},
+            {"Alpha", "-2.174"},
+            {"Beta", "0.255"},
+            {"Annual Standard Deviation", "0.109"},
+            {"Annual Variance", "0.012"},
+            {"Information Ratio", "-15.7"},
+            {"Tracking Error", "0.189"},
+            {"Treynor Ratio", "-7.459"},
             {"Total Fees", "$3.70"},
+            {"Fitness Score", "0.009"},
+            {"Kelly Criterion Estimate", "-112.972"},
+            {"Kelly Criterion Probability Value", "0.671"},
+            {"Sortino Ratio", "-8.425"},
+            {"Return Over Maximum Drawdown", "-35.219"},
+            {"Portfolio Turnover", "0.548"},
             {"Total Insights Generated", "6"},
             {"Total Insights Closed", "5"},
             {"Total Insights Analysis Completed", "5"},
             {"Long Insight Count", "6"},
             {"Short Insight Count", "0"},
             {"Long/Short Ratio", "100%"},
-            {"Estimated Monthly Alpha Value", "$-62.26769"},
-            {"Total Accumulated Estimated Alpha Value", "$-10.1185"},
-            {"Mean Population Estimated Insight Value", "$-2.0237"},
+            {"Estimated Monthly Alpha Value", "$-96.12923"},
+            {"Total Accumulated Estimated Alpha Value", "$-15.621"},
+            {"Mean Population Estimated Insight Value", "$-3.1242"},
             {"Mean Population Direction", "0%"},
             {"Mean Population Magnitude", "0%"},
             {"Rolling Averaged Population Direction", "0%"},

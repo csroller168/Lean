@@ -20,6 +20,7 @@ using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Orders;
 using QuantConnect.Securities;
+using QuantConnect.Tests.Common.Securities;
 
 namespace QuantConnect.Tests.Common.Brokerages
 {
@@ -52,12 +53,30 @@ namespace QuantConnect.Tests.Common.Brokerages
         private Security CreateSecurity(Symbol symbol)
         {
             var quoteCurrency = symbol.Value.Substring(symbol.Value.Length - 3);
+            var properties = _symbolPropertiesDatabase.GetSymbolProperties(
+                symbol.ID.Market,
+                symbol,
+                symbol.SecurityType,
+                quoteCurrency);
 
             return new Security(
                 SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork),
-                new SubscriptionDataConfig(typeof(QuoteBar), symbol, Resolution.Minute, TimeZones.NewYork, TimeZones.NewYork, false, false, false),
-                new Cash(quoteCurrency, 0, 1m),
-                _symbolPropertiesDatabase.GetSymbolProperties(symbol.ID.Market, symbol, symbol.SecurityType, quoteCurrency));
+                new SubscriptionDataConfig(
+                    typeof(QuoteBar),
+                    symbol,
+                    Resolution.Minute,
+                    TimeZones.NewYork,
+                    TimeZones.NewYork,
+                    false,
+                    false,
+                    false
+                ),
+                new Cash(symbol.SecurityType == SecurityType.Equity ? properties.QuoteCurrency : quoteCurrency, 0, 1m),
+                properties,
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
         }
 
         public TestCaseData[] GetOrderTestData()

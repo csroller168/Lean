@@ -23,11 +23,10 @@ from QuantConnect.Orders import *
 from QuantConnect.Algorithm import *
 from QuantConnect.Algorithm.Framework import *
 from QuantConnect.Algorithm.Framework.Alphas import *
+from QuantConnect.Algorithm.Framework.Execution import *
+from QuantConnect.Algorithm.Framework.Portfolio import *
+from QuantConnect.Algorithm.Framework.Risk import *
 from QuantConnect.Algorithm.Framework.Selection import *
-from Alphas.ConstantAlphaModel import ConstantAlphaModel
-from Execution.ImmediateExecutionModel import ImmediateExecutionModel
-from Risk.MaximumDrawdownPercentPerSecurity import MaximumDrawdownPercentPerSecurity
-from Portfolio.EqualWeightingPortfolioConstructionModel import EqualWeightingPortfolioConstructionModel
 from datetime import timedelta
 import numpy as np
 
@@ -37,7 +36,7 @@ import numpy as np
 ### <meta name="tag" content="using data" />
 ### <meta name="tag" content="using quantconnect" />
 ### <meta name="tag" content="trading and orders" />
-class BasicTemplateFrameworkAlgorithm(QCAlgorithmFramework):
+class BasicTemplateFrameworkAlgorithm(QCAlgorithm):
     '''Basic template framework algorithm uses framework components to define the algorithm.'''
 
     def Initialize(self):
@@ -59,7 +58,15 @@ class BasicTemplateFrameworkAlgorithm(QCAlgorithmFramework):
         # set algorithm framework models
         self.SetUniverseSelection(ManualUniverseSelectionModel(symbols))
         self.SetAlpha(ConstantAlphaModel(InsightType.Price, InsightDirection.Up, timedelta(minutes = 20), 0.025, None))
-        self.SetPortfolioConstruction(EqualWeightingPortfolioConstructionModel())
+
+        # We can define who often the EWPCM will rebalance if no new insight is submitted using:
+        # Resolution Enum:
+        self.SetPortfolioConstruction(EqualWeightingPortfolioConstructionModel(Resolution.Daily))
+        # timedelta
+        # self.SetPortfolioConstruction(EqualWeightingPortfolioConstructionModel(timedelta(2)))
+        # A lamdda datetime -> datetime. In this case, we can use the pre-defined func at Expiry helper class
+        # self.SetPortfolioConstruction(EqualWeightingPortfolioConstructionModel(Expiry.EndOfWeek))
+
         self.SetExecution(ImmediateExecutionModel())
         self.SetRiskManagement(MaximumDrawdownPercentPerSecurity(0.01))
 

@@ -44,9 +44,9 @@ namespace QuantConnect.Tests.ToolBox
             var canonicalFutures = new Dictionary<Symbol, string>()
             {
                 { Symbol.Create(Futures.Indices.SP500EMini, SecurityType.Future, Market.USA),
-                    "ESZ13|ESH14|ESM14|ESU14|ESZ14" },
+                    "ES20Z13|ES21H14|ES20M14|ES19U14|ES19Z14" },
                 {Symbol.Create(Futures.Metals.Gold, SecurityType.Future, Market.USA),
-                    "GCV13|GCX13|GCZ13|GCG14|GCJ14|GCM14|GCQ14|GCV14|GCZ14|GCG15|GCJ15|GCM15|GCQ15|GCZ15|GCM16|GCZ16|GCM17|GCZ17|GCM18|GCZ18|GCM19"},
+                    "GC29V13|GC26X13|GC27Z13|GC26G14|GC28J14|GC26M14|GC27Q14|GC29V14|GC29Z14|GC25G15|GC28J15|GC26M15|GC27Q15|GC29Z15|GC28M16|GC28Z16|GC28M17|GC27Z17|GC27M18|GC27Z18|GC26M19"},
             };
 
             var tickTypes = new[] { TickType.Trade, TickType.Quote, TickType.OpenInterest };
@@ -239,44 +239,44 @@ namespace QuantConnect.Tests.ToolBox
         {
             new object[]
             {
-                "../../../Data/future/usa/minute/es/20131008_quote.zip#20131008_es_minute_quote_201312.csv",
+                "../../../Data/future/usa/minute/es/20131008_quote.zip#20131008_es_minute_quote_201312_20131220.csv",
                 LeanData
                     .ReadSymbolFromZipEntry(Symbol.Create(Futures.Indices.SP500EMini, SecurityType.Future, Market.USA),
-                                            Resolution.Minute, "20131008_es_minute_quote_201312.csv"),
+                                            Resolution.Minute, "20131008_es_minute_quote_201312_20131220.csv"),
                 1411,
                 2346061.875
             },
 
             new object[]
             {
-                "../../../Data/future/usa/minute/gc/20131010_trade.zip#20131010_gc_minute_trade_201312.csv",
+                "../../../Data/future/usa/minute/gc/20131010_trade.zip#20131010_gc_minute_trade_201312_20131227.csv",
                 LeanData.ReadSymbolFromZipEntry(Symbol.Create(Futures.Metals.Gold, SecurityType.Future, Market.USA),
-                                                Resolution.Minute, "20131010_gc_minute_trade_201312.csv"),
+                                                Resolution.Minute, "20131010_gc_minute_trade_201312_20131227.csv"),
                 1379,
                 1791800.9
             },
 
             new object[]
             {
-                "../../../Data/future/usa/tick/gc/20131009_quote.zip#20131009_gc_tick_quote_201406.csv",
+                "../../../Data/future/usa/tick/gc/20131009_quote.zip#20131009_gc_tick_quote_201406_20140626.csv",
                 LeanData.ReadSymbolFromZipEntry(Symbol.Create(Futures.Metals.Gold, SecurityType.Future, Market.USA),
-                                                Resolution.Tick, "20131009_gc_tick_quote_201406.csv"),
+                                                Resolution.Tick, "20131009_gc_tick_quote_201406_20140626.csv"),
                 197839,
                 259245064.8
             },
 
             new object[]
             {
-                "../../../Data/future/usa/tick/gc/20131009_trade.zip#20131009_gc_tick_trade_201312.csv",
+                "../../../Data/future/usa/tick/gc/20131009_trade.zip#20131009_gc_tick_trade_201312_20131227.csv",
                 LeanData.ReadSymbolFromZipEntry(Symbol.Create(Futures.Metals.Gold, SecurityType.Future, Market.USA),
-                                                Resolution.Tick, "20131009_gc_tick_trade_201312.csv"),
+                                                Resolution.Tick, "20131009_gc_tick_trade_201312_20131227.csv"),
                 64712,
                 84596673.8
             },
 
             new object[]
             {
-                "../../../Data/future/usa/minute/es/20131010_openinterest.zip#20131010_es_minute_openinterest_201312.csv",
+                "../../../Data/future/usa/minute/es/20131010_openinterest.zip#20131010_es_minute_openinterest_201312_20131220.csv",
                 LeanData
                     .ReadSymbolFromZipEntry(Symbol.Create(Futures.Indices.SP500EMini, SecurityType.Future, Market.USA),
                                             Resolution.Minute, "20131010_es_minute_openinterest_201312.csv"),
@@ -286,9 +286,9 @@ namespace QuantConnect.Tests.ToolBox
 
             new object[]
             {
-                "../../../Data/future/usa/tick/gc/20131009_openinterest.zip#20131009_gc_tick_openinterest_201310.csv",
+                "../../../Data/future/usa/tick/gc/20131009_openinterest.zip#20131009_gc_tick_openinterest_201310_20131029.csv",
                 LeanData.ReadSymbolFromZipEntry(Symbol.Create(Futures.Metals.Gold, SecurityType.Future, Market.USA),
-                                                Resolution.Tick, "20131009_gc_tick_openinterest_201310.csv"),
+                                                Resolution.Tick, "20131009_gc_tick_openinterest_201310_20131029.csv"),
                 4,
                 1312
             },
@@ -353,7 +353,7 @@ namespace QuantConnect.Tests.ToolBox
             new object[] {"forex", "fxcm", "minute", "eurusd", "20140502_quote.zip", 958, 1327.638085},
             new object[] {"forex", "fxcm", "second", "nzdusd", "20140514_quote.zip", 25895, 22432.757185},
             new object[] {"forex", "fxcm", "tick", "eurusd", "20140507_quote.zip", 89504, 124613.655665},
-            new object[] {"cfd", "oanda", "hour", "xauusd", "xauusd.zip", 74920, 88476989.559 },
+            new object[] {"cfd", "oanda", "hour", "xauusd", "xauusd.zip", 76499, 90453133.772 },
             new object[] {"crypto", "gdax", "second", "btcusd", "20161008_trade.zip", 3453, 2137057.57},
             new object[] {"crypto", "gdax", "minute", "ethusd", "20170903_trade.zip", 1440, 510470.66},
             new object[] {"crypto", "gdax", "daily", "btcusd", "btcusd_trade.zip", 1276, 3429172.98},

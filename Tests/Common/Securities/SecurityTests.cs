@@ -14,6 +14,7 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NodaTime;
 using NUnit.Framework;
@@ -35,7 +36,15 @@ namespace QuantConnect.Tests.Common.Securities
         {
             var exchangeHours = SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork);
             var config = CreateTradeBarConfig();
-            var security = new Security(exchangeHours, config, new Cash(CashBook.AccountCurrency, 0, 1m), SymbolProperties.GetDefault(CashBook.AccountCurrency));
+            var security = new Security(
+                exchangeHours,
+                config,
+                new Cash(Currencies.USD, 0, 1m),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
 
             Assert.AreEqual(config, security.Subscriptions.Single());
             Assert.AreEqual(config.Symbol, security.Symbol);
@@ -152,7 +161,23 @@ namespace QuantConnect.Tests.Common.Securities
         [Test]
         public void DefaultDataNormalizationModeForOptionsIsRaw()
         {
-            var option = new Option(SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc), new SubscriptionDataConfig(typeof(TradeBar), Symbols.SPY_P_192_Feb19_2016, Resolution.Minute, DateTimeZone.Utc, DateTimeZone.Utc, true, false, false), new Cash(CashBook.AccountCurrency, 0, 1m), new OptionSymbolProperties(SymbolProperties.GetDefault(CashBook.AccountCurrency)));
+            var option = new Option(
+                SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc),
+                new SubscriptionDataConfig(
+                    typeof(TradeBar),
+                    Symbols.SPY_P_192_Feb19_2016,
+                    Resolution.Minute,
+                    DateTimeZone.Utc,
+                    DateTimeZone.Utc,
+                    true,
+                    false,
+                    false
+                ),
+                new Cash(Currencies.USD, 0, 1m),
+                new OptionSymbolProperties(SymbolProperties.GetDefault(Currencies.USD)),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null
+            );
 
             Assert.AreEqual(option.DataNormalizationMode, DataNormalizationMode.Raw);
         }
@@ -160,7 +185,23 @@ namespace QuantConnect.Tests.Common.Securities
         [Test]
         public void SetDataNormalizationForOptions()
         {
-            var option = new Option(SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc), new SubscriptionDataConfig(typeof(TradeBar), Symbols.SPY_P_192_Feb19_2016, Resolution.Minute, DateTimeZone.Utc, DateTimeZone.Utc, true, false, false), new Cash(CashBook.AccountCurrency, 0, 1m), new OptionSymbolProperties(SymbolProperties.GetDefault(CashBook.AccountCurrency)));
+            var option = new Option(
+                SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc),
+                new SubscriptionDataConfig(
+                    typeof(TradeBar),
+                    Symbols.SPY_P_192_Feb19_2016,
+                    Resolution.Minute,
+                    DateTimeZone.Utc,
+                    DateTimeZone.Utc,
+                    true,
+                    false,
+                    false
+                ),
+                new Cash(Currencies.USD, 0, 1m),
+                new OptionSymbolProperties(SymbolProperties.GetDefault(Currencies.USD)),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null
+            );
 
             Assert.DoesNotThrow(() => { option.SetDataNormalizationMode(DataNormalizationMode.Raw); });
 
@@ -173,7 +214,23 @@ namespace QuantConnect.Tests.Common.Securities
         [Test]
         public void SetDataNormalizationForEquities()
         {
-            var equity = new QuantConnect.Securities.Equity.Equity(SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc), new SubscriptionDataConfig(typeof(TradeBar), Symbols.SPY, Resolution.Minute, DateTimeZone.Utc, DateTimeZone.Utc, true, false, false), new Cash(CashBook.AccountCurrency, 0, 1m), SymbolProperties.GetDefault(CashBook.AccountCurrency));
+            var equity = new QuantConnect.Securities.Equity.Equity(
+                SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc),
+                new SubscriptionDataConfig(
+                    typeof(TradeBar),
+                    Symbols.SPY,
+                    Resolution.Minute,
+                    DateTimeZone.Utc,
+                    DateTimeZone.Utc,
+                    true,
+                    false,
+                    false
+                ),
+                new Cash(Currencies.USD, 0, 1m),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null
+            );
 
             Assert.DoesNotThrow(() => { equity.SetDataNormalizationMode(DataNormalizationMode.Raw); });
             Assert.DoesNotThrow(() => { equity.SetDataNormalizationMode(DataNormalizationMode.Adjusted); });
@@ -204,14 +261,53 @@ namespace QuantConnect.Tests.Common.Securities
             Assert.AreEqual(20, securityCache.Volume);
         }
 
-        private Security GetSecurity()
+        [Test]
+        public void InvokingCacheStoreData_UpdatesSecurityData_ByTypeName()
         {
-            return new Security(SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork), CreateTradeBarConfig(), new Cash(CashBook.AccountCurrency, 0, 1m), SymbolProperties.GetDefault(CashBook.AccountCurrency));
+            var security = GetSecurity();
+            var tradeBars = new List<TradeBar>
+            {
+                new TradeBar(DateTime.UtcNow, security.Symbol, 10m, 20m, 5m, 15m, 10000)
+            };
+
+            security.Cache.StoreData(tradeBars, typeof(TradeBar));
+
+            TradeBar fromSecurityData = security.Data.GetAll<TradeBar>()[0];
+            Assert.AreEqual(tradeBars[0].Time, fromSecurityData.Time);
+            Assert.AreEqual(tradeBars[0].Symbol, fromSecurityData.Symbol);
+            Assert.AreEqual(tradeBars[0].Open, fromSecurityData.Open);
+            Assert.AreEqual(tradeBars[0].High, fromSecurityData.High);
+            Assert.AreEqual(tradeBars[0].Low, fromSecurityData.Low);
+            Assert.AreEqual(tradeBars[0].Close, fromSecurityData.Close);
+            Assert.AreEqual(tradeBars[0].Volume, fromSecurityData.Volume);
+
+            // using dynamic accessor
+            var fromDynamicSecurityData = security.Data.TradeBar[0];
+            Assert.AreEqual(tradeBars[0].Time, fromDynamicSecurityData.Time);
+            Assert.AreEqual(tradeBars[0].Symbol, fromDynamicSecurityData.Symbol);
+            Assert.AreEqual(tradeBars[0].Open, fromDynamicSecurityData.Open);
+            Assert.AreEqual(tradeBars[0].High, fromDynamicSecurityData.High);
+            Assert.AreEqual(tradeBars[0].Low, fromDynamicSecurityData.Low);
+            Assert.AreEqual(tradeBars[0].Close, fromDynamicSecurityData.Close);
+            Assert.AreEqual(tradeBars[0].Volume, fromDynamicSecurityData.Volume);
         }
 
-        private static SubscriptionDataConfig CreateTradeBarConfig()
+        internal static Security GetSecurity()
         {
-            return new SubscriptionDataConfig(typeof(TradeBar), Symbols.SPY, Resolution.Minute, TimeZones.NewYork, TimeZones.NewYork, true, true, false);
+            return new Security(
+                SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork),
+                CreateTradeBarConfig(),
+                new Cash(Currencies.USD, 0, 1m),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
+        }
+
+        internal static SubscriptionDataConfig CreateTradeBarConfig(Resolution resolution = Resolution.Minute)
+        {
+            return new SubscriptionDataConfig(typeof(TradeBar), Symbols.SPY, resolution, TimeZones.NewYork, TimeZones.NewYork, true, true, false);
         }
     }
 }

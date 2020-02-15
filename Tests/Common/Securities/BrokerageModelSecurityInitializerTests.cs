@@ -25,6 +25,7 @@ using QuantConnect.Data.Market;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
 using QuantConnect.Securities;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Common.Securities
 {
@@ -50,8 +51,8 @@ namespace QuantConnect.Tests.Common.Securities
         private readonly SubscriptionDataConfig _quoteBarConfig = new SubscriptionDataConfig(typeof(QuoteBar),
                                                                                      Symbols.EURUSD,
                                                                                      Resolution.Second,
-                                                                                     TimeZones.NewYork,
-                                                                                     TimeZones.NewYork,
+                                                                                     DateTimeZone.ForOffset(Offset.FromHours(-5)),
+                                                                                     DateTimeZone.ForOffset(Offset.FromHours(-5)),
                                                                                      false,
                                                                                      false,
                                                                                      false,
@@ -64,24 +65,40 @@ namespace QuantConnect.Tests.Common.Securities
         {
             _algo =  new QCAlgorithm();
             var historyProvider = new SubscriptionDataReaderHistoryProvider();
-            historyProvider.Initialize(null,
-                                       new DefaultDataProvider(),
-                                       new SingleEntryDataCacheProvider(new DefaultDataProvider()),
-                                       new LocalDiskMapFileProvider(),
-                                       new LocalDiskFactorFileProvider(),
-                                       null);
+            historyProvider.Initialize(
+                new HistoryProviderInitializeParameters(
+                    null,
+                    null,
+                    new DefaultDataProvider(),
+                    new SingleEntryDataCacheProvider(new DefaultDataProvider()),
+                    new LocalDiskMapFileProvider(),
+                    new LocalDiskFactorFileProvider(),
+                    null,
+                    true
+                )
+            );
 
             _algo.HistoryProvider = historyProvider;
+            _algo.SubscriptionManager.SetDataManager(new DataManagerStub(_algo));
+            _tradeBarSecurity = new Security(
+                SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork),
+                _tradeBarConfig,
+                new Cash(Currencies.USD, 0, 1m),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
 
-            _tradeBarSecurity = new Security(SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc),
-                                        _tradeBarConfig,
-                                        new Cash(CashBook.AccountCurrency, 0, 1m),
-                                        SymbolProperties.GetDefault(CashBook.AccountCurrency));
-
-            _quoteBarSecurity = new Security(SecurityExchangeHours.AlwaysOpen(DateTimeZone.Utc),
-                                    _quoteBarConfig,
-                                    new Cash(CashBook.AccountCurrency, 0, 1m),
-                                    SymbolProperties.GetDefault(CashBook.AccountCurrency));
+            _quoteBarSecurity = new Security(
+                SecurityExchangeHours.AlwaysOpen(DateTimeZone.ForOffset(Offset.FromHours(-5))),
+                _quoteBarConfig,
+                new Cash(Currencies.USD, 0, 1m),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
 
             _brokerageInitializer = new BrokerageModelSecurityInitializer(new DefaultBrokerageModel(),
                                                                           new FuncSecuritySeeder(_algo.GetLastKnownPrice));

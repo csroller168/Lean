@@ -22,17 +22,16 @@ using Moq;
 using NUnit.Framework;
 using QuantConnect.Algorithm;
 using QuantConnect.Brokerages;
-using QuantConnect.Data;
 using QuantConnect.Interfaces;
-using QuantConnect.Lean.Engine.RealTime;
 using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Lean.Engine.RealTime;
 using QuantConnect.Lean.Engine.Results;
 using QuantConnect.Lean.Engine.Setup;
 using QuantConnect.Lean.Engine.TransactionHandlers;
 using QuantConnect.Orders;
 using QuantConnect.Packets;
 using QuantConnect.Securities;
-using HistoryRequest = QuantConnect.Data.HistoryRequest;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Engine.Setup
 {
@@ -43,6 +42,7 @@ namespace QuantConnect.Tests.Engine.Setup
         private ITransactionHandler _transactionHandler;
         private NonDequeingTestResultsHandler _resultHandler;
         private IBrokerage _brokerage;
+        private DataManager _dataManager;
 
         private TestableBrokerageSetupHandler _brokerageSetupHandler;
 
@@ -50,7 +50,8 @@ namespace QuantConnect.Tests.Engine.Setup
         public void Setup()
         {
             _algorithm = new QCAlgorithm();
-            _algorithm.SubscriptionManager.SetDataManager(new DataManager());
+            _dataManager = new DataManagerStub(_algorithm);
+            _algorithm.SubscriptionManager.SetDataManager(_dataManager);
             _transactionHandler = new BrokerageTransactionHandler();
             _resultHandler = new NonDequeingTestResultsHandler();
             _brokerage = new TestBrokerage();
@@ -95,134 +96,356 @@ namespace QuantConnect.Tests.Engine.Setup
         }
 
         [Test, TestCaseSource(nameof(GetExistingHoldingsAndOrdersTestCaseData))]
-        public void LoadsExistingHoldingsAndOrders(List<Holding> holdings, List<Order> orders)
+        public void LoadsExistingHoldingsAndOrders(Func<List<Holding>> getHoldings, Func<List<Order>> getOrders, bool expected)
         {
             var algorithm = new TestAlgorithm();
-            var job = new LiveNodePacket { UserId = 1, ProjectId = 1, DeployId = "1", Brokerage = "PaperBrokerage", DataQueueHandler = "none"};
+            algorithm.SetHistoryProvider(new BrokerageTransactionHandlerTests.BrokerageTransactionHandlerTests.EmptyHistoryProvider());
+            var job = new LiveNodePacket
+            {
+                UserId = 1,
+                ProjectId = 1,
+                DeployId = "1",
+                Brokerage = "PaperBrokerage",
+                DataQueueHandler = "none"
+            };
             // Increasing RAM limit, else the tests fail. This is happening in master, when running all the tests together, locally (not travis).
             job.Controls.RamAllocation = 1024 * 1024 * 1024;
+
             var resultHandler = new Mock<IResultHandler>();
             var transactionHandler = new Mock<ITransactionHandler>();
             var realTimeHandler = new Mock<IRealTimeHandler>();
+            var objectStore = new Mock<IObjectStore>();
             var brokerage = new Mock<IBrokerage>();
+
             brokerage.Setup(x => x.IsConnected).Returns(true);
-            brokerage.Setup(x => x.GetCashBalance()).Returns(new List<Cash>());
-            brokerage.Setup(x => x.GetAccountHoldings()).Returns(holdings);
-            brokerage.Setup(x => x.GetOpenOrders()).Returns(orders);
+            brokerage.Setup(x => x.GetCashBalance()).Returns(new List<CashAmount>());
+            brokerage.Setup(x => x.GetAccountHoldings()).Returns(getHoldings);
+            brokerage.Setup(x => x.GetOpenOrders()).Returns(getOrders);
 
             var setupHandler = new BrokerageSetupHandler();
 
             IBrokerageFactory factory;
             setupHandler.CreateBrokerage(job, algorithm, out factory);
-            var result = setupHandler.Setup(algorithm, brokerage.Object, job, resultHandler.Object, transactionHandler.Object, realTimeHandler.Object);
 
-            Assert.IsTrue(result);
+            var result = setupHandler.Setup(new SetupHandlerParameters(_dataManager.UniverseSelection, algorithm, brokerage.Object, job, resultHandler.Object,
+                transactionHandler.Object, realTimeHandler.Object, objectStore.Object));
+
+            Assert.AreEqual(expected, result);
+
+            foreach (var security in algorithm.Securities.Values)
+            {
+                if (security.Symbol.SecurityType == SecurityType.Option)
+                {
+                    Assert.AreEqual(DataNormalizationMode.Raw, security.DataNormalizationMode);
+
+                    var underlyingSecurity = algorithm.Securities[security.Symbol.Underlying];
+                    Assert.AreEqual(DataNormalizationMode.Raw, underlyingSecurity.DataNormalizationMode);
+                }
+            }
+        }
+
+        [Test]
+        public void LoadsHoldingsForExpectedMarket()
+        {
+            var symbol = Symbol.Create("AUDUSD", SecurityType.Forex, Market.Oanda);
+
+            var algorithm = new TestAlgorithm();
+            algorithm.SetBrokerageModel(BrokerageName.InteractiveBrokersBrokerage);
+
+            algorithm.SetHistoryProvider(new BrokerageTransactionHandlerTests.BrokerageTransactionHandlerTests.EmptyHistoryProvider());
+            var job = new LiveNodePacket
+            {
+                UserId = 1,
+                ProjectId = 1,
+                DeployId = "1",
+                Brokerage = "PaperBrokerage",
+                DataQueueHandler = "none"
+            };
+            // Increasing RAM limit, else the tests fail. This is happening in master, when running all the tests together, locally (not travis).
+            job.Controls.RamAllocation = 1024 * 1024 * 1024;
+
+            var resultHandler = new Mock<IResultHandler>();
+            var transactionHandler = new Mock<ITransactionHandler>();
+            var realTimeHandler = new Mock<IRealTimeHandler>();
+            var brokerage = new Mock<IBrokerage>();
+            var objectStore = new Mock<IObjectStore>();
+
+            brokerage.Setup(x => x.IsConnected).Returns(true);
+            brokerage.Setup(x => x.GetCashBalance()).Returns(new List<CashAmount>());
+            brokerage.Setup(x => x.GetAccountHoldings()).Returns(new List<Holding>
+            {
+                new Holding { Symbol = symbol, Type = symbol.SecurityType, Quantity = 100 }
+            });
+            brokerage.Setup(x => x.GetOpenOrders()).Returns(new List<Order>());
+
+            var setupHandler = new BrokerageSetupHandler();
+
+            IBrokerageFactory factory;
+            setupHandler.CreateBrokerage(job, algorithm, out factory);
+
+            Assert.IsTrue(setupHandler.Setup(new SetupHandlerParameters(_dataManager.UniverseSelection, algorithm, brokerage.Object, job, resultHandler.Object,
+                transactionHandler.Object, realTimeHandler.Object, objectStore.Object)));
+
+            Security security;
+            Assert.IsTrue(algorithm.Portfolio.Securities.TryGetValue(symbol, out security));
+            Assert.AreEqual(symbol, security.Symbol);
+        }
+
+        [Test]
+        public void SeedsSecurityCorrectly()
+        {
+            var symbol = Symbol.Create("AUDUSD", SecurityType.Forex, Market.Oanda);
+
+            var algorithm = new TestAlgorithm();
+            algorithm.SetBrokerageModel(BrokerageName.InteractiveBrokersBrokerage);
+
+            algorithm.SetHistoryProvider(new BrokerageTransactionHandlerTests.BrokerageTransactionHandlerTests.EmptyHistoryProvider());
+            var job = new LiveNodePacket
+            {
+                UserId = 1,
+                ProjectId = 1,
+                DeployId = "1",
+                Brokerage = "PaperBrokerage",
+                DataQueueHandler = "none"
+            };
+            // Increasing RAM limit, else the tests fail. This is happening in master, when running all the tests together, locally (not travis).
+            job.Controls.RamAllocation = 1024 * 1024 * 1024;
+
+            var resultHandler = new Mock<IResultHandler>();
+            var transactionHandler = new Mock<ITransactionHandler>();
+            var realTimeHandler = new Mock<IRealTimeHandler>();
+            var brokerage = new Mock<IBrokerage>();
+            var objectStore = new Mock<IObjectStore>();
+
+            brokerage.Setup(x => x.IsConnected).Returns(true);
+            brokerage.Setup(x => x.GetCashBalance()).Returns(new List<CashAmount>());
+            brokerage.Setup(x => x.GetAccountHoldings()).Returns(new List<Holding>
+            {
+                new Holding { Symbol = symbol, Type = symbol.SecurityType, Quantity = 100, MarketPrice = 99}
+            });
+            brokerage.Setup(x => x.GetOpenOrders()).Returns(new List<Order>());
+
+            var setupHandler = new BrokerageSetupHandler();
+
+            IBrokerageFactory factory;
+            setupHandler.CreateBrokerage(job, algorithm, out factory);
+
+            Assert.IsTrue(setupHandler.Setup(new SetupHandlerParameters(_dataManager.UniverseSelection, algorithm, brokerage.Object, job, resultHandler.Object,
+                transactionHandler.Object, realTimeHandler.Object, objectStore.Object)));
+
+            Security security;
+            Assert.IsTrue(algorithm.Portfolio.Securities.TryGetValue(symbol, out security));
+            Assert.AreEqual(symbol, security.Symbol);
+            Assert.AreEqual(99, security.Price);
+
+            var last = security.GetLastData();
+            Assert.IsTrue((DateTime.UtcNow.ConvertFromUtc(security.Exchange.TimeZone) - last.Time) < TimeSpan.FromSeconds(1));
+        }
+
+        [Test]
+        public void AlgorithmTimeIsSetToUtcNowBeforePostInitialize()
+        {
+            var time = DateTime.UtcNow;
+            TestAlgorithm algorithm = null;
+
+            algorithm = new TestAlgorithm(() =>
+            {
+                Assert.That(algorithm.UtcTime > time);
+            });
+
+            Assert.AreEqual(new DateTime(1998, 1, 1), algorithm.UtcTime);
+
+            algorithm.SetHistoryProvider(new BrokerageTransactionHandlerTests.BrokerageTransactionHandlerTests.EmptyHistoryProvider());
+            var job = new LiveNodePacket
+            {
+                UserId = 1,
+                ProjectId = 1,
+                DeployId = "1",
+                Brokerage = "PaperBrokerage",
+                DataQueueHandler = "none"
+            };
+
+            var resultHandler = new Mock<IResultHandler>();
+            var transactionHandler = new Mock<ITransactionHandler>();
+            var realTimeHandler = new Mock<IRealTimeHandler>();
+            var brokerage = new Mock<IBrokerage>();
+            var objectStore = new Mock<IObjectStore>();
+
+            brokerage.Setup(x => x.IsConnected).Returns(true);
+            brokerage.Setup(x => x.GetCashBalance()).Returns(new List<CashAmount>());
+            brokerage.Setup(x => x.GetAccountHoldings()).Returns(new List<Holding>());
+            brokerage.Setup(x => x.GetOpenOrders()).Returns(new List<Order>());
+
+            var setupHandler = new BrokerageSetupHandler();
+
+            IBrokerageFactory factory;
+            setupHandler.CreateBrokerage(job, algorithm, out factory);
+
+            Assert.IsTrue(setupHandler.Setup(new SetupHandlerParameters(_dataManager.UniverseSelection, algorithm, brokerage.Object, job, resultHandler.Object,
+                transactionHandler.Object, realTimeHandler.Object, objectStore.Object)));
+
+            Assert.Greater(algorithm.UtcTime, time);
         }
 
         public TestCaseData[] GetExistingHoldingsAndOrdersTestCaseData()
         {
-            return new []
+            return new[]
             {
-                new TestCaseData(new List<Holding>(), new List<Order>())
+                new TestCaseData(
+                        new Func<List<Holding>>(() => new List<Holding>()),
+                        new Func<List<Order>>(() => new List<Order>()),
+                        true)
                     .SetName("None"),
 
                 new TestCaseData(
-                    new List<Holding>
-                    {
-                        new Holding { Type = SecurityType.Equity, Symbol = Symbols.SPY, Quantity = 1 }
-                    },
-                    new List<Order>
-                    {
-                        new LimitOrder(Symbols.SPY, 1, 1, DateTime.UtcNow)
-                    })
+                        new Func<List<Holding>>(() => new List<Holding>
+                        {
+                            new Holding { Type = SecurityType.Equity, Symbol = Symbols.SPY, Quantity = 1 }
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
+                        {
+                            new LimitOrder(Symbols.SPY, 1, 1, DateTime.UtcNow)
+                        }),
+                        true)
                     .SetName("Equity"),
 
                 new TestCaseData(
-                    new List<Holding>
-                    {
-                        new Holding { Type = SecurityType.Option, Symbol = Symbols.SPY_C_192_Feb19_2016, Quantity = 1 }
-                    },
-                    new List<Order>
-                    {
-                        new LimitOrder(Symbols.SPY_C_192_Feb19_2016, 1, 1, DateTime.UtcNow)
-                    })
+                        new Func<List<Holding>>(() => new List<Holding>
+                        {
+                            new Holding { Type = SecurityType.Option, Symbol = Symbols.SPY_C_192_Feb19_2016, Quantity = 1 }
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
+                        {
+                            new LimitOrder(Symbols.SPY_C_192_Feb19_2016, 1, 1, DateTime.UtcNow)
+                        }),
+                        true)
                     .SetName("Option"),
 
                 new TestCaseData(
-                        new List<Holding>
+                        new Func<List<Holding>>(() => new List<Holding>
                         {
                             new Holding { Type = SecurityType.Equity, Symbol = Symbols.SPY, Quantity = 1 },
                             new Holding { Type = SecurityType.Option, Symbol = Symbols.SPY_C_192_Feb19_2016, Quantity = 1 }
-                        },
-                        new List<Order>
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
                         {
                             new LimitOrder(Symbols.SPY, 1, 1, DateTime.UtcNow),
                             new LimitOrder(Symbols.SPY_C_192_Feb19_2016, 1, 1, DateTime.UtcNow)
-                        })
+                        }),
+                        true)
                     .SetName("Equity + Option"),
 
                 new TestCaseData(
-                        new List<Holding>
+                        new Func<List<Holding>>(() => new List<Holding>
                         {
                             new Holding { Type = SecurityType.Option, Symbol = Symbols.SPY_C_192_Feb19_2016, Quantity = 1 },
                             new Holding { Type = SecurityType.Equity, Symbol = Symbols.SPY, Quantity = 1 }
-                        },
-                        new List<Order>
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
                         {
                             new LimitOrder(Symbols.SPY_C_192_Feb19_2016, 1, 1, DateTime.UtcNow),
                             new LimitOrder(Symbols.SPY, 1, 1, DateTime.UtcNow)
-                        })
+                        }),
+                        true)
                     .SetName("Option + Equity"),
 
                 new TestCaseData(
-                        new List<Holding>
+                        new Func<List<Holding>>(() => new List<Holding>
+                        {
+                            new Holding { Type = SecurityType.Option, Symbol = Symbols.SPY_C_192_Feb19_2016, Quantity = 1 }
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
+                        {
+                            new LimitOrder(Symbols.SPY, 1, 1, DateTime.UtcNow),
+                        }),
+                        true)
+                    .SetName("Equity open order + Option holding"),
+
+                new TestCaseData(
+                        new Func<List<Holding>>(() => new List<Holding>
                         {
                             new Holding { Type = SecurityType.Forex, Symbol = Symbols.EURUSD, Quantity = 1 }
-                        },
-                        new List<Order>
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
                         {
                             new LimitOrder(Symbols.EURUSD, 1, 1, DateTime.UtcNow)
-                        })
+                        }),
+                        true)
                     .SetName("Forex"),
 
                 new TestCaseData(
-                        new List<Holding>
+                        new Func<List<Holding>>(() => new List<Holding>
                         {
                             new Holding { Type = SecurityType.Crypto, Symbol = Symbols.BTCUSD, Quantity = 1 }
-                        },
-                        new List<Order>
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
                         {
                             new LimitOrder(Symbols.BTCUSD, 1, 1, DateTime.UtcNow)
-                        })
+                        }),
+                        true)
                     .SetName("Crypto"),
 
                 new TestCaseData(
-                        new List<Holding>
+                        new Func<List<Holding>>(() => new List<Holding>
                         {
                             new Holding { Type = SecurityType.Future, Symbol = Symbols.Fut_SPY_Feb19_2016, Quantity = 1 }
-                        },
-                        new List<Order>
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
                         {
                             new LimitOrder(Symbols.Fut_SPY_Feb19_2016, 1, 1, DateTime.UtcNow)
-                        })
+                        }),
+                        true)
                     .SetName("Future"),
+
+                new TestCaseData(
+                        new Func<List<Holding>>(() => new List<Holding>
+                        {
+                            new Holding { Type = SecurityType.Base, Symbol = Symbol.Create("XYZ", SecurityType.Base, Market.USA), Quantity = 1 }
+                        }),
+                        new Func<List<Order>>(() => new List<Order>
+                        {
+                            new LimitOrder("XYZ", 1, 1, DateTime.UtcNow)
+                        }),
+                        false)
+                    .SetName("Base"),
+
+                new TestCaseData(
+                        new Func<List<Holding>>(() => { throw new Exception(); }),
+                        new Func<List<Order>>(() => new List<Order>()),
+                        false)
+                    .SetName("Invalid Holdings"),
+
+                new TestCaseData(
+                        new Func<List<Holding>>(() => new List<Holding>()),
+                        new Func<List<Order>>(() => { throw new Exception(); }),
+                        false)
+                    .SetName("Invalid Orders"),
             };
         }
 
         private class TestAlgorithm : QCAlgorithm
         {
-            public TestAlgorithm()
+            private readonly Action _beforePostInitializeAction;
+
+            public TestAlgorithm(Action beforePostInitializeAction = null)
             {
-                SubscriptionManager.SetDataManager(new DataManager());
+                _beforePostInitializeAction = beforePostInitializeAction;
+                SubscriptionManager.SetDataManager(new DataManagerStub(this, new MockDataFeed(), liveMode:true));
             }
 
-            public override void Initialize() {}
+            public override void Initialize() { }
+
+            public override void PostInitialize()
+            {
+                _beforePostInitializeAction?.Invoke();
+                base.PostInitialize();
+            }
         }
 
         private class NonDequeingTestResultsHandler : TestResultHandler
         {
             private readonly AlgorithmNodePacket _job = new BacktestNodePacket();
-            public readonly ConcurrentQueue<Packet> PersistentMessages  = new ConcurrentQueue<Packet>();
+            public readonly ConcurrentQueue<Packet> PersistentMessages = new ConcurrentQueue<Packet>();
 
             public override void DebugMessage(string message)
             {
@@ -244,16 +467,20 @@ namespace QuantConnect.Tests.Engine.Setup
         }
     }
 
-    internal class TestBrokerage : IBrokerage
+    internal class TestBrokerage : Brokerage
     {
-        public event EventHandler<OrderEvent> OrderStatusChanged;
-        public event EventHandler<OrderEvent> OptionPositionAssigned;
-        public event EventHandler<AccountEvent> AccountChanged;
-        public event EventHandler<BrokerageMessageEvent> Message;
-        public string Name { get; }
-        public bool IsConnected { get; }
+        public override bool IsConnected { get; } = true;
+        public int GetCashBalanceCallCount;
 
-        public List<Order> GetOpenOrders()
+        public TestBrokerage() : base("Test")
+        {
+        }
+
+        public TestBrokerage(string name) : base(name)
+        {
+        }
+
+        public override List<Order> GetOpenOrders()
         {
             const decimal delta = 1m;
             const decimal price = 1.2345m;
@@ -263,10 +490,12 @@ namespace QuantConnect.Tests.Engine.Setup
             var tz = TimeZones.NewYork;
 
             var time = new DateTime(2016, 2, 4, 16, 0, 0).ConvertToUtc(tz);
-            var marketOrderWithPrice = new MarketOrder(Symbols.SPY, quantity, time);
-            marketOrderWithPrice.Price = price;
+            var marketOrderWithPrice = new MarketOrder(Symbols.SPY, quantity, time)
+            {
+                Price = price
+            };
 
-            return new List<Order>()
+            return new List<Order>
             {
                 marketOrderWithPrice,
                 new LimitOrder(Symbols.SPY, -quantity, pricePlusDelta, time),
@@ -275,47 +504,41 @@ namespace QuantConnect.Tests.Engine.Setup
             };
         }
 
+        public override List<CashAmount> GetCashBalance()
+        {
+            GetCashBalanceCallCount++;
+
+            return new List<CashAmount> { new CashAmount(10, Currencies.USD) };
+        }
+
         #region UnusedMethods
-        public void Dispose()
-        {
-        }
-        public List<Holding> GetAccountHoldings()
+
+        public override List<Holding> GetAccountHoldings()
         {
             throw new NotImplementedException();
         }
 
-        public List<Cash> GetCashBalance()
+        public override bool PlaceOrder(Order order)
         {
             throw new NotImplementedException();
         }
 
-        public bool PlaceOrder(Order order)
+        public override bool UpdateOrder(Order order)
         {
             throw new NotImplementedException();
         }
 
-        public bool UpdateOrder(Order order)
+        public override bool CancelOrder(Order order)
         {
             throw new NotImplementedException();
         }
 
-        public bool CancelOrder(Order order)
+        public override void Connect()
         {
             throw new NotImplementedException();
         }
 
-        public void Connect()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void Disconnect()
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool AccountInstantlyUpdated { get; }
-        public IEnumerable<BaseData> GetHistory(HistoryRequest request)
+        public override void Disconnect()
         {
             throw new NotImplementedException();
         }

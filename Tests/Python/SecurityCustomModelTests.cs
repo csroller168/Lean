@@ -24,7 +24,7 @@ using QuantConnect.Securities;
 using QuantConnect.Securities.Equity;
 using QuantConnect.Tests.Common.Securities;
 using System;
-using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Python
 {
@@ -37,7 +37,7 @@ namespace QuantConnect.Tests.Python
         public void SetBuyingPowerModelSuccess(bool isChild)
         {
             var algorithm = new QCAlgorithm();
-            algorithm.SubscriptionManager.SetDataManager(new DataManager());
+            algorithm.SubscriptionManager.SetDataManager(new DataManagerStub(algorithm));
             algorithm.SetDateTime(new DateTime(2018, 8, 20, 15, 0, 0));
             algorithm.Transactions.SetOrderProcessor(new FakeOrderProcessor());
 
@@ -66,9 +66,9 @@ namespace QuantConnect.Tests.Python
         {
             var spy = GetSecurity<Equity>(Symbols.SPY, Resolution.Daily);
 
-            // Renaming GetBuyingPower will cause a NotImplementedException exception
+            // Renaming GetMaximumOrderQuantityForTargetDeltaBuyingPower will cause a NotImplementedException exception
             var code = CreateCustomBuyingPowerModelCode();
-            code = code.Replace("GetBuyingPower", "SetBuyingPower");
+            code = code.Replace("GetMaximumOrderQuantityForDeltaBuyingPower", "AnotherName");
             var pyObject = CreateCustomBuyingPowerModel(code);
             Assert.Throws<NotImplementedException>(() => spy.SetBuyingPowerModel(pyObject));
         }
@@ -95,19 +95,19 @@ class CustomBuyingPowerModel:
     def __init__(self):
         self.margin = 1.0
 
-    def GetBuyingPower(self, portfolio, security, direction):
-        return portfolio.MarginRemaining
-    
+    def GetMaximumOrderQuantityForDeltaBuyingPower(self, context):
+        return GetMaximumOrderQuantityResult(200)
+
     def GetLeverage(self, security):
         return 1.0 / self.margin
 
-    def GetMaximumOrderQuantityForTargetValue(self, portfolio, security, order):
-        return GetMaximumOrderQuantityForTargetValueResult(200)
+    def GetMaximumOrderQuantityForTargetBuyingPower(self, context):
+        return GetMaximumOrderQuantityResult(200)
 
-    def GetReservedBuyingPowerForPosition(self, security):
-        return security.Holdings.AbsoluteHoldingsCost * self.margin
+    def GetReservedBuyingPowerForPosition(self, context):
+        return ReservedBuyingPowerForPosition(context.Security.Holdings.AbsoluteHoldingsCost * self.margin)
 
-    def HasSufficientBuyingPowerForOrder(self, portfolio, security, order):
+    def HasSufficientBuyingPowerForOrder(self, context):
         return HasSufficientBuyingPowerForOrderResult(True)
 
     def SetLeverage(self, security, leverage):
@@ -123,8 +123,8 @@ from QuantConnect import *
 from QuantConnect.Securities import *
 
 class CustomBuyingPowerModel(SecurityMarginModel):
-    def GetMaximumOrderQuantityForTargetValue(self, portfolio, security, order):
-        return GetMaximumOrderQuantityForTargetValueResult(100)";
+    def GetMaximumOrderQuantityForTargetBuyingPower(self, context):
+        return GetMaximumOrderQuantityResult(100)";
 
         private Security GetSecurity<T>(Symbol symbol, Resolution resolution)
         {
@@ -141,8 +141,12 @@ class CustomBuyingPowerModel(SecurityMarginModel):
             return new Security(
                 SecurityExchangeHours.AlwaysOpen(TimeZones.Utc),
                 subscriptionDataConfig,
-                new Cash(CashBook.AccountCurrency, 0, 1m),
-                SymbolProperties.GetDefault(CashBook.AccountCurrency));
+                new Cash(Currencies.USD, 0, 1m),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
         }
     }
 }

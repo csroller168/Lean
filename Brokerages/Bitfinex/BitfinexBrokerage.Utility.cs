@@ -14,18 +14,17 @@
 */
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using QuantConnect.Data.Market;
 using QuantConnect.Logging;
 using QuantConnect.Orders;
 using RestSharp;
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using QuantConnect.Orders.Fees;
 
 namespace QuantConnect.Brokerages.Bitfinex
 {
@@ -97,19 +96,6 @@ namespace QuantConnect.Brokerages.Bitfinex
                 wallet.Type.Equals("trading") && accountType == AccountType.Margin;
         }
 
-        private decimal GetConversionRate(Symbol symbol)
-        {
-            try
-            {
-                return _priceProvider.GetLastPrice(symbol);
-            }
-            catch (Exception e)
-            {
-                OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Error, 0, $"GetConversionRate: {e.Message}"));
-                return 0;
-            }
-        }
-
         /// <summary>
         /// Provides the current best bid and ask
         /// </summary>
@@ -168,7 +154,7 @@ namespace QuantConnect.Brokerages.Bitfinex
             {
                 case OrderType.Limit:
                 case OrderType.Market:
-                    outputOrderType = orderType.ToString().ToLower();
+                    outputOrderType = orderType.ToLower();
                     break;
                 case OrderType.StopMarket:
                     outputOrderType = "stop";
@@ -184,7 +170,7 @@ namespace QuantConnect.Brokerages.Bitfinex
         {
             if (orderDirection == OrderDirection.Buy || orderDirection == OrderDirection.Sell)
             {
-                return orderDirection.ToString().ToLower();
+                return orderDirection.ToLower();
             }
 
             throw new NotSupportedException($"BitfinexBrokerage.ConvertOrderDirection: Unsupported order direction: {orderDirection}");
@@ -215,16 +201,28 @@ namespace QuantConnect.Brokerages.Bitfinex
 
         private Holding ConvertHolding(Messages.Position position)
         {
-            return new Holding()
+            var holding = new Holding
             {
                 Symbol = _symbolMapper.GetLeanSymbol(position.Symbol),
                 AveragePrice = position.AveragePrice,
                 Quantity = position.Amount,
                 UnrealizedPnL = position.PL,
-                ConversionRate = 1.0m,
                 CurrencySymbol = "$",
                 Type = SecurityType.Crypto
             };
+
+            try
+            {
+                var tick = GetTick(holding.Symbol);
+                holding.MarketPrice = tick.Value;
+            }
+            catch (Exception)
+            {
+                Log.Error($"BitfinexBrokerage.ConvertHolding(): failed to set {holding.Symbol} market price");
+                throw;
+            }
+
+            return holding;
         }
 
         private Func<Messages.Order, bool> OrderFilter(AccountType accountType)
@@ -276,7 +274,7 @@ namespace QuantConnect.Brokerages.Bitfinex
 
             var payload = new JsonObject();
             payload.Add("request", endpoint);
-            payload.Add("nonce", GetNonce().ToString());
+            payload.Add("nonce", GetNonce().ToStringInvariant());
             payload.Add("symbol", _symbolMapper.GetBrokerageSymbol(order.Symbol));
             payload.Add("amount", Math.Abs(order.Quantity).ToString(CultureInfo.InvariantCulture));
             payload.Add("side", ConvertOrderDirection(order.Direction));
@@ -285,7 +283,7 @@ namespace QuantConnect.Brokerages.Bitfinex
 
             if (order.BrokerId.Any())
             {
-                payload.Add("order_id", long.Parse(order.BrokerId.FirstOrDefault()));
+                payload.Add("order_id", Parse.Long(order.BrokerId.FirstOrDefault()));
             }
 
             var orderProperties = order.Properties as BitfinexOrderProperties;
@@ -303,7 +301,7 @@ namespace QuantConnect.Brokerages.Bitfinex
             SignRequest(request, payload.ToString());
 
             var response = ExecuteRestRequest(request);
-
+            var orderFee = OrderFee.Zero;
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 var raw = JsonConvert.DeserializeObject<Messages.Order>(response.Content);
@@ -311,7 +309,7 @@ namespace QuantConnect.Brokerages.Bitfinex
                 if (string.IsNullOrEmpty(raw?.Id))
                 {
                     var errorMessage = $"Error parsing response from place order: {response.Content}";
-                    OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, 0, "Bitfinex Order Event") { Status = OrderStatus.Invalid, Message = errorMessage });
+                    OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, orderFee, "Bitfinex Order Event") { Status = OrderStatus.Invalid, Message = errorMessage });
                     OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, (int)response.StatusCode, errorMessage));
 
                     UnlockStream();
@@ -331,7 +329,7 @@ namespace QuantConnect.Brokerages.Bitfinex
                 }
 
                 // Generate submitted event
-                OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, 0, "Bitfinex Order Event") { Status = OrderStatus.Submitted });
+                OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, orderFee, "Bitfinex Order Event") { Status = OrderStatus.Submitted });
                 Log.Trace($"Order submitted successfully - OrderId: {order.Id}");
 
                 UnlockStream();
@@ -339,7 +337,7 @@ namespace QuantConnect.Brokerages.Bitfinex
             }
 
             var message = $"Order failed, Order Id: {order.Id} timestamp: {order.Time} quantity: {order.Quantity} content: {response.Content}";
-            OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, 0, "Bitfinex Order Event") { Status = OrderStatus.Invalid });
+            OnOrderEvent(new OrderEvent(order, DateTime.UtcNow, orderFee, "Bitfinex Order Event") { Status = OrderStatus.Invalid });
             OnMessage(new BrokerageMessageEvent(BrokerageMessageType.Warning, -1, message));
 
             UnlockStream();

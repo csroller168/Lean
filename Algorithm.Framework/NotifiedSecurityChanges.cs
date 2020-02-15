@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Securities;
+using QuantConnect.Util;
 
 namespace QuantConnect.Algorithm.Framework
 {
@@ -40,7 +41,7 @@ namespace QuantConnect.Algorithm.Framework
         /// </summary>
         /// <param name="securities">The securities collection to be updated with the changes</param>
         /// <param name="changes">The changes to be applied to the securities collection</param>
-        /// <param name="valueFactory">Delegate used to create instances of <see cref="TValue"/> from a <see cref="Security"/> objec</param>
+        /// <param name="valueFactory">Delegate used to create instances of <typeparamref name="TValue"/> from a <see cref="Security"/> object</param>
         public static void UpdateCollection<TValue>(ICollection<TValue> securities, SecurityChanges changes, Func<Security, TValue> valueFactory)
         {
             Update(changes, added => securities.Add(valueFactory(added)), removed => securities.Remove(valueFactory(removed)));
@@ -79,12 +80,12 @@ namespace QuantConnect.Algorithm.Framework
         /// <summary>
         /// Most generic form of <see cref="UpdateCollection"/>
         /// </summary>
-        /// <typeparam name="TKey"></typeparam>
-        /// <typeparam name="TValue"></typeparam>
-        /// <param name="dictionary"></param>
-        /// <param name="changes"></param>
-        /// <param name="keyFactory"></param>
-        /// <param name="valueFactory"></param>
+        /// <typeparam name="TKey">The dictionary's key type</typeparam>
+        /// <typeparam name="TValue">The dictionary's value type</typeparam>
+        /// <param name="dictionary">The dictionary to update</param>
+        /// <param name="changes">The <seealso cref="SecurityChanges"/> to apply to the dictionary</param>
+        /// <param name="keyFactory">Selector pulling <typeparamref name="TKey"/> from a <seealso cref="Security"/></param>
+        /// <param name="valueFactory">Selector pulling <typeparamref name="TValue"/> from a <seealso cref="Security"/></param>
         public static void UpdateDictionary<TKey, TValue>(
             IDictionary<TKey, TValue> dictionary,
             SecurityChanges changes,
@@ -94,10 +95,25 @@ namespace QuantConnect.Algorithm.Framework
         {
             Update(changes,
                 added => dictionary.Add(keyFactory(added), valueFactory(added)),
-                removed => dictionary.Remove(keyFactory(removed))
-            );
+                removed =>
+                {
+                    var key = keyFactory(removed);
+                    var entry = dictionary[key];
+                    dictionary.Remove(key);
+
+                    // give the entry a chance to clean up after itself
+                    var disposable = entry as IDisposable;
+                    disposable.DisposeSafely();
+                });
         }
 
+        /// <summary>
+        /// Invokes the provided <paramref name="add"/> and <paramref name="remove"/> functions for each
+        /// <seealso cref="SecurityChanges.Added"/> and <seealso cref="SecurityChanges.Removed"/>, respectively
+        /// </summary>
+        /// <param name="changes">The security changes to process</param>
+        /// <param name="add">Function called for each added security</param>
+        /// <param name="remove">Function called for each removed security</param>
         public static void Update(SecurityChanges changes, Action<Security> add, Action<Security> remove)
         {
             foreach (var added in changes.AddedSecurities)

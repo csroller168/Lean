@@ -15,11 +15,13 @@ from clr import AddReference
 AddReference("System")
 AddReference("QuantConnect.Algorithm")
 AddReference("QuantConnect.Common")
+AddReference("QuantConnect.Logging")
 AddReference("QuantConnect.Indicators")
 
 from System import *
 from QuantConnect import *
 from QuantConnect.Indicators import *
+from QuantConnect.Logging import Log
 from QuantConnect.Algorithm import *
 from QuantConnect.Algorithm.Framework import *
 from QuantConnect.Algorithm.Framework.Alphas import InsightCollection, InsightDirection
@@ -81,9 +83,9 @@ class BlackLittermanOptimizationPortfolioConstructionModel(PortfolioConstruction
         Create portfolio targets from the specified insights
         Args:
             algorithm: The algorithm instance
-            insights: The insights to create portoflio targets from
+            insights: The insights to create portfolio targets from
         Returns:
-            An enumerable of portoflio targets to be sent to the execution model
+            An enumerable of portfolio targets to be sent to the execution model
         """
         targets = []
 
@@ -92,6 +94,8 @@ class BlackLittermanOptimizationPortfolioConstructionModel(PortfolioConstruction
             len(insights) == 0 and
             self.removedSymbols is None):
             return targets
+
+        insights = PortfolioConstructionModel.FilterInvalidInsightMagnitude(algorithm, insights)
 
         self.insightCollection.AddRange(insights)
 
@@ -187,6 +191,11 @@ class BlackLittermanOptimizationPortfolioConstructionModel(PortfolioConstruction
 
             if not history.empty:
                 ticker = SymbolCache.GetTicker(symbol)
+
+                if ticker not in history.index.levels[0]:
+                    Log.Trace(f'BlackLittermanOptimizationPortfolioConstructionModel.OnSecuritiesChanged: {ticker} not found in history data frame.')
+                    continue
+
                 symbolData.WarmUpIndicators(history.loc[ticker])
 
             self.symbolDataBySymbol[symbol] = symbolData

@@ -1,13 +1,23 @@
-﻿using NUnit.Framework;
+﻿/*
+ * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+ * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
+
+using NUnit.Framework;
 using QuantConnect.Orders.Fees;
 using QuantConnect.Orders;
 using QuantConnect.Securities;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using NodaTime;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Brokerages;
@@ -22,9 +32,24 @@ namespace QuantConnect.Tests.Brokerages.Bitfinex
         {
             get
             {
-                var security = new Security(SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork),
-                    new SubscriptionDataConfig(typeof(TradeBar), Symbol, Resolution.Minute, TimeZones.NewYork, TimeZones.NewYork, false, false, false),
-                    new Cash(CashBook.AccountCurrency, 0, 1m), SymbolProperties.GetDefault(CashBook.AccountCurrency));
+                var security = new Security(
+                    SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork),
+                    new SubscriptionDataConfig(
+                        typeof(TradeBar),
+                        Symbol,
+                        Resolution.Minute,
+                        TimeZones.NewYork,
+                        TimeZones.NewYork,
+                        false,
+                        false,
+                        false
+                    ),
+                    new Cash(Currencies.USD, 0, 1m),
+                    SymbolProperties.GetDefault(Currencies.USD),
+                    ErrorCurrencyConverter.Instance,
+                    RegisteredSecurityDataTypesProvider.Null,
+                    new SecurityCache()
+                );
                 security.SetMarketPrice(new Tick(DateTime.UtcNow, Symbol, LowPrice, HighPrice));
 
                 return security;
@@ -70,10 +95,11 @@ namespace QuantConnect.Tests.Brokerages.Bitfinex
 
             Order order = parameters.CreateShortOrder(Quantity);
             var price = order.Type == OrderType.Limit ? ((LimitOrder)order).LimitPrice : LowPrice;
+            var fee = feeModel.GetOrderFee(new OrderFeeParameters(Security, order));
 
             Assert.AreEqual(
-                BitfinexFeeModel.MakerFee * price * Math.Abs(Quantity),
-                feeModel.GetOrderFee(Security, order));
+                BitfinexFeeModel.MakerFee * price * Math.Abs(Quantity), fee.Value.Amount);
+            Assert.AreEqual(Currencies.USD, fee.Value.Currency);
         }
 
         [Test]
@@ -84,10 +110,12 @@ namespace QuantConnect.Tests.Brokerages.Bitfinex
 
             Order order = parameters.CreateShortOrder(Quantity);
             var price = order.Type == OrderType.Limit ? ((LimitOrder)order).LimitPrice : LowPrice;
+            var fee =
+                feeModel.GetOrderFee(new OrderFeeParameters(Security, order));
 
             Assert.AreEqual(
-                BitfinexFeeModel.TakerFee * price * Math.Abs(Quantity),
-                feeModel.GetOrderFee(Security, order));
+                BitfinexFeeModel.TakerFee * price * Math.Abs(Quantity), fee.Value.Amount);
+            Assert.AreEqual(Currencies.USD, fee.Value.Currency);
         }
 
         [Test]
@@ -98,10 +126,12 @@ namespace QuantConnect.Tests.Brokerages.Bitfinex
 
             Order order = parameters.CreateLongOrder(Quantity);
             var price = order.Type == OrderType.Limit ? ((LimitOrder)order).LimitPrice : HighPrice;
+            var fee =
+                feeModel.GetOrderFee(new OrderFeeParameters(Security, order));
 
             Assert.AreEqual(
-                BitfinexFeeModel.MakerFee * price * Math.Abs(Quantity),
-                feeModel.GetOrderFee(Security, order));
+                BitfinexFeeModel.MakerFee * price * Math.Abs(Quantity), fee.Value.Amount);
+            Assert.AreEqual(Currencies.USD, fee.Value.Currency);
         }
 
         [Test]
@@ -112,10 +142,12 @@ namespace QuantConnect.Tests.Brokerages.Bitfinex
 
             Order order = parameters.CreateLongOrder(Quantity);
             var price = order.Type == OrderType.Limit ? ((LimitOrder)order).LimitPrice : HighPrice;
+            var fee =
+                feeModel.GetOrderFee(new OrderFeeParameters(Security, order));
 
             Assert.AreEqual(
-                BitfinexFeeModel.TakerFee * price * Math.Abs(Quantity),
-                feeModel.GetOrderFee(Security, order));
+                BitfinexFeeModel.TakerFee * price * Math.Abs(Quantity), fee.Value.Amount);
+            Assert.AreEqual(Currencies.USD, fee.Value.Currency);
         }
     }
 }

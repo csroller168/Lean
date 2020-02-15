@@ -36,7 +36,7 @@ namespace QuantConnect.Exceptions
         /// <returns>True if the exception can be interpreted, false otherwise</returns>
         public bool CanInterpret(Exception exception)
         {
-            return 
+            return
                 exception?.GetType() == typeof(PythonException) &&
                 exception.Message.Contains("TypeError") &&
                 exception.Message.Contains("No method match");
@@ -46,13 +46,13 @@ namespace QuantConnect.Exceptions
         /// Interprets the specified exception into a new exception
         /// </summary>
         /// <param name="exception">The exception to be interpreted</param>
-        /// <param name="innerInterpreter">An interpreter that should be applied to the inner exception.
+        /// <param name="innerInterpreter">An interpreter that should be applied to the inner exception.</param>
         /// <returns>The interpreted exception</returns>
         public Exception Interpret(Exception exception, IExceptionInterpreter innerInterpreter)
         {
             var pe = (PythonException)exception;
 
-            var startIndex = pe.Message.LastIndexOf(" ");
+            var startIndex = pe.Message.LastIndexOfInvariant(" ");
             var methodName = pe.Message.Substring(startIndex).Trim();
             var message = $"Trying to dynamically access a method that does not exist throws a TypeError exception. To prevent the exception, ensure each parameter type matches those required by the {methodName} method. Please checkout the API documentation.";
 

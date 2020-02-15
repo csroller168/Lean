@@ -33,6 +33,7 @@ using QuantConnect.Securities.Option;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using QuantConnect.Storage;
 
 namespace QuantConnect.AlgorithmFactory.Python.Wrappers
 {
@@ -41,9 +42,16 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
     /// </summary>
     public class AlgorithmPythonWrapper : IAlgorithm
     {
-        private readonly dynamic _algorithm = null;
+        private readonly dynamic _algorithm;
+        private readonly dynamic _onData;
+        private readonly dynamic _onOrderEvent;
+        private readonly dynamic _onMarginCall;
         private readonly IAlgorithm _baseAlgorithm;
-        private readonly bool _isOnDataDefined = false;
+
+        /// <summary>
+        /// True if the underlying python algorithm implements "OnEndOfDay"
+        /// </summary>
+        public bool IsOnEndOfDayImplemented { get; }
 
         /// <summary>
         /// <see cref = "AlgorithmPythonWrapper"/> constructor.
@@ -59,8 +67,8 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
                     Logging.Log.Trace($"AlgorithmPythonWrapper(): Python version {PythonEngine.Version}: Importing python module {moduleName}");
 
                     var module = Py.Import(moduleName);
-
-                    foreach (var name in module.Dir())
+                    var pyList = module.Dir();
+                    foreach (var name in pyList)
                     {
                         Type type;
                         var attr = module.GetAttr(name.ToString());
@@ -82,15 +90,23 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
 
                             // determines whether OnData method was defined or inherits from QCAlgorithm
                             // If it is not, OnData from the base class will not be called
-                            var pythonType = (_algorithm as PyObject).GetAttr("OnData").GetPythonType();
-                            _isOnDataDefined = pythonType.Repr().Equals("<class \'method\'>");
-                        }
-                    }
+                            var pyAlgorithm = _algorithm as PyObject;
+                            _onData = pyAlgorithm.GetPythonMethod("OnData");
 
+                            _onMarginCall = pyAlgorithm.GetPythonMethod("OnMarginCall");
+
+                            _onOrderEvent = pyAlgorithm.GetAttr("OnOrderEvent");
+
+                            IsOnEndOfDayImplemented = pyAlgorithm.GetPythonMethod("OnEndOfDay") != null;
+                        }
+                        attr.Dispose();
+                    }
+                    module.Dispose();
+                    pyList.Dispose();
                     // If _algorithm could not be set, throw exception
                     if (_algorithm == null)
                     {
-                        throw new Exception("Please ensure that one class inherits from QCAlgorithm or QCAlgorithmFramework.");
+                        throw new Exception("Please ensure that one class inherits from QCAlgorithm.");
                     }
                 }
             }
@@ -167,11 +183,6 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
                 SetHistoryProvider(value);
             }
         }
-
-        /// <summary>
-        /// Gets a flag indicating whether or not this algorithm uses the QCAlgorithmFramework
-        /// </summary>
-        public bool IsFrameworkAlgorithm => _baseAlgorithm.IsFrameworkAlgorithm;
 
         /// <summary>
         /// Gets whether or not this algorithm is still warming up
@@ -275,6 +286,16 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         public IFutureChainProvider FutureChainProvider => _baseAlgorithm.FutureChainProvider;
 
         /// <summary>
+        /// Gets the object store, used for persistence
+        /// </summary>
+        public ObjectStore ObjectStore => _baseAlgorithm.ObjectStore;
+
+        /// <summary>
+        /// Returns the current Slice object
+        /// </summary>
+        public Slice CurrentSlice => _baseAlgorithm.CurrentSlice;
+
+        /// <summary>
         /// Algorithm start date for backtesting, set by the SetStartDate methods.
         /// </summary>
         public DateTime StartDate => _baseAlgorithm.StartDate;
@@ -336,6 +357,11 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         }
 
         /// <summary>
+        /// Gets the time keeper instance
+        /// </summary>
+        public ITimeKeeper TimeKeeper => _baseAlgorithm.TimeKeeper;
+
+        /// <summary>
         /// Data subscription manager controls the information and subscriptions the algorithms recieves.
         /// Subscription configurations can be added through the Subscription Manager.
         /// </summary>
@@ -373,16 +399,21 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         public DateTime UtcTime => _baseAlgorithm.UtcTime;
 
         /// <summary>
+        /// Gets the account currency
+        /// </summary>
+        public string AccountCurrency => _baseAlgorithm.AccountCurrency;
+
+        /// <summary>
         /// Set a required SecurityType-symbol and resolution for algorithm
         /// </summary>
         /// <param name="securityType">SecurityType Enum: Equity, Commodity, FOREX or Future</param>
         /// <param name="symbol">Symbol Representation of the MarketType, e.g. AAPL</param>
-        /// <param name="resolution">Resolution of the MarketType required: MarketData, Second or Minute</param>
+        /// <param name="resolution">The <see cref="Resolution"/> of market data, Tick, Second, Minute, Hour, or Daily.</param>
         /// <param name="market">The market the requested security belongs to, such as 'usa' or 'fxcm'</param>
         /// <param name="fillDataForward">If true, returns the last available data even if none in that timeslice.</param>
         /// <param name="leverage">leverage for this security</param>
         /// <param name="extendedMarketHours">ExtendedMarketHours send in data from 4am - 8pm, not used for FOREX</param>
-        public Security AddSecurity(SecurityType securityType, string symbol, Resolution resolution, string market, bool fillDataForward, decimal leverage, bool extendedMarketHours)
+        public Security AddSecurity(SecurityType securityType, string symbol, Resolution? resolution, string market, bool fillDataForward, decimal leverage, bool extendedMarketHours)
             => _baseAlgorithm.AddSecurity(securityType, symbol, resolution, market, fillDataForward, leverage, extendedMarketHours);
 
         /// <summary>
@@ -393,7 +424,7 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// <param name="fillDataForward">If true, returns the last available data even if none in that timeslice. Default is <value>true</value></param>
         /// <param name="leverage">The requested leverage for this equity. Default is set by <see cref="SecurityInitializer"/></param>
         /// <returns>The new <see cref="Future"/> security</returns>
-        public Future AddFutureContract(Symbol symbol, Resolution resolution = Resolution.Minute, bool fillDataForward = true, decimal leverage = 0m)
+        public Future AddFutureContract(Symbol symbol, Resolution? resolution = null, bool fillDataForward = true, decimal leverage = 0m)
             => _baseAlgorithm.AddFutureContract(symbol, resolution, fillDataForward, leverage);
 
         /// <summary>
@@ -404,7 +435,7 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// <param name="fillDataForward">If true, returns the last available data even if none in that timeslice. Default is <value>true</value></param>
         /// <param name="leverage">The requested leverage for this equity. Default is set by <see cref="SecurityInitializer"/></param>
         /// <returns>The new <see cref="Option"/> security</returns>
-        public Option AddOptionContract(Symbol symbol, Resolution resolution = Resolution.Minute, bool fillDataForward = true, decimal leverage = 0m)
+        public Option AddOptionContract(Symbol symbol, Resolution? resolution = null, bool fillDataForward = true, decimal leverage = 0m)
             => _baseAlgorithm.AddOptionContract(symbol, resolution, fillDataForward, leverage);
 
         /// <summary>
@@ -524,11 +555,11 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// <param name="slice">The current slice of data</param>
         public void OnData(Slice slice)
         {
-            if (_isOnDataDefined)
+            if (_onData != null)
             {
                 using (Py.GIL())
                 {
-                    _algorithm.OnData(SubscriptionManager.HasCustomData ? new PythonSlice(slice) : slice);
+                    _onData(SubscriptionManager.HasCustomData ? new PythonSlice(slice) : slice);
                 }
             }
         }
@@ -537,7 +568,13 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// Used to send data updates to algorithm framework models
         /// </summary>
         /// <param name="slice">The current data slice</param>
-        public void OnFrameworkData(Slice slice) => _baseAlgorithm.OnFrameworkData(slice);
+        public void OnFrameworkData(Slice slice)
+        {
+            using (Py.GIL())
+            {
+                _algorithm.OnFrameworkData(SubscriptionManager.HasCustomData ? new PythonSlice(slice) : slice);
+            }
+        }
 
         /// <summary>
         /// Call this event at the end of the algorithm running.
@@ -554,6 +591,9 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// End of a trading day event handler. This method is called at the end of the algorithm day (or multiple times if trading multiple assets).
         /// </summary>
         /// <remarks>Method is called 10 minutes before closing to allow user to close out position.</remarks>
+        /// <remarks>Deprecated because different assets have different market close times,
+        /// and because Python does not support two methods with the same name</remarks>
+        [Obsolete("This method is deprecated. Please use this overload: OnEndOfDay(Symbol symbol)")]
         public void OnEndOfDay()
         {
             try
@@ -608,12 +648,13 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// <param name="requests">The orders to be executed to bring this algorithm within margin limits</param>
         public void OnMarginCall(List<SubmitOrderRequest> requests)
         {
-            try
+            using (Py.GIL())
             {
-                using (Py.GIL())
-                {
-                    var pyRequests = _algorithm.OnMarginCall(requests) as PyObject;
+                var result = _algorithm.OnMarginCall(requests);
 
+                if (_onMarginCall != null)
+                {
+                    var pyRequests = result as PyObject;
                     // If the method does not return or returns a non-iterable PyObject, throw an exception
                     if (pyRequests == null || !pyRequests.IsIterable())
                     {
@@ -638,23 +679,10 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
                     }
                 }
             }
-            catch (PythonException pythonException)
-            {
-                // Pythonnet generated error due to List conversion
-                if (pythonException.Message.Contains("TypeError : No method matches given arguments"))
-                {
-                    _baseAlgorithm.OnMarginCall(requests);
-                }
-                // User code generated error
-                else
-                {
-                    throw pythonException;
-                }
-            }
         }
 
         /// <summary>
-        /// Margin call warning event handler. This method is called when Portoflio.MarginRemaining is under 5% of your Portfolio.TotalPortfolioValue
+        /// Margin call warning event handler. This method is called when Portfolio.MarginRemaining is under 5% of your Portfolio.TotalPortfolioValue
         /// </summary>
         public void OnMarginCallWarning()
         {
@@ -673,7 +701,7 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         {
             using (Py.GIL())
             {
-                _algorithm.OnOrderEvent(newEvent);
+                _onOrderEvent(newEvent);
             }
         }
 
@@ -765,6 +793,14 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         public void SetBrokerageModel(IBrokerageModel brokerageModel) => _baseAlgorithm.SetBrokerageModel(brokerageModel);
 
         /// <summary>
+        /// Sets the account currency cash symbol this algorithm is to manage.
+        /// </summary>
+        /// <remarks>Has to be called during <see cref="Initialize"/> before
+        /// calling <see cref="SetCash(decimal)"/> or adding any <see cref="Security"/></remarks>
+        /// <param name="accountCurrency">The account currency cash symbol to set</param>
+        public void SetAccountCurrency(string accountCurrency) => _baseAlgorithm.SetAccountCurrency(accountCurrency);
+
+        /// <summary>
         /// Set the starting capital for the strategy
         /// </summary>
         /// <param name="startingCash">decimal starting capital, default $100,000</param>
@@ -776,13 +812,27 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// <param name="symbol">The cash symbol to set</param>
         /// <param name="startingCash">Decimal cash value of portfolio</param>
         /// <param name="conversionRate">The current conversion rate for the</param>
-        public void SetCash(string symbol, decimal startingCash, decimal conversionRate) => _baseAlgorithm.SetCash(symbol, startingCash, conversionRate);
+        public void SetCash(string symbol, decimal startingCash, decimal conversionRate = 0) => _baseAlgorithm.SetCash(symbol, startingCash, conversionRate);
 
         /// <summary>
         /// Set the DateTime Frontier: This is the master time and is
         /// </summary>
         /// <param name="time"></param>
         public void SetDateTime(DateTime time) => _baseAlgorithm.SetDateTime(time);
+
+        /// <summary>
+        /// Set the start date for the backtest
+        /// </summary>
+        /// <param name="start">Datetime Start date for backtest</param>
+        /// <remarks>Must be less than end date and within data available</remarks>
+        public void SetStartDate(DateTime start) => _baseAlgorithm.SetStartDate(start);
+
+        /// <summary>
+        /// Set the end date for a backtest.
+        /// </summary>
+        /// <param name="end">Datetime value for end date</param>
+        /// <remarks>Must be greater than the start date</remarks>
+        public void SetEndDate(DateTime end) => _baseAlgorithm.SetEndDate(end);
 
         /// <summary>
         /// Set the runtime error
@@ -861,5 +911,25 @@ namespace QuantConnect.AlgorithmFactory.Python.Wrappers
         /// </summary>
         /// <param name="slice">The Slice object</param>
         public void SetCurrentSlice(Slice slice) => _baseAlgorithm.SetCurrentSlice(slice);
+
+        /// <summary>
+        /// Provide the API for the algorithm.
+        /// </summary>
+        /// <param name="api">Initiated API</param>
+        public void SetApi(IApi api) => _baseAlgorithm.SetApi(api);
+
+        /// <summary>
+        /// Sets the object store
+        /// </summary>
+        /// <param name="objectStore">The object store</param>
+        public void SetObjectStore(IObjectStore objectStore) => _baseAlgorithm.SetObjectStore(objectStore);
+
+        /// <summary>
+        /// Sets the order event provider
+        /// </summary>
+        /// <param name="newOrderEvent">The order event provider</param>
+        /// <remarks>Will be called before the <see cref="SecurityPortfolioManager"/></remarks>
+        public void SetOrderEventProvider(IOrderEventProvider newOrderEvent)
+            => _baseAlgorithm.SetOrderEventProvider(newOrderEvent);
     }
 }

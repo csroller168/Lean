@@ -19,7 +19,9 @@ using System.Linq;
 using Newtonsoft.Json;
 using QuantConnect.Data;
 using QuantConnect.Data.UniverseSelection;
+using QuantConnect.Interfaces;
 using QuantConnect.Logging;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect.Securities
 {
@@ -28,10 +30,17 @@ namespace QuantConnect.Securities
     /// </summary>
     public class Cash
     {
+        private decimal _conversionRate;
         private bool _isBaseCurrency;
         private bool _invertRealTimePrice;
 
         private readonly object _locker = new object();
+
+        /// <summary>
+        /// Event fired when this instance is updated
+        /// <see cref="AddAmount"/>, <see cref="SetAmount"/>, <see cref="Update"/>
+        /// </summary>
+        public event EventHandler Updated;
 
         /// <summary>
         /// Gets the symbol of the security required to provide conversion rates.
@@ -60,7 +69,18 @@ namespace QuantConnect.Securities
         /// <summary>
         /// Gets the conversion rate into account currency
         /// </summary>
-        public decimal ConversionRate { get; internal set; }
+        public decimal ConversionRate
+        {
+            get
+            {
+                return _conversionRate;
+            }
+            internal set
+            {
+                _conversionRate = value;
+                OnUpdate();
+            }
+        }
 
         /// <summary>
         /// The symbol of the currency, such as $
@@ -77,16 +97,16 @@ namespace QuantConnect.Securities
         /// </summary>
         /// <param name="symbol">The symbol used to represent this cash</param>
         /// <param name="amount">The amount of this currency held</param>
-        /// <param name="conversionRate">The initial conversion rate of this currency into the <see cref="CashBook.AccountCurrency"/></param>
+        /// <param name="conversionRate">The initial conversion rate of this currency into the <see cref="AccountCurrency"/></param>
         public Cash(string symbol, decimal amount, decimal conversionRate)
         {
-            if (symbol == null || symbol.Length != 3)
+            if (string.IsNullOrEmpty(symbol))
             {
-                throw new ArgumentException("Cash symbols must be exactly 3 characters.");
+                throw new ArgumentException("Cash symbols cannot be null or empty.");
             }
             Amount = amount;
             ConversionRate = conversionRate;
-            Symbol = symbol.ToUpper();
+            Symbol = symbol.LazyToUpper();
             CurrencySymbol = Currencies.GetCurrencySymbol(Symbol);
         }
 
@@ -104,6 +124,7 @@ namespace QuantConnect.Securities
                 rate = 1/rate;
             }
             ConversionRate = rate;
+            OnUpdate();
         }
 
         /// <summary>
@@ -117,8 +138,9 @@ namespace QuantConnect.Securities
             lock (_locker)
             {
                 Amount += amount;
-                return Amount;
             }
+            OnUpdate();
+            return Amount;
         }
 
         /// <summary>
@@ -131,27 +153,25 @@ namespace QuantConnect.Securities
             {
                 Amount = amount;
             }
+            OnUpdate();
         }
 
         /// <summary>
         /// Ensures that we have a data feed to convert this currency into the base currency.
-        /// This will add a subscription at the lowest resolution if one is not found.
+        /// This will add a <see cref="SubscriptionDataConfig"/> and create a <see cref="Security"/> at the lowest resolution if one is not found.
         /// </summary>
         /// <param name="securities">The security manager</param>
         /// <param name="subscriptions">The subscription manager used for searching and adding subscriptions</param>
-        /// <param name="marketHoursDatabase">A security exchange hours provider instance used to resolve exchange hours for new subscriptions</param>
-        /// <param name="symbolPropertiesDatabase">A symbol properties database instance</param>
         /// <param name="marketMap">The market map that decides which market the new security should be in</param>
-        /// <param name="cashBook">The cash book - used for resolving quote currencies for created conversion securities</param>
-        /// <param name="changes"></param>
-        /// <returns>Returns the added currency security if needed, otherwise null</returns>
-        public Security EnsureCurrencyDataFeed(SecurityManager securities,
+        /// <param name="changes">Will be used to consume <see cref="SecurityChanges.AddedSecurities"/></param>
+        /// <param name="securityService">Will be used to create required new <see cref="Security"/></param>
+        /// <returns>Returns the added <see cref="SubscriptionDataConfig"/>, otherwise null</returns>
+        public SubscriptionDataConfig EnsureCurrencyDataFeed(SecurityManager securities,
             SubscriptionManager subscriptions,
-            MarketHoursDatabase marketHoursDatabase,
-            SymbolPropertiesDatabase symbolPropertiesDatabase,
             IReadOnlyDictionary<SecurityType, string> marketMap,
-            CashBook cashBook,
-            SecurityChanges changes
+            SecurityChanges changes,
+            ISecurityService securityService,
+            string accountCurrency
             )
         {
             // this gets called every time we add securities using universe selection,
@@ -161,7 +181,7 @@ namespace QuantConnect.Securities
                 return null;
             }
 
-            if (Symbol == CashBook.AccountCurrency)
+            if (Symbol == accountCurrency)
             {
                 ConversionRateSecurity = null;
                 _isBaseCurrency = true;
@@ -170,8 +190,8 @@ namespace QuantConnect.Securities
             }
 
             // we require a security that converts this into the base currency
-            string normal = Symbol + CashBook.AccountCurrency;
-            string invert = CashBook.AccountCurrency + Symbol;
+            string normal = Symbol + accountCurrency;
+            string invert = accountCurrency + Symbol;
             var securitiesToSearch = securities.Select(kvp => kvp.Value)
                 .Concat(changes.AddedSecurities)
                 .Where(s => s.Type == SecurityType.Forex || s.Type == SecurityType.Cfd || s.Type == SecurityType.Crypto);
@@ -215,14 +235,6 @@ namespace QuantConnect.Securities
                 {
                     _invertRealTimePrice = symbol.Value == invert;
                     var securityType = symbol.ID.SecurityType;
-                    var symbolProperties = symbolPropertiesDatabase.GetSymbolProperties(symbol.ID.Market, symbol.Value, securityType, Symbol);
-                    Cash quoteCash;
-                    if (!cashBook.TryGetValue(symbolProperties.QuoteCurrency, out quoteCash))
-                    {
-                        throw new Exception("Unable to resolve quote cash: " + symbolProperties.QuoteCurrency + ". This is required to add conversion feed: " + symbol.Value);
-                    }
-                    var marketHoursDbEntry = marketHoursDatabase.GetEntry(symbol.ID.Market, symbol.Value, symbol.ID.SecurityType);
-                    var exchangeHours = marketHoursDbEntry.ExchangeHours;
 
                     // use the first subscription defined in the subscription manager
                     var type = subscriptions.LookupSubscriptionConfigDataTypes(securityType, minimumResolution, false).First();
@@ -230,31 +242,28 @@ namespace QuantConnect.Securities
                     var tickType = type.Item2;
 
                     // set this as an internal feed so that the data doesn't get sent into the algorithm's OnData events
-                    var config = subscriptions.Add(objectType, tickType, symbol, minimumResolution, marketHoursDbEntry.DataTimeZone, exchangeHours.TimeZone, false, true, false, true);
+                    var config = subscriptions.SubscriptionDataConfigService.Add(symbol,
+                        minimumResolution,
+                        fillForward: true,
+                        extendedMarketHours: false,
+                        isInternalFeed: true,
+                        subscriptionDataTypes: new List<Tuple<Type, TickType>> { new Tuple<Type, TickType>(objectType, tickType) }).First();
 
-                    Security security;
-                    if (securityType == SecurityType.Cfd)
-                    {
-                        security = new Cfd.Cfd(exchangeHours, quoteCash, config, symbolProperties);
-                    }
-                    else if (securityType == SecurityType.Crypto)
-                    {
-                        security = new Crypto.Crypto(exchangeHours, quoteCash, config, symbolProperties);
-                    }
-                    else
-                    {
-                        security = new Forex.Forex(exchangeHours, quoteCash, config, symbolProperties);
-                    }
+                    var security = securityService.CreateSecurity(symbol,
+                        config,
+                        addToSymbolCache: false);
 
                     ConversionRateSecurity = security;
                     securities.Add(config.Symbol, security);
-                    Log.Trace("Cash.EnsureCurrencyDataFeed(): Adding " + symbol.Value + " for cash " + Symbol + " currency feed");
-                    return security;
+                    Log.Trace($"Cash.EnsureCurrencyDataFeed(): Adding {symbol.Value} for cash {Symbol} currency feed");
+                    return config;
                 }
             }
 
             // if this still hasn't been set then it's an error condition
-            throw new ArgumentException(string.Format("In order to maintain cash in {0} you are required to add a subscription for Forex pair {0}{1} or {1}{0}", Symbol, CashBook.AccountCurrency));
+            throw new ArgumentException($"In order to maintain cash in {Symbol} you are required to add a " +
+                $"subscription for Forex pair {Symbol}{accountCurrency} or {accountCurrency}{Symbol}"
+            );
         }
 
         /// <summary>
@@ -266,7 +275,7 @@ namespace QuantConnect.Securities
             // round the conversion rate for output
             var rate = ConversionRate;
             rate = rate < 1000 ? rate.RoundToSignificantDigits(5) : Math.Round(rate, 2);
-            return $"{Symbol}: {CurrencySymbol}{Amount,15:0.00} @ {rate,10:0.00####} = ${Math.Round(ValueInAccountCurrency, 2)}";
+            return Invariant($"{Symbol}: {CurrencySymbol}{Amount,15:0.00} @ {rate,10:0.00####} = ${Math.Round(ValueInAccountCurrency, 2)}");
         }
 
         private static Symbol CreateSymbol(IReadOnlyDictionary<SecurityType, string> marketMap, string crypto, Dictionary<SecurityType, string> markets, SecurityType securityType)
@@ -278,6 +287,11 @@ namespace QuantConnect.Securities
             }
 
             return QuantConnect.Symbol.Create(crypto, securityType, market);
+        }
+
+        private void OnUpdate()
+        {
+            Updated?.Invoke(this, EventArgs.Empty);
         }
     }
 }

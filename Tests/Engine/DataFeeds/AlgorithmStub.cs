@@ -16,25 +16,36 @@
 
 using System.Collections.Generic;
 using QuantConnect.Algorithm;
+using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Securities;
 
 namespace QuantConnect.Tests.Engine.DataFeeds
 {
     /// <summary>
-    /// This type allows tests to easily create an algorith that is mostly initialized in one line
+    /// This type allows tests to easily create an algorithm that is mostly initialized in one line
     /// </summary>
-    public class AlgorithmStub : QCAlgorithm
+    internal class AlgorithmStub : QCAlgorithm
     {
-        public AlgorithmStub(out DataManager dataManager, Resolution resolution = Resolution.Second,
-                             List<string> equities = null, List<string> forex = null)
+        public List<SecurityChanges> SecurityChangesRecord = new List<SecurityChanges>();
+        public DataManager DataManager;
+
+        public AlgorithmStub(bool createDataManager = true)
         {
-            dataManager = new DataManager();
-            SubscriptionManager.SetDataManager(dataManager);
-            AddSecurities(resolution, equities, forex);
+            if (createDataManager)
+            {
+                DataManager = new DataManagerStub(this);
+                SubscriptionManager.SetDataManager(DataManager);
+            }
         }
 
-        public void AddSecurities(Resolution resolution = Resolution.Second, List<string> equities = null, List<string> forex = null)
+        public AlgorithmStub(IDataFeed dataFeed)
+        {
+            DataManager = new DataManagerStub(dataFeed, this);
+            SubscriptionManager.SetDataManager(DataManager);
+        }
+
+        public void AddSecurities(Resolution resolution = Resolution.Second, List<string> equities = null, List<string> forex = null, List<string> crypto = null)
         {
             foreach (var ticker in equities ?? new List<string>())
             {
@@ -48,6 +59,17 @@ namespace QuantConnect.Tests.Engine.DataFeeds
                 var symbol = SymbolCache.GetSymbol(ticker);
                 Securities[symbol].Exchange = new SecurityExchange(SecurityExchangeHours.AlwaysOpen(TimeZones.EasternStandard));
             }
+            foreach (var ticker in crypto ?? new List<string>())
+            {
+                AddSecurity(SecurityType.Crypto, ticker, resolution);
+                var symbol = SymbolCache.GetSymbol(ticker);
+                Securities[symbol].Exchange = new SecurityExchange(SecurityExchangeHours.AlwaysOpen(TimeZones.Utc));
+            }
+        }
+
+        public override void OnSecuritiesChanged(SecurityChanges changes)
+        {
+            SecurityChangesRecord.Add(changes);
         }
     }
 }

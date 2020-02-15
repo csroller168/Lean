@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net;
 
 namespace QuantConnect.Data.Custom
 {
@@ -29,6 +30,16 @@ namespace QuantConnect.Data.Custom
         private readonly List<string> _propertyNames = new List<string>();
         private readonly string _valueColumn;
         private static string _authCode = "";
+
+        /// <summary>
+        /// Static constructor for the <see cref="Quandl"/> class
+        /// </summary>
+        static Quandl()
+        {
+            // The Quandl API now requires TLS 1.2 for API requests (since 9/18/2018).
+            // NET 4.5.2 and below does not enable this more secure protocol by default, so we add it in here
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+        }
 
         /// <summary>
         /// Flag indicating whether or not the Quanl auth code has been set yet
@@ -126,7 +137,7 @@ namespace QuantConnect.Data.Custom
         /// <returns>STRING API Url for Quandl.</returns>
         public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
         {
-            var source = @"https://www.quandl.com/api/v3/datasets/" + config.Symbol.Value + ".csv?order=asc&api_key=" + _authCode;
+            var source = $"https://www.quandl.com/api/v3/datasets/{config.Symbol.Value}.csv?order=asc&api_key={_authCode}";
             return new SubscriptionDataSource(source, SubscriptionTransportMedium.RemoteFile);
         }
 

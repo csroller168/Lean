@@ -50,16 +50,13 @@ namespace QuantConnect.Algorithm.CSharp
 
             // Set Strategy Cash (EUR)
             // EUR/USD conversion rate will be updated dynamically
-            SetCash("EUR", 10000, 1.23m);
+            SetCash("EUR", 10000);
 
             // Add some coins as initial holdings
             // When connected to a real brokerage, the amount specified in SetCash
             // will be replaced with the amount in your actual account.
-            SetCash("BTC", 1m, 7300m);
-            SetCash("ETH", 5m, 400m);
-
-            // Note: the conversion rates above are required in backtesting (for now) because of this issue:
-            // https://github.com/QuantConnect/Lean/issues/1859
+            SetCash("BTC", 1m);
+            SetCash("ETH", 5m);
 
             SetBrokerageModel(BrokerageName.GDAX, AccountType.Cash);
 
@@ -85,6 +82,18 @@ namespace QuantConnect.Algorithm.CSharp
         /// <param name="data">Slice object keyed by symbol containing the stock data</param>
         public override void OnData(Slice data)
         {
+            if (Portfolio.CashBook["EUR"].ConversionRate == 0
+                || Portfolio.CashBook["BTC"].ConversionRate == 0
+                || Portfolio.CashBook["ETH"].ConversionRate == 0
+                || Portfolio.CashBook["LTC"].ConversionRate == 0)
+            {
+                Log($"EUR conversion rate: {Portfolio.CashBook["EUR"].ConversionRate}");
+                Log($"BTC conversion rate: {Portfolio.CashBook["BTC"].ConversionRate}");
+                Log($"LTC conversion rate: {Portfolio.CashBook["LTC"].ConversionRate}");
+                Log($"ETH conversion rate: {Portfolio.CashBook["ETH"].ConversionRate}");
+
+                throw new Exception("Conversion rate is 0");
+            }
             if (Time.Hour == 1 && Time.Minute == 0)
             {
                 // Sell all ETH holdings with a limit order at 1% above the current price
@@ -196,23 +205,43 @@ namespace QuantConnect.Algorithm.CSharp
         {
             {"Total Trades", "10"},
             {"Average Win", "0%"},
-            {"Average Loss", "-0.18%"},
-            {"Compounding Annual Return", "-99.992%"},
-            {"Drawdown", "3.800%"},
-            {"Expectancy", "-1"},
-            {"Net Profit", "-2.545%"},
-            {"Sharpe Ratio", "-16.028"},
-            {"Loss Rate", "100%"},
+            {"Average Loss", "0%"},
+            {"Compounding Annual Return", "0%"},
+            {"Drawdown", "0%"},
+            {"Expectancy", "0"},
+            {"Net Profit", "0%"},
+            {"Sharpe Ratio", "0"},
+            {"Probabilistic Sharpe Ratio", "0%"},
+            {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "-5.47"},
-            {"Beta", "326.539"},
-            {"Annual Standard Deviation", "0.201"},
-            {"Annual Variance", "0.04"},
-            {"Information Ratio", "-16.112"},
-            {"Tracking Error", "0.2"},
-            {"Treynor Ratio", "-0.01"},
-            {"Total Fees", "$85.27"}
+            {"Alpha", "0"},
+            {"Beta", "0"},
+            {"Annual Standard Deviation", "0"},
+            {"Annual Variance", "0"},
+            {"Information Ratio", "0"},
+            {"Tracking Error", "0"},
+            {"Treynor Ratio", "0"},
+            {"Total Fees", "$85.33"},
+            {"Fitness Score", "0.5"},
+            {"Kelly Criterion Estimate", "-64.598"},
+            {"Kelly Criterion Probability Value", "0.778"},
+            {"Sortino Ratio", "79228162514264337593543950335"},
+            {"Return Over Maximum Drawdown", "-43.917"},
+            {"Portfolio Turnover", "1.028"},
+            {"Total Insights Generated", "10"},
+            {"Total Insights Closed", "6"},
+            {"Total Insights Analysis Completed", "6"},
+            {"Long Insight Count", "6"},
+            {"Short Insight Count", "2"},
+            {"Long/Short Ratio", "300%"},
+            {"Estimated Monthly Alpha Value", "$-3165.922"},
+            {"Total Accumulated Estimated Alpha Value", "$-123.1192"},
+            {"Mean Population Estimated Insight Value", "$-20.51987"},
+            {"Mean Population Direction", "26.6667%"},
+            {"Mean Population Magnitude", "0%"},
+            {"Rolling Averaged Population Direction", "32.6733%"},
+            {"Rolling Averaged Population Magnitude", "0%"}
         };
     }
 }

@@ -32,6 +32,10 @@ namespace QuantConnect.Algorithm.CSharp
     /// <meta name="tag" content="delisting event" />
     public class DelistingEventsAlgorithm : QCAlgorithm, IRegressionAlgorithmDefinition
     {
+        private bool _receivedDelistedWarningEvent;
+        private bool _receivedDelistedEvent;
+        private int _dataCount;
+
         /// <summary>
         /// Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.
         /// </summary>
@@ -51,6 +55,7 @@ namespace QuantConnect.Algorithm.CSharp
         /// <param name="data">Slice object keyed by symbol containing the stock data</param>
         public override void OnData(Slice data)
         {
+            _dataCount += data.Bars.Count;
             if (Transactions.OrdersCount == 0)
             {
                 SetHoldings("AAA", 1);
@@ -61,7 +66,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 var symbol = kvp.Key;
                 var tradeBar = kvp.Value;
-                Debug($"OnData(Slice): {Time}: {symbol}: {tradeBar.Close.ToString("0.00")}");
+                Debug($"OnData(Slice): {Time}: {symbol}: {tradeBar.Close.ToStringInvariant("0.00")}");
             }
 
             // the slice can also contain delisting data: data.Delistings in a dictionary string->Delisting
@@ -85,6 +90,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var delisting = kvp.Value;
                 if (delisting.Type == DelistingType.Warning)
                 {
+                    _receivedDelistedWarningEvent = true;
                     Debug($"OnData(Delistings): {Time}: {symbol} will be delisted at end of day today.");
 
                     // liquidate on delisting warning
@@ -92,6 +98,7 @@ namespace QuantConnect.Algorithm.CSharp
                 }
                 if (delisting.Type == DelistingType.Delisted)
                 {
+                    _receivedDelistedEvent = true;
                     Debug($"OnData(Delistings): {Time}: {symbol} has been delisted.");
 
                     // fails because the security has already been delisted and is no longer tradable
@@ -103,6 +110,22 @@ namespace QuantConnect.Algorithm.CSharp
         public override void OnOrderEvent(OrderEvent orderEvent)
         {
             Debug($"OnOrderEvent(OrderEvent): {Time}: {orderEvent}");
+        }
+
+        public override void OnEndOfAlgorithm()
+        {
+            if (!_receivedDelistedEvent)
+            {
+                throw new Exception("Did not receive expected delisted event");
+            }
+            if (!_receivedDelistedWarningEvent)
+            {
+                throw new Exception("Did not receive expected delisted warning event");
+            }
+            if (_dataCount != 13)
+            {
+                throw new Exception($"Unexpected data count {_dataCount}. Expected 13");
+            }
         }
 
         /// <summary>
@@ -120,25 +143,45 @@ namespace QuantConnect.Algorithm.CSharp
         /// </summary>
         public Dictionary<string, string> ExpectedStatistics => new Dictionary<string, string>
         {
-            {"Total Trades", "2"},
+            {"Total Trades", "3"},
             {"Average Win", "0%"},
-            {"Average Loss", "-5.58%"},
-            {"Compounding Annual Return", "-87.694%"},
-            {"Drawdown", "5.600%"},
+            {"Average Loss", "-3.23%"},
+            {"Compounding Annual Return", "-79.990%"},
+            {"Drawdown", "4.300%"},
             {"Expectancy", "-1"},
-            {"Net Profit", "-5.578%"},
-            {"Sharpe Ratio", "-10.227"},
+            {"Net Profit", "-4.312%"},
+            {"Sharpe Ratio", "-10.321"},
+            {"Probabilistic Sharpe Ratio", "0.000%"},
             {"Loss Rate", "100%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "-1.953"},
-            {"Beta", "23.587"},
-            {"Annual Standard Deviation", "0.156"},
-            {"Annual Variance", "0.024"},
-            {"Information Ratio", "-10.33"},
-            {"Tracking Error", "0.156"},
-            {"Treynor Ratio", "-0.067"},
-            {"Total Fees", "$36.70"}
+            {"Alpha", "-1.203"},
+            {"Beta", "-0.445"},
+            {"Annual Standard Deviation", "0.119"},
+            {"Annual Variance", "0.014"},
+            {"Information Ratio", "-8.223"},
+            {"Tracking Error", "0.155"},
+            {"Treynor Ratio", "2.752"},
+            {"Total Fees", "$55.05"},
+            {"Fitness Score", "0.002"},
+            {"Kelly Criterion Estimate", "-45.709"},
+            {"Kelly Criterion Probability Value", "0.681"},
+            {"Sortino Ratio", "-15.687"},
+            {"Return Over Maximum Drawdown", "-18.549"},
+            {"Portfolio Turnover", "0.334"},
+            {"Total Insights Generated", "3"},
+            {"Total Insights Closed", "2"},
+            {"Total Insights Analysis Completed", "2"},
+            {"Long Insight Count", "1"},
+            {"Short Insight Count", "1"},
+            {"Long/Short Ratio", "100%"},
+            {"Estimated Monthly Alpha Value", "$-1163.479"},
+            {"Total Accumulated Estimated Alpha Value", "$-394.29"},
+            {"Mean Population Estimated Insight Value", "$-197.145"},
+            {"Mean Population Direction", "0%"},
+            {"Mean Population Magnitude", "0%"},
+            {"Rolling Averaged Population Direction", "0%"},
+            {"Rolling Averaged Population Magnitude", "0%"}
         };
     }
 }

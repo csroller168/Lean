@@ -41,7 +41,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetBrokerageModel(BrokerageName.GDAX, AccountType.Cash);
 
             SetTimeZone(NodaTime.DateTimeZone.Utc);
-            var security = AddSecurity(SecurityType.Crypto, "BTCUSD", Resolution.Daily, Market.GDAX, false, 3.3m, true);
+            var security = AddSecurity(SecurityType.Crypto, "BTCUSD", Resolution.Daily, Market.GDAX, false, 1, true);
 
             // The default buying power model for the Crypto security type is now CashBuyingPowerModel.
             // Since this test algorithm uses leverage we need to set a buying power model with margin.
@@ -99,24 +99,44 @@ namespace QuantConnect.Algorithm.CSharp
         public Dictionary<string, string> ExpectedStatistics => new Dictionary<string, string>
         {
             {"Total Trades", "6"},
-            {"Average Win", "0.63%"},
-            {"Average Loss", "-2.39%"},
-            {"Compounding Annual Return", "82.917%"},
-            {"Drawdown", "6.500%"},
-            {"Expectancy", "-0.158"},
-            {"Net Profit", "0.664%"},
-            {"Sharpe Ratio", "0.743"},
+            {"Average Win", "6.02%"},
+            {"Average Loss", "-2.40%"},
+            {"Compounding Annual Return", "915.481%"},
+            {"Drawdown", "5.500%"},
+            {"Expectancy", "1.338"},
+            {"Net Profit", "11.400%"},
+            {"Sharpe Ratio", "3.485"},
+            {"Probabilistic Sharpe Ratio", "76.768%"},
             {"Loss Rate", "33%"},
             {"Win Rate", "67%"},
-            {"Profit-Loss Ratio", "0.26"},
-            {"Alpha", "-1.38"},
-            {"Beta", "1.128"},
-            {"Annual Standard Deviation", "0.739"},
-            {"Annual Variance", "0.546"},
-            {"Information Ratio", "-8.422"},
-            {"Tracking Error", "0.138"},
-            {"Treynor Ratio", "0.487"},
-            {"Total Fees", "$2428.91"}
+            {"Profit-Loss Ratio", "2.51"},
+            {"Alpha", "0"},
+            {"Beta", "0"},
+            {"Annual Standard Deviation", "0.507"},
+            {"Annual Variance", "0.257"},
+            {"Information Ratio", "0"},
+            {"Tracking Error", "0"},
+            {"Treynor Ratio", "0"},
+            {"Total Fees", "$2651.00"},
+            {"Fitness Score", "0.467"},
+            {"Kelly Criterion Estimate", "6.507"},
+            {"Kelly Criterion Probability Value", "0.235"},
+            {"Sortino Ratio", "53.455"},
+            {"Return Over Maximum Drawdown", "165.408"},
+            {"Portfolio Turnover", "0.468"},
+            {"Total Insights Generated", "6"},
+            {"Total Insights Closed", "5"},
+            {"Total Insights Analysis Completed", "5"},
+            {"Long Insight Count", "5"},
+            {"Short Insight Count", "1"},
+            {"Long/Short Ratio", "500%"},
+            {"Estimated Monthly Alpha Value", "$11490.3004"},
+            {"Total Accumulated Estimated Alpha Value", "$6511.1702"},
+            {"Mean Population Estimated Insight Value", "$1302.2340"},
+            {"Mean Population Direction", "60%"},
+            {"Mean Population Magnitude", "0%"},
+            {"Rolling Averaged Population Direction", "50.9901%"},
+            {"Rolling Averaged Population Magnitude", "0%"}
         };
     }
 }

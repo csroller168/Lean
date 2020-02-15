@@ -28,6 +28,7 @@ using System.Collections.Concurrent;
 using QuantConnect.Algorithm.Framework.Alphas;
 using QuantConnect.Securities.Future;
 using QuantConnect.Securities.Option;
+using QuantConnect.Storage;
 
 namespace QuantConnect.Interfaces
 {
@@ -43,12 +44,20 @@ namespace QuantConnect.Interfaces
     /// Interface for QuantConnect algorithm implementations. All algorithms must implement these
     /// basic members to allow interaction with the Lean Backtesting Engine.
     /// </summary>
-    public interface IAlgorithm
+    public interface IAlgorithm : ISecurityInitializerProvider, IAccountCurrencyProvider
     {
         /// <summary>
         /// Event fired when an algorithm generates a insight
         /// </summary>
         event AlgorithmEvent<GeneratedInsightsCollection> InsightsGenerated;
+
+        /// <summary>
+        /// Gets the time keeper instance
+        /// </summary>
+        ITimeKeeper TimeKeeper
+        {
+            get;
+        }
 
         /// <summary>
         /// Data subscription manager controls the information and subscriptions the algorithms recieves.
@@ -146,14 +155,6 @@ namespace QuantConnect.Interfaces
         {
             get;
             set;
-        }
-
-        /// <summary>
-        /// Gets a flag indicating whether or not this algorithm uses the QCAlgorithmFramework
-        /// </summary>
-        bool IsFrameworkAlgorithm
-        {
-            get;
         }
 
         /// <summary>
@@ -289,14 +290,6 @@ namespace QuantConnect.Interfaces
         }
 
         /// <summary>
-        /// Gets an instance that is to be used to initialize newly created securities.
-        /// </summary>
-        ISecurityInitializer SecurityInitializer
-        {
-            get;
-        }
-
-        /// <summary>
         /// Gets the Trade Builder to generate trades from executions
         /// </summary>
         ITradeBuilder TradeBuilder
@@ -327,6 +320,16 @@ namespace QuantConnect.Interfaces
         {
             get;
         }
+
+        /// <summary>
+        /// Gets the object store, used for persistence
+        /// </summary>
+        ObjectStore ObjectStore { get; }
+
+        /// <summary>
+        /// Returns the current Slice object
+        /// </summary>
+        Slice CurrentSlice { get; }
 
         /// <summary>
         /// Initialise the Algorithm and Prepare Required Data:
@@ -397,7 +400,7 @@ namespace QuantConnect.Interfaces
         void OnFrameworkData(Slice slice);
 
         /// <summary>
-        /// Event fired each time the we add/remove securities from the data feed
+        /// Event fired each time that we add/remove securities from the data feed
         /// </summary>
         /// <param name="changes">Security additions/removals for this time step</param>
         void OnSecuritiesChanged(SecurityChanges changes);
@@ -439,13 +442,16 @@ namespace QuantConnect.Interfaces
         void OnMarginCall(List<SubmitOrderRequest> requests);
 
         /// <summary>
-        /// Margin call warning event handler. This method is called when Portoflio.MarginRemaining is under 5% of your Portfolio.TotalPortfolioValue
+        /// Margin call warning event handler. This method is called when Portfolio.MarginRemaining is under 5% of your Portfolio.TotalPortfolioValue
         /// </summary>
         void OnMarginCallWarning();
 
         /// <summary>
         /// Call this method at the end of each day of data.
         /// </summary>
+        /// <remarks>Deprecated because different assets have different market close times,
+        /// and because Python does not support two methods with the same name</remarks>
+        [Obsolete("This method is deprecated. Please use this overload: OnEndOfDay(Symbol symbol)")]
         void OnEndOfDay();
 
         /// <summary>
@@ -494,6 +500,20 @@ namespace QuantConnect.Interfaces
         void SetDateTime(DateTime time);
 
         /// <summary>
+        /// Set the start date for the backtest
+        /// </summary>
+        /// <param name="start">Datetime Start date for backtest</param>
+        /// <remarks>Must be less than end date and within data available</remarks>
+        void SetStartDate(DateTime start);
+
+        /// <summary>
+        /// Set the end date for a backtest.
+        /// </summary>
+        /// <param name="end">Datetime value for end date</param>
+        /// <remarks>Must be greater than the start date</remarks>
+        void SetEndDate(DateTime end);
+
+        /// <summary>
         /// Set the algorithm Id for this backtest or live run. This can be used to identify the order and equity records.
         /// </summary>
         /// <param name="algorithmId">unique 32 character identifier for backtest or live server</param>
@@ -532,7 +552,7 @@ namespace QuantConnect.Interfaces
         /// <param name="fillDataForward">If true, returns the last available data even if none in that timeslice.</param>
         /// <param name="leverage">leverage for this security</param>
         /// <param name="extendedMarketHours">ExtendedMarketHours send in data from 4am - 8pm, not used for FOREX</param>
-        Security AddSecurity(SecurityType securityType, string symbol, Resolution resolution, string market, bool fillDataForward, decimal leverage, bool extendedMarketHours);
+        Security AddSecurity(SecurityType securityType, string symbol, Resolution? resolution, string market, bool fillDataForward, decimal leverage, bool extendedMarketHours);
 
         /// <summary>
         /// Creates and adds a new single <see cref="Future"/> contract to the algorithm
@@ -542,7 +562,7 @@ namespace QuantConnect.Interfaces
         /// <param name="fillDataForward">If true, returns the last available data even if none in that timeslice. Default is <value>true</value></param>
         /// <param name="leverage">The requested leverage for this equity. Default is set by <see cref="SecurityInitializer"/></param>
         /// <returns>The new <see cref="Future"/> security</returns>
-        Future AddFutureContract(Symbol symbol, Resolution resolution = Resolution.Minute, bool fillDataForward = true, decimal leverage = 0m);
+        Future AddFutureContract(Symbol symbol, Resolution? resolution = null, bool fillDataForward = true, decimal leverage = 0m);
 
         /// <summary>
         /// Creates and adds a new single <see cref="Option"/> contract to the algorithm
@@ -552,7 +572,7 @@ namespace QuantConnect.Interfaces
         /// <param name="fillDataForward">If true, returns the last available data even if none in that timeslice. Default is <value>true</value></param>
         /// <param name="leverage">The requested leverage for this equity. Default is set by <see cref="SecurityInitializer"/></param>
         /// <returns>The new <see cref="Option"/> security</returns>
-        Option AddOptionContract(Symbol symbol, Resolution resolution = Resolution.Minute, bool fillDataForward = true, decimal leverage = 0m);
+        Option AddOptionContract(Symbol symbol, Resolution? resolution = null, bool fillDataForward = true, decimal leverage = 0m);
 
         /// <summary>
         /// Removes the security with the specified symbol. This will cancel all
@@ -560,6 +580,14 @@ namespace QuantConnect.Interfaces
         /// </summary>
         /// <param name="symbol">The symbol of the security to be removed</param>
         bool RemoveSecurity(Symbol symbol);
+
+        /// <summary>
+        /// Sets the account currency cash symbol this algorithm is to manage.
+        /// </summary>
+        /// <remarks>Has to be called during <see cref="Initialize"/> before
+        /// calling <see cref="SetCash(decimal)"/> or adding any <see cref="Security"/></remarks>
+        /// <param name="accountCurrency">The account currency cash symbol to set</param>
+        void SetAccountCurrency(string accountCurrency);
 
         /// <summary>
         /// Set the starting capital for the strategy
@@ -573,7 +601,7 @@ namespace QuantConnect.Interfaces
         /// <param name="symbol">The cash symbol to set</param>
         /// <param name="startingCash">Decimal cash value of portfolio</param>
         /// <param name="conversionRate">The current conversion rate for the</param>
-        void SetCash(string symbol, decimal startingCash, decimal conversionRate);
+        void SetCash(string symbol, decimal startingCash, decimal conversionRate = 0);
 
         /// <summary>
         /// Liquidate your portfolio holdings:
@@ -656,5 +684,24 @@ namespace QuantConnect.Interfaces
         /// </summary>
         /// <param name="slice">The Slice object</param>
         void SetCurrentSlice(Slice slice);
+
+        /// <summary>
+        /// Provide the API for the algorithm.
+        /// </summary>
+        /// <param name="api">Initiated API</param>
+        void SetApi(IApi api);
+
+        /// <summary>
+        /// Sets the object store
+        /// </summary>
+        /// <param name="objectStore">The object store</param>
+        void SetObjectStore(IObjectStore objectStore);
+
+        /// <summary>
+        /// Sets the order event provider
+        /// </summary>
+        /// <param name="newOrderEvent">The order event provider</param>
+        /// <remarks>Will be called before the <see cref="SecurityPortfolioManager"/></remarks>
+        void SetOrderEventProvider(IOrderEventProvider newOrderEvent);
     }
 }

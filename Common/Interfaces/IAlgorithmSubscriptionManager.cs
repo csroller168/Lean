@@ -20,29 +20,23 @@ using QuantConnect.Data;
 namespace QuantConnect.Interfaces
 {
     /// <summary>
-    /// AlgorithmSubscriptionManager interface will manage the subscriptions for the SubscriptionManager
+    ///     AlgorithmSubscriptionManager interface will manage the subscriptions for the SubscriptionManager
     /// </summary>
-    public interface IAlgorithmSubscriptionManager
+    public interface IAlgorithmSubscriptionManager : ISubscriptionDataConfigService
     {
         /// <summary>
-        /// Gets all the current data config subscriptions that are being processed for the SubscriptionManager
+        ///     Gets all the current data config subscriptions that are being processed for the SubscriptionManager
         /// </summary>
         IEnumerable<SubscriptionDataConfig> SubscriptionManagerSubscriptions { get; }
 
         /// <summary>
-        /// Adds a new subscription data config for the SubscriptionManager
-        /// </summary>
-        /// <returns>True, if the configuration was added successfully</returns>
-        bool SubscriptionManagerTryAdd(SubscriptionDataConfig config);
-
-        /// <summary>
-        /// Returns true if the given subscription data config is already present for the SubscriptionManager
-        /// </summary>
-        bool SubscriptionManagerContainsKey(SubscriptionDataConfig config);
-
-        /// <summary>
-        /// Returns the amount of data config subscriptions processed for the SubscriptionManager
+        ///     Returns the amount of data config subscriptions processed for the SubscriptionManager
         /// </summary>
         int SubscriptionManagerCount();
+
+        /// <summary>
+        ///     Flags the existence of custom data in the subscriptions
+        /// </summary>
+        bool HasCustomData { get; set; }
     }
 }

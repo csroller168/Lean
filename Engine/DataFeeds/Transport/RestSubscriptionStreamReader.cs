@@ -16,6 +16,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using QuantConnect.Interfaces;
 using QuantConnect.Logging;
 using RestSharp;
@@ -29,14 +30,25 @@ namespace QuantConnect.Lean.Engine.DataFeeds.Transport
     {
         private readonly RestClient _client;
         private readonly RestRequest _request;
-        private bool _isLiveMode;
+        private readonly bool _isLiveMode;
         private bool _delivered;
+
+        /// <summary>
+        /// Gets whether or not this stream reader should be rate limited
+        /// </summary>
+        public bool ShouldBeRateLimited => _isLiveMode;
+
+        /// <summary>
+        /// Direct access to the StreamReader instance
+        /// </summary>
+        public StreamReader StreamReader => null;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RestSubscriptionStreamReader"/> class.
         /// </summary>
         /// <param name="source">The source url to poll with a GET</param>
         /// <param name="headers">Defines header values to add to the request</param>
+        /// <param name="isLiveMode">True for live mode, false otherwise</param>
         public RestSubscriptionStreamReader(string source, IEnumerable<KeyValuePair<string, string>> headers, bool isLiveMode)
         {
             _client = new RestClient(source);

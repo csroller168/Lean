@@ -26,7 +26,18 @@ namespace QuantConnect.Tests
         {
             var pythonPath = string.Join(
                 OS.IsLinux ? ":" : ";",
-                "./Alphas", "./Execution", "./Portfolio", "./Risk", "./Selection", "./RegressionAlgorithms");
+                "./Alphas",
+                "./Execution",
+                "./Portfolio",
+                "./Risk",
+                "./Selection",
+                "./RegressionAlgorithms",
+                "./Jupyter/RegressionScripts",
+                "../../../Algorithm",
+                "../../../Algorithm/Selection",
+                "../../../Algorithm.Framework",
+                "../../../Algorithm.Framework/Selection",
+                "../../../Algorithm.Python");
 
             Environment.SetEnvironmentVariable("PYTHONPATH", pythonPath);
         }

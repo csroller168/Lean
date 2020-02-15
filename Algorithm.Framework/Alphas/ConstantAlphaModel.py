@@ -12,10 +12,13 @@
 # limitations under the License.
 
 from clr import AddReference
-AddReference("QuantConnect.Algorithm.Framework")
 AddReference("QuantConnect.Common")
+AddReference("QuantConnect.Algorithm")
+AddReference("QuantConnect.Algorithm.Framework")
 
 from QuantConnect import *
+from QuantConnect.Algorithm import *
+from QuantConnect.Algorithm.Framework import *
 from QuantConnect.Algorithm.Framework.Alphas import AlphaModel, Insight, InsightType, InsightDirection
 
 
@@ -26,7 +29,7 @@ class ConstantAlphaModel(AlphaModel):
         '''Initializes a new instance of the ConstantAlphaModel class
         Args:
             type: The type of insight
-            direction: The direction of the insight 
+            direction: The direction of the insight
             period: The period over which the insight with come to fruition
             magnitude: The predicted change in magnitude as a +- percentage
             confidence: The confidence in the insight'''
@@ -40,7 +43,7 @@ class ConstantAlphaModel(AlphaModel):
 
         typeString = Extensions.GetEnumString(type, InsightType)
         directionString = Extensions.GetEnumString(direction, InsightDirection)
-        
+
         self.Name = '{}({},{},{}'.format(self.__class__.__name__, typeString, directionString, strfdelta(period))
         if magnitude is not None:
             self.Name += ',{}'.format(magnitude)
@@ -60,7 +63,9 @@ class ConstantAlphaModel(AlphaModel):
         insights = []
 
         for security in self.securities:
-            if self.ShouldEmitInsight(algorithm.UtcTime, security.Symbol):
+            # security price could be zero until we get the first data point. e.g. this could happen
+            # when adding both forex and equities, we will first get a forex data point
+            if security.Price != 0 and self.ShouldEmitInsight(algorithm.UtcTime, security.Symbol):
                 insights.append(Insight(security.Symbol, self.period, self.type, self.direction, self.magnitude, self.confidence))
 
         return insights

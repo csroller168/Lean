@@ -22,8 +22,9 @@ using NodaTime;
 using NUnit.Framework;
 using QuantConnect.Data;
 using QuantConnect.Data.Auxiliary;
+using QuantConnect.Data.Consolidators;
 using QuantConnect.Data.Market;
-using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Common.Data
 {
@@ -121,9 +122,8 @@ namespace QuantConnect.Tests.Common.Data
         [Test]
         public void SubscriptionsMemberIsThreadSafe()
         {
-            var timeKeeper = new TimeKeeper(DateTime.UtcNow);
-            var subscriptionManager = new SubscriptionManager(new AlgorithmSettings(), timeKeeper);
-            subscriptionManager.SetDataManager(new DataManager());
+            var subscriptionManager = new SubscriptionManager();
+            subscriptionManager.SetDataManager(new DataManagerStub());
             var start = DateTime.UtcNow;
             var end = start.AddSeconds(5);
             var tickers = QuantConnect.Algorithm.CSharp.StressSymbols.StockSymbols.ToList();
@@ -155,10 +155,116 @@ namespace QuantConnect.Tests.Common.Data
             Task.WaitAll(addTask, readTask);
         }
 
+        [Test]
+        public void GetsCustomSubscriptionDataTypes()
+        {
+            var subscriptionManager = new SubscriptionManager();
+            subscriptionManager.SetDataManager(new DataManagerStub());
+            subscriptionManager.AvailableDataTypes[SecurityType.Commodity] = new List<TickType> { TickType.OpenInterest, TickType.Quote, TickType.Trade };
+            var types = subscriptionManager.LookupSubscriptionConfigDataTypes(SecurityType.Commodity, Resolution.Daily, false);
+
+            Assert.AreEqual(3, types.Count);
+
+            Assert.AreEqual(typeof(OpenInterest), types[0].Item1);
+            Assert.AreEqual(typeof(QuoteBar), types[1].Item1);
+            Assert.AreEqual(typeof(TradeBar), types[2].Item1);
+
+            Assert.AreEqual(TickType.OpenInterest, types[0].Item2);
+            Assert.AreEqual(TickType.Quote, types[1].Item2);
+            Assert.AreEqual(TickType.Trade, types[2].Item2);
+        }
+
+        [Test]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(TradeBar), true)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(QuoteBar), false)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(QuoteBar), true)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.OpenInterest, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.OpenInterest, typeof(QuoteBar), false)]
+        [TestCase(SecurityType.Future, Resolution.Tick, typeof(Tick), TickType.OpenInterest, typeof(OpenInterest), true)]
+
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(TradeBar), true)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(QuoteBar), false)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(QuoteBar), true)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.OpenInterest, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.OpenInterest, typeof(QuoteBar), false)]
+        [TestCase(SecurityType.Option, Resolution.Tick, typeof(Tick), TickType.OpenInterest, typeof(OpenInterest), true)]
+
+        [TestCase(SecurityType.Equity, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(TradeBar), true)]
+        [TestCase(SecurityType.Equity, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(QuoteBar), false)]
+        [TestCase(SecurityType.Equity, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Equity, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(RenkoBar), true)]
+
+        [TestCase(SecurityType.Forex, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Forex, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(QuoteBar), true)]
+        [TestCase(SecurityType.Forex, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Forex, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(RenkoBar), true)]
+
+        [TestCase(SecurityType.Cfd, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Cfd, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(QuoteBar), true)]
+        [TestCase(SecurityType.Cfd, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Cfd, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(RenkoBar), true)]
+
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(TradeBar), true)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(QuoteBar), false)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Trade, typeof(RenkoBar), true)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(TradeBar), false)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(QuoteBar), true)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(OpenInterest), false)]
+        [TestCase(SecurityType.Crypto, Resolution.Tick, typeof(Tick), TickType.Quote, typeof(RenkoBar), true)]
+        public void ValidatesSubscriptionTickTypesForConsolidators(
+            SecurityType securityType,
+            Resolution subscriptionResolution,
+            Type subscriptionDataType,
+            TickType? subscriptionTickType,
+            Type consolidatorOutputType,
+            bool expected)
+        {
+            var subscription = new SubscriptionDataConfig(
+                subscriptionDataType,
+                Symbol.Create("XYZ", securityType, QuantConnect.Market.USA),
+                subscriptionResolution,
+                DateTimeZone.Utc,
+                DateTimeZone.Utc,
+                true,
+                false,
+                false,
+                false,
+                subscriptionTickType);
+
+            var consolidator = new TestConsolidator(subscriptionDataType, consolidatorOutputType);
+
+            Assert.AreEqual(expected, SubscriptionManager.IsSubscriptionValidForConsolidator(subscription, consolidator));
+        }
+
+        private class TestConsolidator : IDataConsolidator
+        {
+            public event DataConsolidatedHandler DataConsolidated;
+            public IBaseData Consolidated { get; }
+            public IBaseData WorkingData { get; }
+            public Type InputType { get; }
+            public Type OutputType { get; }
+            public void Update(IBaseData data) { }
+            public void Scan(DateTime currentLocalTime) { }
+            public void Dispose() { }
+
+            public TestConsolidator(Type inputType, Type outputType)
+            {
+                InputType = inputType;
+                OutputType = outputType;
+            }
+        }
+
         private static List<Tuple<Type, TickType>> GetSubscriptionDataTypes(SecurityType securityType, Resolution resolution, bool isCanonical = false)
         {
-            var timeKeeper = new TimeKeeper(DateTime.UtcNow);
-            var subscriptionManager = new SubscriptionManager(new AlgorithmSettings(), timeKeeper);
+            var subscriptionManager = new SubscriptionManager();
+            subscriptionManager.SetDataManager(new DataManagerStub());
             return subscriptionManager.LookupSubscriptionConfigDataTypes(securityType, resolution, isCanonical);
         }
     }

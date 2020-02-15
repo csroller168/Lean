@@ -18,7 +18,7 @@ using System.Linq;
 using Moq;
 using NUnit.Framework;
 using Python.Runtime;
-using QuantConnect.Algorithm.Framework;
+using QuantConnect.Algorithm;
 using QuantConnect.Algorithm.Framework.Risk;
 using QuantConnect.Securities;
 using QuantConnect.Securities.Equity;
@@ -48,17 +48,22 @@ namespace QuantConnect.Tests.Algorithm.Framework.Risk
             var security = new Mock<Equity>(
                 Symbols.AAPL,
                 SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork),
-                new Cash(CashBook.AccountCurrency, 0, 1),
-                SymbolProperties.GetDefault(CashBook.AccountCurrency));
+                new Cash(Currencies.USD, 0, 1),
+                SymbolProperties.GetDefault(Currencies.USD),
+                ErrorCurrencyConverter.Instance,
+                RegisteredSecurityDataTypesProvider.Null,
+                new SecurityCache()
+            );
             security.Setup(m => m.Invested).Returns(invested);
 
-            var holding = new Mock<EquityHolding>(security.Object);
+            var holding = new Mock<EquityHolding>(security.Object,
+                new IdentityCurrencyConverter(Currencies.USD));
             holding.Setup(m => m.UnrealizedProfit).Returns(unrealizedProfit);
             holding.Setup(m => m.AbsoluteHoldingsCost).Returns(absoluteHoldingsCost);
 
             security.Object.Holdings = holding.Object;
 
-            var algorithm = new QCAlgorithmFramework();
+            var algorithm = new QCAlgorithm();
             algorithm.SetPandasConverter();
             algorithm.Securities.Add(Symbols.AAPL, security.Object);
 

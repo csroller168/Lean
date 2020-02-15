@@ -28,15 +28,15 @@ from QuantConnect.Algorithm.Framework.Portfolio import *
 from QuantConnect.Algorithm.Framework.Selection import *
 from Alphas.ConstantAlphaModel import ConstantAlphaModel
 from Selection.FutureUniverseSelectionModel import FutureUniverseSelectionModel
-from Execution.ImmediateExecutionModel import ImmediateExecutionModel
-from Risk.NullRiskManagementModel import NullRiskManagementModel
+from QuantConnect.Algorithm.Framework.Execution import *
+from QuantConnect.Algorithm.Framework.Risk import *
 from datetime import date, timedelta
 
 ### <summary>
 ### Basic template futures framework algorithm uses framework components
 ### to define an algorithm that trades futures.
 ### </summary>
-class BasicTemplateFuturesFrameworkAlgorithm(QCAlgorithmFramework):
+class BasicTemplateFuturesFrameworkAlgorithm(QCAlgorithm):
 
     def Initialize(self):
 
@@ -83,7 +83,7 @@ class ConstantFutureContractAlphaModel(ConstantAlphaModel):
         return super().ShouldEmitInsight(utcTime, symbol)
 
 class SingleSharePortfolioConstructionModel(PortfolioConstructionModel):
-    '''Portoflio construction model that sets target quantities to 1 for up insights and -1 for down insights'''
+    '''Portfolio construction model that sets target quantities to 1 for up insights and -1 for down insights'''
     def CreateTargets(self, algorithm, insights):
         targets = []
         for insight in insights:

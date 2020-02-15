@@ -34,13 +34,14 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly HashSet<Symbol> _expectedSecurities = new HashSet<Symbol>();
         private readonly HashSet<Symbol> _expectedData = new HashSet<Symbol>();
         private readonly HashSet<Symbol> _expectedUniverses = new HashSet<Symbol>();
+        private bool _expectUniverseSubscription;
 
         // order of expected contract additions as price moves
         private int _expectedContractIndex;
         private readonly List<Symbol> _expectedContracts = new List<Symbol>
         {
-            SymbolRepresentation.ParseOptionTickerOSI("GOOG  151224P00747500"),
             SymbolRepresentation.ParseOptionTickerOSI("GOOG  151224P00750000"),
+            SymbolRepresentation.ParseOptionTickerOSI("GOOG  151224P00747500"),
             SymbolRepresentation.ParseOptionTickerOSI("GOOG  151224P00752500")
         };
 
@@ -61,6 +62,12 @@ namespace QuantConnect.Algorithm.CSharp
         public override void OnData(Slice data)
         {
             // verify expectations
+            if (SubscriptionManager.Subscriptions.Count(x => x.Symbol == OptionChainSymbol)
+                != (_expectUniverseSubscription ? 1 : 0))
+            {
+                Log($"SubscriptionManager.Subscriptions:  {string.Join(" -- ", SubscriptionManager.Subscriptions)}");
+                throw new Exception($"Unexpected {OptionChainSymbol} subscription presence");
+            }
             if (!data.ContainsKey(Underlying))
             {
                 // TODO : In fact, we're unable to properly detect whether or not we auto-added or it was manually added
@@ -111,6 +118,7 @@ namespace QuantConnect.Algorithm.CSharp
 
                 _expectedSecurities.Add(OptionChainSymbol);
                 _expectedUniverses.Add(OptionChainSymbol);
+                _expectUniverseSubscription = true;
             }
 
             // 11:30AM remove GOOG option chain
@@ -121,6 +129,8 @@ namespace QuantConnect.Algorithm.CSharp
                 _expectedData.RemoveWhere(s => _expectedContracts.Contains(s));
                 // remove option chain universe from expected universes
                 _expectedUniverses.Remove(OptionChainSymbol);
+                // OptionChainSymbol universe subscription should not be present
+                _expectUniverseSubscription = false;
             }
         }
 
@@ -202,13 +212,14 @@ namespace QuantConnect.Algorithm.CSharp
         {
             {"Total Trades", "6"},
             {"Average Win", "0%"},
-            {"Average Loss", "-0.21%"},
-            {"Compounding Annual Return", "-96.657%"},
-            {"Drawdown", "0.600%"},
-            {"Expectancy", "-1"},
-            {"Net Profit", "-0.626%"},
+            {"Average Loss", "0%"},
+            {"Compounding Annual Return", "0%"},
+            {"Drawdown", "0%"},
+            {"Expectancy", "0"},
+            {"Net Profit", "0%"},
             {"Sharpe Ratio", "0"},
-            {"Loss Rate", "100%"},
+            {"Probabilistic Sharpe Ratio", "0%"},
+            {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
             {"Alpha", "0"},
@@ -218,7 +229,26 @@ namespace QuantConnect.Algorithm.CSharp
             {"Information Ratio", "0"},
             {"Tracking Error", "0"},
             {"Treynor Ratio", "0"},
-            {"Total Fees", "$1.50"}
+            {"Total Fees", "$6.00"},
+            {"Fitness Score", "0"},
+            {"Kelly Criterion Estimate", "-1.296"},
+            {"Kelly Criterion Probability Value", "0.632"},
+            {"Sortino Ratio", "0"},
+            {"Return Over Maximum Drawdown", "0"},
+            {"Portfolio Turnover", "0"},
+            {"Total Insights Generated", "6"},
+            {"Total Insights Closed", "3"},
+            {"Total Insights Analysis Completed", "3"},
+            {"Long Insight Count", "3"},
+            {"Short Insight Count", "0"},
+            {"Long/Short Ratio", "100%"},
+            {"Estimated Monthly Alpha Value", "$-8.4"},
+            {"Total Accumulated Estimated Alpha Value", "$-0.21"},
+            {"Mean Population Estimated Insight Value", "$-0.07"},
+            {"Mean Population Direction", "0%"},
+            {"Mean Population Magnitude", "0%"},
+            {"Rolling Averaged Population Direction", "0%"},
+            {"Rolling Averaged Population Magnitude", "0%"}
         };
     }
 }

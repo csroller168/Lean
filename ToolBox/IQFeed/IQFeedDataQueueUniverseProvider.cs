@@ -1,11 +1,11 @@
 ﻿/*
  * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
  * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License"); 
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -51,24 +51,24 @@ namespace QuantConnect.ToolBox.IQFeed
         private const string NewLine = "\r\n";
         private const char Tabulation = '\t';
 
-        private IDataCacheProvider _dataCacheProvider = new ZipDataCacheProvider(new DefaultDataProvider());
+        private IDataCacheProvider _dataCacheProvider = new ZipDataCacheProvider(new DefaultDataProvider(), isDataEphemeral:true);
 
         // Database of all symbols
         // We store symbol data in memory by default (e.g. Equity, FX),
-        // and we store root symbol placeholder (one per underlying) for those symbols that are loaded in memory on demand (e.g. Equity/Index options, Futures) 
+        // and we store root symbol placeholder (one per underlying) for those symbols that are loaded in memory on demand (e.g. Equity/Index options, Futures)
         private List<SymbolData> _symbolUniverse = new List<SymbolData>();
 
         // tickets and symbols are isomorphic
         private Dictionary<Symbol, string> _symbols = new Dictionary<Symbol, string>();
         private Dictionary<string, Symbol> _tickers = new Dictionary<string, Symbol>();
 
-        // we have a special treatment of futures, because IQFeed renamed exchange tickers and doesn't include 
-        // futures expiration dates in the symbol universe file. We fix this: 
+        // we have a special treatment of futures, because IQFeed renamed exchange tickers and doesn't include
+        // futures expiration dates in the symbol universe file. We fix this:
         // We map those tickers back to their original names using the map below
         private Dictionary<string, string> _iqFeedNameMap = new Dictionary<string, string>();
 
         // Map of IQFeed exchange names to QC markets
-        // Prioritized list of exchanges used to find right futures contract 
+        // Prioritized list of exchanges used to find right futures contract
         private readonly Dictionary<string, string> _futuresExchanges = new Dictionary<string, string>
         {
             { "CME", Market.Globex },
@@ -117,7 +117,7 @@ namespace QuantConnect.ToolBox.IQFeed
         }
 
         /// <summary>
-        /// Method returns a collection of Symbols that are available at IQFeed. 
+        /// Method returns a collection of Symbols that are available at IQFeed.
         /// </summary>
         /// <param name="lookupName">String representing the name to lookup</param>
         /// <param name="securityType">Expected security type of the returned symbols (if any)</param>
@@ -181,6 +181,16 @@ namespace QuantConnect.ToolBox.IQFeed
         }
 
         /// <summary>
+        /// Returns whether the time can be advanced or not.
+        /// </summary>
+        /// <param name="securityType">The security type</param>
+        /// <returns>true if the time can be advanced</returns>
+        public bool CanAdvanceTime(SecurityType securityType)
+        {
+            return true;
+        }
+
+        /// <summary>
         /// Private method updates internal collections of the class with new data loaded on demand (usually options, futures)
         /// </summary>
         /// <param name="placeholderSymbolData">Old data that contained reference to the symbol cache file</param>
@@ -214,7 +224,7 @@ namespace QuantConnect.ToolBox.IQFeed
         }
 
         /// <summary>
-        /// Private method performs initial loading of data from IQFeed universe: 
+        /// Private method performs initial loading of data from IQFeed universe:
         /// - method loads FX,equities, indices as is into memory
         /// - method prepares ondemand data for options and futures and stores it to disk
         /// - method updates futures mapping files if required
@@ -227,12 +237,12 @@ namespace QuantConnect.ToolBox.IQFeed
 
             if (!Directory.Exists(Globals.Cache)) Directory.CreateDirectory(Globals.Cache);
 
-            // we try to check if we already downloaded the file and it is in cache. If yes, we use it. Otherwise, download new file. 
+            // we try to check if we already downloaded the file and it is in cache. If yes, we use it. Otherwise, download new file.
             IStreamReader reader;
 
             // we update the files every week
             var dayOfWeek = DateTimeFormatInfo.CurrentInfo.Calendar.GetWeekOfYear(DateTime.Today, CalendarWeekRule.FirstDay, DayOfWeek.Monday);
-            var thisYearWeek = DateTime.Today.ToString("yyyy") + "-" + dayOfWeek.ToString();
+            var thisYearWeek = $"{DateTime.Today.ToStringInvariant("yyyy")}-{dayOfWeek.ToStringInvariant()}";
 
             var todayZipFileName = "IQFeed-symbol-universe-" + thisYearWeek + ".zip";
             var todayFullZipName = Path.Combine(Globals.Cache, todayZipFileName);
@@ -311,7 +321,7 @@ namespace QuantConnect.ToolBox.IQFeed
                         symbolUniverse.Add(new SymbolData
                         {
                             Symbol = Symbol.Create(columns[columnSymbol], SecurityType.Equity, Market.USA),
-                            SecurityCurrency = "USD",
+                            SecurityCurrency = Currencies.USD,
                             SecurityExchange = Market.USA,
                             Ticker = columns[columnSymbol]
                         });
@@ -329,7 +339,7 @@ namespace QuantConnect.ToolBox.IQFeed
                             var placeholderSymbolData = new SymbolData
                             {
                                 Symbol = canonicalSymbol,
-                                SecurityCurrency = "USD",
+                                SecurityCurrency = Currencies.USD,
                                 SecurityExchange = Market.USA,
                                 StartPosition = prevPosition,
                                 EndPosition = currentPosition
@@ -354,7 +364,7 @@ namespace QuantConnect.ToolBox.IQFeed
                             symbolUniverse.Add(new SymbolData
                             {
                                 Symbol = Symbol.Create(symbol, SecurityType.Forex, Market.FXCM),
-                                SecurityCurrency = "USD",
+                                SecurityCurrency = Currencies.USD,
                                 SecurityExchange = Market.FXCM,
                                 Ticker = columns[columnSymbol]
                             });
@@ -363,7 +373,7 @@ namespace QuantConnect.ToolBox.IQFeed
 
                     case "FUTURE":
 
-                        // we are not interested in designated continuous contracts 
+                        // we are not interested in designated continuous contracts
                         if (columns[columnSymbol].EndsWith("#"))
                             continue;
 
@@ -399,7 +409,7 @@ namespace QuantConnect.ToolBox.IQFeed
                             var placeholderSymbolData = new SymbolData
                             {
                                 Symbol = canonicalSymbol,
-                                SecurityCurrency = "USD",
+                                SecurityCurrency = Currencies.USD,
                                 SecurityExchange = market,
                                 StartPosition = prevPosition,
                                 EndPosition = currentPosition
@@ -435,7 +445,7 @@ namespace QuantConnect.ToolBox.IQFeed
 
 
         /// <summary>
-        /// Private method loads all option or future contracts for a particular underlying 
+        /// Private method loads all option or future contracts for a particular underlying
         /// symbol (placeholder) on demand by walking through the IQFeed universe file
         /// </summary>
         /// <param name="placeholder">Underlying symbol</param>
@@ -443,7 +453,7 @@ namespace QuantConnect.ToolBox.IQFeed
         private IEnumerable<SymbolData> LoadSymbolOnDemand(SymbolData placeholder)
         {
             var dayOfWeek = DateTimeFormatInfo.CurrentInfo.Calendar.GetWeekOfYear(DateTime.Today, CalendarWeekRule.FirstDay, DayOfWeek.Monday);
-            var thisYearWeek = DateTime.Today.ToString("yyyy") + "-" + dayOfWeek.ToString();
+            var thisYearWeek = $"{DateTime.Today.ToStringInvariant("yyyy")}-{dayOfWeek.ToStringInvariant()}";
 
             var todayCsvFileName = "mktsymbols_v2.txt";
             var todayFullCsvName = Path.Combine(Globals.Cache, todayCsvFileName);
@@ -484,7 +494,7 @@ namespace QuantConnect.ToolBox.IQFeed
                                                         result.OptionRight,
                                                         result.OptionStrike,
                                                         result.ExpirationDate),
-                            SecurityCurrency = "USD",
+                            SecurityCurrency = Currencies.USD,
                             SecurityExchange = Market.USA,
                             Ticker = columns[columnSymbol]
                         });
@@ -528,7 +538,7 @@ namespace QuantConnect.ToolBox.IQFeed
                             Symbol = Symbol.CreateFuture(underlyingString,
                                                         market,
                                                         expirationDate),
-                            SecurityCurrency = "USD",
+                            SecurityCurrency = Currencies.USD,
                             SecurityExchange = market,
                             Ticker = columns[columnSymbol]
                         });
@@ -546,7 +556,7 @@ namespace QuantConnect.ToolBox.IQFeed
 
 
         // Class stores symbol data in memory if symbol is loaded in memory by default (e.g. Equity, FX),
-        // and stores quick access parameters for those symbols that are loaded in memory on demand (e.g. Equity/Index options, Futures) 
+        // and stores quick access parameters for those symbols that are loaded in memory on demand (e.g. Equity/Index options, Futures)
         class SymbolData
         {
             public string Ticker { get; set; }
@@ -604,7 +614,7 @@ namespace QuantConnect.ToolBox.IQFeed
         }
 
         /// <summary>
-        /// Private class that helps requesting IQFeed fundamental data 
+        /// Private class that helps requesting IQFeed fundamental data
         /// </summary>
         public class SymbolFundamentalData : IQLevel1Client
         {

@@ -18,6 +18,7 @@ using System;
 using System.Linq;
 using QuantConnect.Algorithm;
 using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Engine
 {
@@ -50,7 +51,7 @@ namespace QuantConnect.Tests.Engine
         {
             public SingleSecurity_Second_BenchmarkTest()
             {
-                SubscriptionManager.SetDataManager(new DataManager());
+                SubscriptionManager.SetDataManager(new DataManagerStub(this, new MockDataFeed()));
             }
 
             public override void Initialize()

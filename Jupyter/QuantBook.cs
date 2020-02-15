@@ -23,7 +23,6 @@ using QuantConnect.Indicators;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine;
 using QuantConnect.Lean.Engine.DataFeeds;
-using QuantConnect.Python;
 using QuantConnect.Securities;
 using QuantConnect.Securities.Future;
 using QuantConnect.Securities.Option;
@@ -34,6 +33,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using QuantConnect.Logging;
+using QuantConnect.Packets;
 
 namespace QuantConnect.Jupyter
 {
@@ -44,7 +45,13 @@ namespace QuantConnect.Jupyter
     {
         private dynamic _pandas;
         private IDataCacheProvider _dataCacheProvider;
-        
+
+        static QuantBook()
+        {
+            Logging.Log.LogHandler =
+                Composer.Instance.GetExportedValueByTypeName<ILogHandler>(Config.Get("log-handler", "CompositeLogHandler"));
+        }
+
         /// <summary>
         /// <see cref = "QuantBook" /> constructor.
         /// Provides access to data for quantitative analysis
@@ -67,11 +74,49 @@ namespace QuantConnect.Jupyter
                 // Initialize History Provider
                 var composer = new Composer();
                 var algorithmHandlers = LeanEngineAlgorithmHandlers.FromConfiguration(composer);
+                var systemHandlers = LeanEngineSystemHandlers.FromConfiguration(composer);
+                // init the API
+                systemHandlers.Initialize();
+                systemHandlers.LeanManager.Initialize(systemHandlers,
+                    algorithmHandlers,
+                    new BacktestNodePacket(),
+                    new AlgorithmManager(false));
+                systemHandlers.LeanManager.SetAlgorithm(this);
+
                 _dataCacheProvider = new ZipDataCacheProvider(algorithmHandlers.DataProvider);
+
+                var symbolPropertiesDataBase = SymbolPropertiesDatabase.FromDataFolder();
+                var registeredTypes = new RegisteredSecurityDataTypesProvider();
+                var securityService = new SecurityService(Portfolio.CashBook,
+                    MarketHoursDatabase,
+                    symbolPropertiesDataBase,
+                    this,
+                    registeredTypes,
+                    new SecurityCacheProvider(Portfolio));
+                Securities.SetSecurityService(securityService);
+                SubscriptionManager.SetDataManager(
+                    new DataManager(new NullDataFeed(),
+                        new UniverseSelection(this, securityService),
+                        this,
+                        TimeKeeper,
+                        MarketHoursDatabase,
+                        false,
+                        registeredTypes));
 
                 var mapFileProvider = algorithmHandlers.MapFileProvider;
                 HistoryProvider = composer.GetExportedValueByTypeName<IHistoryProvider>(Config.Get("history-provider", "SubscriptionDataReaderHistoryProvider"));
-                HistoryProvider.Initialize(null, algorithmHandlers.DataProvider, _dataCacheProvider, mapFileProvider, algorithmHandlers.FactorFileProvider, null);
+                HistoryProvider.Initialize(
+                    new HistoryProviderInitializeParameters(
+                        null,
+                        null,
+                        algorithmHandlers.DataProvider,
+                        _dataCacheProvider,
+                        mapFileProvider,
+                        algorithmHandlers.FactorFileProvider,
+                        null,
+                        true
+                    )
+                );
 
                 SetOptionChainProvider(new CachingOptionChainProvider(new BacktestingOptionChainProvider()));
                 SetFutureChainProvider(new CachingFutureChainProvider(new BacktestingFutureChainProvider()));
@@ -112,7 +157,7 @@ namespace QuantConnect.Jupyter
                 foreach (var ticker in tickers)
                 {
                     var symbol = QuantConnect.Symbol.Create(ticker.ToString(), SecurityType.Equity, Market.USA);
-                    var dir = new DirectoryInfo(Path.Combine(Globals.DataFolder, "equity", symbol.ID.Market, "fundamental", "fine", symbol.Value.ToLower()));
+                    var dir = new DirectoryInfo(Path.Combine(Globals.DataFolder, "equity", symbol.ID.Market, "fundamental", "fine", symbol.Value.ToLowerInvariant()));
                     if (!dir.Exists) continue;
 
                     var config = new SubscriptionDataConfig(typeof(FineFundamental), symbol, Resolution.Daily, TimeZones.NewYork, TimeZones.NewYork, false, false, false);
@@ -145,30 +190,47 @@ namespace QuantConnect.Jupyter
         /// Gets <see cref="OptionHistory"/> object for a given symbol, date and resolution
         /// </summary>
         /// <param name="symbol">The symbol to retrieve historical option data for</param>
-        /// <param name="date">Date of the data</param>
+        /// <param name="start">The history request start time</param>
+        /// <param name="end">The history request end time. Defaults to 1 day if null</param>
         /// <param name="resolution">The resolution to request</param>
         /// <returns>A <see cref="OptionHistory"/> object that contains historical option data.</returns>
         public OptionHistory GetOptionHistory(Symbol symbol, DateTime start, DateTime? end = null, Resolution? resolution = null)
         {
-            if (!end.HasValue || end.Value.Date == start.Date)
+            if (!end.HasValue || end.Value == start)
             {
                 end = start.AddDays(1);
             }
 
-            var option = Securities[symbol] as Option;
-            var underlying = AddEquity(symbol.Underlying.Value, option.Resolution);
-
-            var allSymbols = new List<Symbol>();
-            for (var date = start; date < end; date = date.AddDays(1))
+            IEnumerable<Symbol> symbols;
+            if (symbol.IsCanonical())
             {
-                if (option.Exchange.DateIsOpen(date))
+                // canonical symbol, lets find the contracts
+                var option = Securities[symbol] as Option;
+                var resolutionToUseForUnderlying = resolution ?? SubscriptionManager.SubscriptionDataConfigService
+                                                       .GetSubscriptionDataConfigs(symbol)
+                                                       .GetHighestResolution();
+                if (!Securities.ContainsKey(symbol.Underlying))
                 {
-                    allSymbols.AddRange(OptionChainProvider.GetOptionContractList(symbol.Underlying, date));
+                    // only add underlying if not present
+                    AddEquity(symbol.Underlying.Value, resolutionToUseForUnderlying);
                 }
+                var allSymbols = new List<Symbol>();
+                for (var date = start; date < end; date = date.AddDays(1))
+                {
+                    if (option.Exchange.DateIsOpen(date))
+                    {
+                        allSymbols.AddRange(OptionChainProvider.GetOptionContractList(symbol.Underlying, date));
+                    }
+                }
+                symbols = base.History(symbol.Underlying, start, end.Value, resolution)
+                    .SelectMany(x => option.ContractFilter.Filter(new OptionFilterUniverse(allSymbols.Distinct(), x)))
+                    .Distinct().Concat(new[] { symbol.Underlying });
             }
-            var symbols = base.History(symbol.Underlying, start, end.Value, resolution)
-                .SelectMany(x => option.ContractFilter.Filter(new OptionFilterUniverse(allSymbols.Distinct(), x)))
-                .Distinct().Concat(new[] { symbol.Underlying });
+            else
+            {
+                // the symbol is a contract
+                symbols = new List<Symbol>{ symbol };
+            }
 
             return new OptionHistory(History(symbols, start, end.Value, resolution));
         }
@@ -177,33 +239,42 @@ namespace QuantConnect.Jupyter
         /// Gets <see cref="FutureHistory"/> object for a given symbol, date and resolution
         /// </summary>
         /// <param name="symbol">The symbol to retrieve historical future data for</param>
-        /// <param name="start">Date of the data</param>
+        /// <param name="start">The history request start time</param>
+        /// <param name="end">The history request end time. Defaults to 1 day if null</param>
         /// <param name="resolution">The resolution to request</param>
         /// <returns>A <see cref="FutureHistory"/> object that contains historical future data.</returns>
         public FutureHistory GetFutureHistory(Symbol symbol, DateTime start, DateTime? end = null, Resolution? resolution = null)
         {
-            if (!end.HasValue || end.Value.Date == start.Date)
+            if (!end.HasValue || end.Value == start)
             {
                 end = start.AddDays(1);
             }
 
-            var future = Securities[symbol] as Future;
-
-            var allSymbols = new List<Symbol>();
-            for (var date = start; date < end; date = date.AddDays(1))
+            var allSymbols = new HashSet<Symbol>();
+            if (symbol.IsCanonical())
             {
-                if (future.Exchange.DateIsOpen(date))
+                // canonical symbol, lets find the contracts
+                var future = Securities[symbol] as Future;
+
+                for (var date = start; date < end; date = date.AddDays(1))
                 {
-                    allSymbols.AddRange(FutureChainProvider.GetFutureContractList(future.Symbol, date));
+                    if (future.Exchange.DateIsOpen(date))
+                    {
+                        allSymbols.UnionWith(FutureChainProvider.GetFutureContractList(future.Symbol, date));
+                    }
                 }
             }
-            var symbols = allSymbols.Distinct();
+            else
+            {
+                // the symbol is a contract
+                allSymbols.Add(symbol);
+            }
 
-            return new FutureHistory(History(symbols, start, end.Value, resolution));
+            return new FutureHistory(History(allSymbols, start, end.Value, resolution));
         }
 
         /// <summary>
-        /// Gets the historical data of an indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of an indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="symbol">The symbol to retrieve historical data for</param>
@@ -218,7 +289,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="symbol">The symbol to retrieve historical data for</param>
@@ -233,7 +304,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="symbol">The symbol to retrieve historical data for</param>
@@ -248,7 +319,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of an indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of an indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="indicator">Indicator</param>
@@ -264,7 +335,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="indicator">Indicator</param>
@@ -280,7 +351,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="indicator">Indicator</param>
@@ -296,7 +367,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of an indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of an indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="indicator">Indicator</param>
@@ -313,7 +384,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="indicator">Indicator</param>
@@ -330,7 +401,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned. 
+        /// Gets the historical data of a bar indicator for the specified symbol. The exact number of bars will be returned.
         /// The symbol must exist in the Securities collection.
         /// </summary>
         /// <param name="indicator">Indicator</param>
@@ -432,7 +503,7 @@ namespace QuantConnect.Jupyter
         }
 
         /// <summary>
-        /// Calculates the daily rate of change 
+        /// Calculates the daily rate of change
         /// </summary>
         /// <param name="dictionary"><see cref="IDictionary{DateTime, Double}"/> with prices keyed by time</param>
         /// <returns><see cref="List{Double}"/> with daily rate of change</returns>
@@ -463,7 +534,7 @@ namespace QuantConnect.Jupyter
         {
             // Reset the indicator
             indicator.Reset();
-            
+
             // Create a dictionary of the properties
             var name = indicator.GetType().Name;
 
@@ -538,7 +609,7 @@ namespace QuantConnect.Jupyter
 
             return PandasConverter.GetIndicatorDataFrame(properties);
         }
-        
+
         /// <summary>
         /// Gets a value of a property
         /// </summary>

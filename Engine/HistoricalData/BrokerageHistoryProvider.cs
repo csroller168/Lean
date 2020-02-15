@@ -13,17 +13,11 @@
  * limitations under the License.
 */
 
-using System;
 using System.Collections.Generic;
 using NodaTime;
 using QuantConnect.Data;
-using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
-using QuantConnect.Lean.Engine.DataFeeds.Enumerators;
-using QuantConnect.Packets;
-using QuantConnect.Securities;
-using QuantConnect.Util;
 using HistoryRequest = QuantConnect.Data.HistoryRequest;
 
 namespace QuantConnect.Lean.Engine.HistoricalData
@@ -48,14 +42,8 @@ namespace QuantConnect.Lean.Engine.HistoricalData
         /// <summary>
         /// Initializes this history provider to work for the specified job
         /// </summary>
-        /// <param name="job">The job</param>
-        /// <param name="dataProvider">Provider used to get data when it is not present on disk</param>
-        /// <param name="dataCacheProvider">Provider used to cache history data files</param>
-        /// <param name="mapFileProvider">Provider used to get a map file resolver to handle equity mapping</param>
-        /// <param name="factorFileProvider">Provider used to get factor files to handle equity price scaling</param>
-        /// <param name="statusUpdate">Function used to send status updates</param>
-        public override void Initialize(AlgorithmNodePacket job, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
-            IMapFileProvider mapFileProvider, IFactorFileProvider factorFileProvider, Action<int> statusUpdate)
+        /// <param name="parameters">The initialization parameters</param>
+        public override void Initialize(HistoryProviderInitializeParameters parameters)
         {
             _brokerage.Connect();
         }
@@ -74,56 +62,10 @@ namespace QuantConnect.Lean.Engine.HistoricalData
             {
                 var history = _brokerage.GetHistory(request);
                 var subscription = CreateSubscription(request, history);
-                subscription.MoveNext(); // prime pump
                 subscriptions.Add(subscription);
             }
 
             return CreateSliceEnumerableFromSubscriptions(subscriptions, sliceTimeZone);
-        }
-
-        /// <summary>
-        /// Creates a subscription to process the history request
-        /// </summary>
-        private static Subscription CreateSubscription(HistoryRequest request, IEnumerable<BaseData> history)
-        {
-            // data reader expects these values in local times
-            var start = request.StartTimeUtc.ConvertFromUtc(request.ExchangeHours.TimeZone);
-            var end = request.EndTimeUtc.ConvertFromUtc(request.ExchangeHours.TimeZone);
-
-            var config = new SubscriptionDataConfig(request.DataType,
-                request.Symbol,
-                request.Resolution,
-                request.DataTimeZone,
-                request.ExchangeHours.TimeZone,
-                request.FillForwardResolution.HasValue,
-                request.IncludeExtendedMarketHours,
-                false,
-                request.IsCustomData,
-                request.TickType,
-                true,
-                request.DataNormalizationMode
-                );
-
-            var security = new Security(request.ExchangeHours, config, new Cash(CashBook.AccountCurrency, 0, 1m), SymbolProperties.GetDefault(CashBook.AccountCurrency));
-
-            var reader = history.GetEnumerator();
-
-            // optionally apply fill forward behavior
-            if (request.FillForwardResolution.HasValue)
-            {
-                // copy forward Bid/Ask bars for QuoteBars
-                if (request.DataType == typeof(QuoteBar))
-                {
-                    reader = new QuoteBarFillForwardEnumerator(reader);
-                }
-
-                var readOnlyRef = Ref.CreateReadOnly(() => request.FillForwardResolution.Value.ToTimeSpan());
-                reader = new FillForwardEnumerator(reader, security.Exchange, readOnlyRef, security.IsExtendedMarketHours, end, config.Increment, config.DataTimeZone);
-            }
-
-            var timeZoneOffsetProvider = new TimeZoneOffsetProvider(security.Exchange.TimeZone, start, end);
-            var subscriptionDataEnumerator = SubscriptionData.Enumerator(config, security, timeZoneOffsetProvider, reader);
-            return new Subscription(null, security, config, subscriptionDataEnumerator, timeZoneOffsetProvider, start, end, false);
         }
     }
 }

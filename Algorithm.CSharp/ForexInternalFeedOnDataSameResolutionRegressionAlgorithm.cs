@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using QuantConnect.Data;
 using QuantConnect.Interfaces;
 
@@ -28,6 +29,7 @@ namespace QuantConnect.Algorithm.CSharp
     {
         private readonly Dictionary<Symbol, int> _dataPointsPerSymbol = new Dictionary<Symbol, int>();
         private bool _added;
+        private Symbol _eurusd;
 
         /// <summary>
         /// Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.
@@ -38,6 +40,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetEndDate(2013, 10, 8);
             SetCash(100000);
 
+            _eurusd = QuantConnect.Symbol.Create("EURUSD", SecurityType.Forex, Market.FXCM);
             var eurgbp = AddForex("EURGBP", Resolution.Daily);
             _dataPointsPerSymbol.Add(eurgbp.Symbol, 0);
         }
@@ -48,8 +51,25 @@ namespace QuantConnect.Algorithm.CSharp
         /// <param name="data">Slice object keyed by symbol containing the stock data</param>
         public override void OnData(Slice data)
         {
+            if (_added)
+            {
+                var eurUsdSubscription = SubscriptionManager.SubscriptionDataConfigService
+                    .GetSubscriptionDataConfigs(_eurusd, includeInternalConfigs: true)
+                    .Single();
+                if (eurUsdSubscription.IsInternalFeed)
+                {
+                    throw new Exception("Unexpected internal 'EURUSD' Subscription");
+                }
+            }
             if (!_added)
             {
+                var eurUsdSubscription = SubscriptionManager.SubscriptionDataConfigService
+                    .GetSubscriptionDataConfigs(_eurusd, includeInternalConfigs: true)
+                    .Single();
+                if (!eurUsdSubscription.IsInternalFeed)
+                {
+                    throw new Exception("Unexpected not internal 'EURUSD' Subscription");
+                }
                 var eurusd = AddForex("EURUSD", Resolution.Daily);
                 _dataPointsPerSymbol.Add(eurusd.Symbol, 0);
 
@@ -61,7 +81,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var symbol = kvp.Key;
                 _dataPointsPerSymbol[symbol]++;
 
-                Log($"{Time} {symbol.Value} {kvp.Value.Price}");
+                Log($"{Time} {symbol.Value} {kvp.Value.Price} EndTime {kvp.Value.EndTime}");
             }
         }
 
@@ -76,7 +96,7 @@ namespace QuantConnect.Algorithm.CSharp
                 // normal feed
                 { "EURGBP", 3 },
                 // internal feed on the first day, normal feed on the other two days
-                { "EURUSD", 2 },
+                { "EURUSD", 3 },
                 // internal feed only
                 { "GBPUSD", 0 }
             };
@@ -117,6 +137,7 @@ namespace QuantConnect.Algorithm.CSharp
             {"Expectancy", "0"},
             {"Net Profit", "0%"},
             {"Sharpe Ratio", "0"},
+            {"Probabilistic Sharpe Ratio", "0%"},
             {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
@@ -127,7 +148,26 @@ namespace QuantConnect.Algorithm.CSharp
             {"Information Ratio", "0"},
             {"Tracking Error", "0"},
             {"Treynor Ratio", "0"},
-            {"Total Fees", "$0.00"}
+            {"Total Fees", "$0.00"},
+            {"Fitness Score", "0"},
+            {"Kelly Criterion Estimate", "0"},
+            {"Kelly Criterion Probability Value", "0"},
+            {"Sortino Ratio", "79228162514264337593543950335"},
+            {"Return Over Maximum Drawdown", "79228162514264337593543950335"},
+            {"Portfolio Turnover", "0"},
+            {"Total Insights Generated", "0"},
+            {"Total Insights Closed", "0"},
+            {"Total Insights Analysis Completed", "0"},
+            {"Long Insight Count", "0"},
+            {"Short Insight Count", "0"},
+            {"Long/Short Ratio", "100%"},
+            {"Estimated Monthly Alpha Value", "$0"},
+            {"Total Accumulated Estimated Alpha Value", "$0"},
+            {"Mean Population Estimated Insight Value", "$0"},
+            {"Mean Population Direction", "0%"},
+            {"Mean Population Magnitude", "0%"},
+            {"Rolling Averaged Population Direction", "0%"},
+            {"Rolling Averaged Population Magnitude", "0%"}
         };
     }
 }

@@ -14,9 +14,11 @@
  *
 */
 
+using System;
 using NUnit.Framework;
 using Python.Runtime;
-using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Python;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Python
 {
@@ -31,11 +33,15 @@ namespace QuantConnect.Tests.Python
         [SetUp]
         public void Setup()
         {
+            PythonInitializer.Initialize();
+
             using (Py.GIL())
             {
                 var module = Py.Import("Test_MethodOverload");
                 _algorithm = module.GetAttr("Test_MethodOverload").Invoke();
-                _algorithm.SubscriptionManager.SetDataManager(new DataManager());
+                // this is required else will get a 'RuntimeBinderException' because fails to match constructor method
+                dynamic algo = _algorithm.AsManagedObject((Type)_algorithm.GetPythonType().AsManagedObject(typeof(Type)));
+                _algorithm.SubscriptionManager.SetDataManager(new DataManagerStub(algo));
                 _algorithm.Initialize();
             }
         }
@@ -43,23 +49,26 @@ namespace QuantConnect.Tests.Python
         [Test]
         public void CallPlotTests()
         {
-            // self.Plot('NUMBER', 0.1)
-            Assert.DoesNotThrow(() => _algorithm.call_plot_number_test());
+            using (Py.GIL())
+            {
+                // self.Plot('NUMBER', 0.1)
+                Assert.DoesNotThrow(() => _algorithm.call_plot_number_test());
 
-            // self.Plot('STD', self.std), where self.sma = self.SMA('SPY', 20)
-            Assert.DoesNotThrow(() => _algorithm.call_plot_sma_test());
+                // self.Plot('STD', self.std), where self.sma = self.SMA('SPY', 20)
+                Assert.DoesNotThrow(() => _algorithm.call_plot_sma_test());
 
-            // self.Plot('SMA', self.sma), where self.std = self.STD('SPY', 20)
-            Assert.DoesNotThrow(() => _algorithm.call_plot_std_test());
+                // self.Plot('SMA', self.sma), where self.std = self.STD('SPY', 20)
+                Assert.DoesNotThrow(() => _algorithm.call_plot_std_test());
 
-            // self.Plot("ERROR", self.Name), where self.Name is IAlgorithm.Name: string
-            Assert.Throws<PythonException>(() => _algorithm.call_plot_throw_test());
+                // self.Plot("ERROR", self.Name), where self.Name is IAlgorithm.Name: string
+                Assert.Throws<PythonException>(() => _algorithm.call_plot_throw_test());
 
-            // self.Plot("ERROR", self.Portfolio), where self.Portfolio is IAlgorithm.Portfolio: instance of SecurityPortfolioManager
-            Assert.Throws<PythonException>(() => _algorithm.call_plot_throw_managed_test());
+                // self.Plot("ERROR", self.Portfolio), where self.Portfolio is IAlgorithm.Portfolio: instance of SecurityPortfolioManager
+                Assert.Throws<PythonException>(() => _algorithm.call_plot_throw_managed_test());
 
-            // self.Plot("ERROR", self.a), where self.a is an instance of a python object
-            Assert.Throws<PythonException>(() => _algorithm.call_plot_throw_pyobject_test());
+                // self.Plot("ERROR", self.a), where self.a is an instance of a python object
+                Assert.Throws<PythonException>(() => _algorithm.call_plot_throw_pyobject_test());
+            }
         }
     }
 }

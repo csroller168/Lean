@@ -13,7 +13,10 @@
  * limitations under the License.
 */
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
 
@@ -27,6 +30,9 @@ namespace QuantConnect.Algorithm.CSharp
     public class HourSplitRegressionAlgorithm : QCAlgorithm, IRegressionAlgorithmDefinition
     {
         private Symbol _symbol;
+        private bool _receivedWarningEvent;
+        private bool _receivedOccurredEvent;
+        private int _dataCount;
 
         public override void Initialize()
         {
@@ -49,6 +55,44 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        public override void OnData(Slice slice)
+        {
+            _dataCount += slice.Bars.Count;
+            if (slice.Splits.Any())
+            {
+                if (slice.Splits.Single().Value.Type == SplitType.Warning)
+                {
+                    _receivedWarningEvent = true;
+                    Debug($"{slice.Splits.Single().Value}");
+                }
+                else if (slice.Splits.Single().Value.Type == SplitType.SplitOccurred)
+                {
+                    _receivedOccurredEvent = true;
+                    if (slice.Splits.Single().Value.Price != 88.9700m || slice.Splits.Single().Value.ReferencePrice != 88.9700m)
+                    {
+                        throw new Exception("Did not receive expected price values");
+                    }
+                    Debug($"{slice.Splits.Single().Value}");
+                }
+            }
+        }
+
+        public override void OnEndOfAlgorithm()
+        {
+            if (!_receivedOccurredEvent)
+            {
+                throw new Exception("Did not receive expected split event");
+            }
+            if (!_receivedWarningEvent)
+            {
+                throw new Exception("Did not receive expected split warning event");
+            }
+            if (_dataCount != 14)
+            {
+                throw new Exception($"Unexpected data count {_dataCount}. Expected 14");
+            }
+        }
+
         /// <summary>
         /// This is used by the regression test system to indicate if the open source Lean repository has the required data to run this algorithm.
         /// </summary>
@@ -67,11 +111,12 @@ namespace QuantConnect.Algorithm.CSharp
             {"Total Trades", "1"},
             {"Average Win", "0%"},
             {"Average Loss", "0%"},
-            {"Compounding Annual Return", "-0.096%"},
-            {"Drawdown", "0.000%"},
+            {"Compounding Annual Return", "0%"},
+            {"Drawdown", "0%"},
             {"Expectancy", "0"},
-            {"Net Profit", "-0.001%"},
-            {"Sharpe Ratio", "-11.225"},
+            {"Net Profit", "0%"},
+            {"Sharpe Ratio", "0"},
+            {"Probabilistic Sharpe Ratio", "0%"},
             {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
@@ -82,7 +127,26 @@ namespace QuantConnect.Algorithm.CSharp
             {"Information Ratio", "0"},
             {"Tracking Error", "0"},
             {"Treynor Ratio", "0"},
-            {"Total Fees", "$1.00"}
+            {"Total Fees", "$1.00"},
+            {"Fitness Score", "0"},
+            {"Kelly Criterion Estimate", "0"},
+            {"Kelly Criterion Probability Value", "0"},
+            {"Sortino Ratio", "79228162514264337593543950335"},
+            {"Return Over Maximum Drawdown", "79228162514264337593543950335"},
+            {"Portfolio Turnover", "0"},
+            {"Total Insights Generated", "1"},
+            {"Total Insights Closed", "0"},
+            {"Total Insights Analysis Completed", "0"},
+            {"Long Insight Count", "1"},
+            {"Short Insight Count", "0"},
+            {"Long/Short Ratio", "100%"},
+            {"Estimated Monthly Alpha Value", "$0"},
+            {"Total Accumulated Estimated Alpha Value", "$0"},
+            {"Mean Population Estimated Insight Value", "$0"},
+            {"Mean Population Direction", "0%"},
+            {"Mean Population Magnitude", "0%"},
+            {"Rolling Averaged Population Direction", "0%"},
+            {"Rolling Averaged Population Magnitude", "0%"}
         };
     }
 }

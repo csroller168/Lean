@@ -92,6 +92,19 @@ namespace QuantConnect.Securities
         }
 
         /// <summary>
+        /// Resets the market hours database, forcing a reload when reused.
+        /// Called in tests where multiple algorithms are run sequentially,
+        /// and we need to guarantee that every test starts with the same environment.
+        /// </summary>
+        public static void Reset()
+        {
+            lock (DataFolderMarketHoursDatabaseLock)
+            {
+                _dataFolderMarketHoursDatabase = null;
+            }
+        }
+
+        /// <summary>
         /// Gets the instance of the <see cref="MarketHoursDatabase"/> class produced by reading in the market hours
         /// data found in /Data/market-hours/
         /// </summary>
@@ -186,7 +199,7 @@ namespace QuantConnect.Securities
                     Log.Error($"MarketHoursDatabase.GetExchangeHours(): Unable to locate exchange hours for {key}.Available keys: {keys}");
 
                     // there was nothing that really matched exactly... what should we do here?
-                    throw new ArgumentException("Unable to locate exchange hours for " + key);
+                    throw new ArgumentException($"Unable to locate exchange hours for {key}");
                 }
             }
 
@@ -225,8 +238,13 @@ namespace QuantConnect.Securities
                         stringSymbol = symbol.HasUnderlying ? symbol.Underlying.Value : string.Empty;
                         break;
 
+                    case SecurityType.Base:
+                    case SecurityType.Future:
+                        stringSymbol = symbol.ID.Symbol;
+                        break;
+
                     default:
-                        stringSymbol = symbol.ID.SecurityType == SecurityType.Future ? symbol.ID.Symbol : symbol.Value;
+                        stringSymbol = symbol.Value;
                         break;
                 }
             }

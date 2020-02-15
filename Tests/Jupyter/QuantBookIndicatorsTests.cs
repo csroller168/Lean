@@ -16,11 +16,11 @@
 using NUnit.Framework;
 using Python.Runtime;
 using System;
-using System.IO;
+using QuantConnect.Securities;
 
 namespace QuantConnect.Tests.Jupyter
 {
-    [TestFixture, Category("TravisExclude")]
+    [TestFixture]
     public class QuantBookIndicatorsTests
     {
         dynamic _module;
@@ -28,8 +28,9 @@ namespace QuantConnect.Tests.Jupyter
         [TestFixtureSetUp]
         public void Setup()
         {
-            var pythonPath = new DirectoryInfo("Jupyter/RegressionScripts");
-            Environment.SetEnvironmentVariable("PYTHONPATH", pythonPath.FullName);
+            SymbolCache.Clear();
+            MarketHoursDatabase.Reset();
+
             using (Py.GIL())
             {
                 _module = Py.Import("Test_QuantBookIndicator");
@@ -42,28 +43,31 @@ namespace QuantConnect.Tests.Jupyter
         [TestCase(2016, 10, 9, SecurityType.Crypto, "BTCUSD")]
         public void QuantBookIndicatorTests(int year, int month, int day, SecurityType securityType, string symbol)
         {
-            var startDate = new DateTime(year, month, day);
-            var indicatorTest = _module.IndicatorTest(startDate, securityType, symbol);
-
-            var endDate = startDate;
-            startDate = endDate.AddYears(-1);
-
-            // Tests a data point indicator
-            var dfBB = indicatorTest.test_bollinger_bands(symbol, startDate, endDate, Resolution.Daily);
-            Assert.IsTrue(GetDataFrameLength(dfBB) > 0);
-
-            // Tests a bar indicator
-            var dfATR = indicatorTest.test_average_true_range(symbol, startDate, endDate, Resolution.Daily);
-            Assert.IsTrue(GetDataFrameLength(dfATR) > 0);
-
-            if (securityType == SecurityType.Forex)
+            using (Py.GIL())
             {
-                return;
-            }
+                var startDate = new DateTime(year, month, day);
+                var indicatorTest = _module.IndicatorTest(startDate, securityType, symbol);
 
-            // Tests a trade bar indicator
-            var dfOBV = indicatorTest.test_on_balance_volume(symbol, startDate, endDate, Resolution.Daily);
-            Assert.IsTrue(GetDataFrameLength(dfOBV) > 0);
+                var endDate = startDate;
+                startDate = endDate.AddYears(-1);
+
+                // Tests a data point indicator
+                var dfBB = indicatorTest.test_bollinger_bands(symbol, startDate, endDate, Resolution.Daily);
+                Assert.IsTrue(GetDataFrameLength(dfBB) > 0);
+
+                // Tests a bar indicator
+                var dfATR = indicatorTest.test_average_true_range(symbol, startDate, endDate, Resolution.Daily);
+                Assert.IsTrue(GetDataFrameLength(dfATR) > 0);
+
+                if (securityType == SecurityType.Forex)
+                {
+                    return;
+                }
+
+                // Tests a trade bar indicator
+                var dfOBV = indicatorTest.test_on_balance_volume(symbol, startDate, endDate, Resolution.Daily);
+                Assert.IsTrue(GetDataFrameLength(dfOBV) > 0);
+            }
         }
 
         private int GetDataFrameLength(dynamic df) => (int)(df.shape[0] as PyObject).AsManagedObject(typeof(int));

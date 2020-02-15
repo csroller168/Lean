@@ -18,8 +18,6 @@ using System.Collections.Generic;
 using QuantConnect.Data;
 using QuantConnect.Data.Custom.Intrinio;
 using QuantConnect.Indicators;
-using QuantConnect.Parameters;
-using QuantConnect.Interfaces;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -27,16 +25,15 @@ namespace QuantConnect.Algorithm.CSharp
     ///     Basic template algorithm simply initializes the date range and cash. This is a skeleton
     ///     framework you can use for designing an algorithm.
     /// </summary>
+    /// <remarks>This regression test requires a valid Intrinio account</remarks>
     /// <meta name="tag" content="using data" />
     /// <meta name="tag" content="using quantconnect" />
     /// <meta name="tag" content="trading and orders" />
-    public class BasicTemplateIntrinioEconomicData : QCAlgorithm, IRegressionAlgorithmDefinition
+    public class BasicTemplateIntrinioEconomicData : QCAlgorithm
     {
-        // Get the intrinio credentials from the parameters.
-        [Parameter("intrinio-username")]
-        public string _user;
-        [Parameter("intrinio-password")]
-        public string _password;
+        // Set your Intrinino user and password.
+        public string _user = "";
+        public string _password = "";
 
         private Symbol _uso; // United States Oil Fund LP
         private Symbol _bno; // United States Brent Oil Fund LP
@@ -60,6 +57,11 @@ namespace QuantConnect.Algorithm.CSharp
 
             // Set your Intrinino user and password.
             IntrinioConfig.SetUserAndPassword(_user, _password);
+
+            // Set Intrinio config to make 1 call each minute, default is 1 call each 5 seconds.
+            // (1 call each minute is the free account limit for historical_data endpoint)
+            IntrinioConfig.SetTimeIntervalBetweenCalls(TimeSpan.FromMinutes(1));
+
 
             // Find more symbols here: http://quantconnect.com/data
             // Forex, CFD, Equities Resolutions: Tick, Second, Minute, Hour, Daily.
@@ -110,16 +112,6 @@ namespace QuantConnect.Algorithm.CSharp
         }
 
         /// <summary>
-        /// This is used by the regression test system to indicate if the open source Lean repository has the required data to run this algorithm.
-        /// </summary>
-        public bool CanRunLocally { get; } = true;
-
-        /// <summary>
-        /// This is used by the regression test system to indicate which languages this algorithm is written in.
-        /// </summary>
-        public Language[] Languages { get; } = { Language.CSharp, Language.Python };
-
-        /// <summary>
         /// This is used by the regression test system to indicate what the expected statistics are from running the algorithm
         /// </summary>
         public Dictionary<string, string> ExpectedStatistics => new Dictionary<string, string>
@@ -128,20 +120,20 @@ namespace QuantConnect.Algorithm.CSharp
             {"Average Win", "0.09%"},
             {"Average Loss", "-0.01%"},
             {"Compounding Annual Return", "5.732%"},
-            {"Drawdown", "21.500%"},
+            {"Drawdown", "4.800%"},
             {"Expectancy", "1.846"},
             {"Net Profit", "24.996%"},
-            {"Sharpe Ratio", "0.416"},
+            {"Sharpe Ratio", "1.142"},
             {"Loss Rate", "68%"},
             {"Win Rate", "32%"},
             {"Profit-Loss Ratio", "7.97"},
-            {"Alpha", "0.097"},
-            {"Beta", "-1.612"},
-            {"Annual Standard Deviation", "0.16"},
-            {"Annual Variance", "0.025"},
-            {"Information Ratio", "0.295"},
-            {"Tracking Error", "0.16"},
-            {"Treynor Ratio", "-0.041"},
+            {"Alpha", "0.076"},
+            {"Beta", "-1.101"},
+            {"Annual Standard Deviation", "0.048"},
+            {"Annual Variance", "0.002"},
+            {"Information Ratio", "0.741"},
+            {"Tracking Error", "0.048"},
+            {"Treynor Ratio", "-0.05"},
             {"Total Fees", "$102.64"}
         };
     }

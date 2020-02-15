@@ -23,11 +23,11 @@ using QuantConnect.Brokerages;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
-using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.Results;
 using QuantConnect.Lean.Engine.TransactionHandlers;
 using QuantConnect.Orders;
 using QuantConnect.Securities;
+using QuantConnect.Tests.Engine.DataFeeds;
 
 namespace QuantConnect.Tests.Algorithm
 {
@@ -38,7 +38,7 @@ namespace QuantConnect.Tests.Algorithm
         public void SetHoldingsTakesIntoAccountPendingMarketOrders()
         {
             var algorithm = new QCAlgorithm();
-            algorithm.SubscriptionManager.SetDataManager(new DataManager());
+            algorithm.SubscriptionManager.SetDataManager(new DataManagerStub(algorithm));
             var security = algorithm.AddEquity("SPY");
             security.Exchange = new SecurityExchange(SecurityExchangeHours.AlwaysOpen(TimeZones.NewYork));
             security.SetMarketPrice(new Tick { Value = 270m });
@@ -48,8 +48,7 @@ namespace QuantConnect.Tests.Algorithm
             var transactionHandler = new BrokerageTransactionHandler();
 
             transactionHandler.Initialize(algorithm, brokerage, new LiveTradingResultHandler());
-            new Thread(transactionHandler.Run) { IsBackground = true }.Start();
-            Thread.Sleep(2000);
+            Thread.Sleep(250);
             algorithm.Transactions.SetOrderProcessor(transactionHandler);
 
             var symbol = security.Symbol;
@@ -82,7 +81,7 @@ namespace QuantConnect.Tests.Algorithm
             public bool IsConnected { get; } = true;
             public List<Order> GetOpenOrders() { return new List<Order>(); }
             public List<Holding> GetAccountHoldings() { return new List<Holding>(); }
-            public List<Cash> GetCashBalance() { return new List<Cash>(); }
+            public List<CashAmount> GetCashBalance() { return new List<CashAmount>(); }
             public bool PlaceOrder(Order order) { return true; }
             public bool UpdateOrder(Order order) { return true; }
             public bool CancelOrder(Order order) { return true; }
@@ -90,6 +89,9 @@ namespace QuantConnect.Tests.Algorithm
             public void Disconnect() {}
             public bool AccountInstantlyUpdated { get; } = true;
             public IEnumerable<BaseData> GetHistory(HistoryRequest request) { return Enumerable.Empty<BaseData>(); }
+            public DateTime LastSyncDateTimeUtc { get; } = DateTime.UtcNow;
+            public bool ShouldPerformCashSync(DateTime currentTimeUtc) { return false; }
+            public bool PerformCashSync(IAlgorithm algorithm, DateTime currentTimeUtc, Func<TimeSpan> getTimeSinceLastFill) { return true; }
         }
     }
 }

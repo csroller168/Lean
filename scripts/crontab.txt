@@ -1,0 +1,5 @@
+@reboot systemctl start vncserver@1.service
+31 9 * * * /home/ubuntu/Lean/scripts/startTws.sh
+54 9 * * * /home/ubuntu/Lean/scripts/startTrading.sh
+30 10 * * * killall IBController.sh
+30 10 * * * killall QuantConnect.Lean.Launcher.exe

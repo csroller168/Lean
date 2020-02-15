@@ -19,6 +19,7 @@ using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using QuantConnect.Securities;
+using static QuantConnect.StringExtensions;
 
 namespace QuantConnect
 {
@@ -72,7 +73,7 @@ namespace QuantConnect
         public decimal MarketPrice;
 
         /// Current market conversion rate into the account currency
-        public decimal ConversionRate;
+        public decimal? ConversionRate;
 
         /// Current market value of the holding
         public decimal MarketValue;
@@ -84,7 +85,6 @@ namespace QuantConnect
         public Holding()
         {
             CurrencySymbol = "$";
-            ConversionRate = 1m;
         }
 
         /// <summary>
@@ -145,11 +145,13 @@ namespace QuantConnect
         /// </summary>
         public override string ToString()
         {
-            var value = string.Format("{0}: {1} @ {2}{3} - Market: {2}{4}", Symbol.Value, Quantity, CurrencySymbol, AveragePrice, MarketPrice);
+            var value = Invariant($"{Symbol.Value}: {Quantity} @ ") +
+                        Invariant($"{CurrencySymbol}{AveragePrice} - ") +
+                        Invariant($"Market: {CurrencySymbol}{MarketPrice}");
 
             if (ConversionRate != 1m)
             {
-                value += string.Format(" - Conversion: {0}", ConversionRate);
+                value += Invariant($" - Conversion: {ConversionRate}");
             }
 
             return value;
@@ -580,7 +582,12 @@ namespace QuantConnect
         /// <summary>
         /// The subscription's data comes from a rest call that is polled and returns a single line/data point of information
         /// </summary>
-        Rest
+        Rest,
+
+        /// <summary>
+        /// The subscription's data is streamed
+        /// </summary>
+        Streaming
     }
 
     /// <summary>

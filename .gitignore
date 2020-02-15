@@ -1,3 +1,6 @@
+.DS_Store
+*.zip
+
 # Object files
 *.o
 *.ko
@@ -33,7 +36,7 @@
 *.hex
 
 # QC Cloud Setup Bash Files
-#*.sh
+#.sh
 
 # QC Config Files:
 config.json
@@ -259,3 +262,6 @@ QuantConnectProjects.xml
 Launcher/Plugins/*
 /ApiPython/dist
 /ApiPython/quantconnect.egg-info
+/ApiPython/quantconnect.egg-info/*
+
+QuantConnect.Lean.sln.DotSettings*

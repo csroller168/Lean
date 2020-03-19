@@ -48,7 +48,10 @@ namespace QuantConnect.Algorithm.CSharp
             _optionSymbol = option.Symbol;
 
             // set our strike/expiry filter for this option chain
-            option.SetFilter(-2, +2, TimeSpan.Zero, TimeSpan.FromDays(180));
+            // SetFilter method accepts TimeSpan objects or integer for days.
+            // The following statements yield the same filtering criteria
+            option.SetFilter(-2, +2, 0, 180);
+            // option.SetFilter(-2, +2, TimeSpan.Zero, TimeSpan.FromDays(180));
 
             // Adding this to reproduce GH issue #2314
             SetWarmup(TimeSpan.FromMinutes(1));
@@ -149,7 +152,8 @@ namespace QuantConnect.Algorithm.CSharp
             {"Mean Population Direction", "22.6169%"},
             {"Mean Population Magnitude", "0%"},
             {"Rolling Averaged Population Direction", "0.5865%"},
-            {"Rolling Averaged Population Magnitude", "0%"}
+            {"Rolling Averaged Population Magnitude", "0%"},
+            {"OrderListHash", "-1881861672"}
         };
     }
 }

@@ -9,6 +9,7 @@ using QuantConnect.Algorithm.Framework.Portfolio;
 using System.Collections.Generic;
 using QuantConnect.Indicators;
 using System.Linq;
+using System;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -43,6 +44,7 @@ namespace QuantConnect.Algorithm.CSharp
             "XLV",
             "XLY"
         };
+        private DateTime? lastRun = null;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, MovingAverageConvergenceDivergence> Macds = new Dictionary<string, MovingAverageConvergenceDivergence>();
         private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
@@ -76,6 +78,10 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
+            if (TradedToday())
+                return;
+
+            UpdateIndicators();
             PlotPoints();
             var toSell = universe
                 .Where(x => Portfolio[x].Invested && SellSignal(x));
@@ -95,6 +101,20 @@ namespace QuantConnect.Algorithm.CSharp
                 var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                 SetHoldings(targets.ToList());
             }
+        }
+
+        private bool TradedToday()
+        {
+            if (lastRun?.Day == Time.Day)
+                return true;
+
+            lastRun = Time;
+            return false;
+        }
+
+        private void UpdateIndicators()
+        {
+            // tbd
         }
 
         private bool BuySignal(string symbol)

@@ -19,30 +19,32 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize
             // https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         // bugs
-            // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
+            // manually manage indicators with history at each OnData call.  the built-in updates don't work
+            // use deployed custom emailer
         // deployment
             // trade with live $
+            // if I eventually make this into a business, integrate directly with alpaca
 
         private static readonly int slowMacdDays = 26;
         private static readonly int fastMacdDays = 12;
         private static readonly int signalMacdDays = 9;
         private static readonly int slowSmaDays = 150;
-        private static readonly int fastSmaDays = 20;
+        private static readonly int fastSmaDays = 3; // 20;
         private static readonly int stoPeriod = 20;
         private static readonly List<string> universe = new List<string>
         {   
             "IEF", // treasuries
-            "TLT",
-            "SHY", 
-            "XLB", // etfs
-            "XLE",
-            "XLF",
-            "XLI",
-            "XLK",
-            "XLP",
-            "XLU",
-            "XLV",
-            "XLY"
+            //"TLT",
+            //"SHY", 
+            //"XLB", // etfs
+            //"XLE",
+            //"XLF",
+            //"XLI",
+            //"XLK",
+            //"XLP",
+            //"XLU",
+            //"XLV",
+            //"XLY"
         };
         private DateTime? lastRun = null;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
@@ -57,7 +59,8 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.Resolution = Resolution.Minute;
             SetBenchmark("SPY");
 
-            SetStartDate(2003, 8, 1);
+            //SetStartDate(2003, 8, 1);
+            SetStartDate(2019, 12, 2);
             SetEndDate(2020, 1, 8);
             SetCash(100000);
             EnableAutomaticIndicatorWarmUp = true;

@@ -84,7 +84,7 @@ namespace QuantConnect.Algorithm.CSharp
             if (TradedToday())
                 return;
 
-            UpdateIndicators();
+            UpdateIndicators(slice);
             PlotPoints();
             var toSell = universe
                 .Where(x => Portfolio[x].Invested && SellSignal(x));
@@ -115,7 +115,7 @@ namespace QuantConnect.Algorithm.CSharp
             return false;
         }
 
-        private void UpdateIndicators()
+        private void UpdateIndicators(Slice currentSlice)
         {
             foreach(var symbol in universe)
             {
@@ -125,10 +125,15 @@ namespace QuantConnect.Algorithm.CSharp
                 SlowSmas[symbol].Reset();
             }
             var allHistory = History(slowSmaDays, Resolution.Daily);
-            allHistory.PushThrough(data => WarmIndicators(data));
+            allHistory.PushThrough(data => UpdateIndicatorDataPoint(data));
+
+            foreach(var symbol in universe)
+            {
+                UpdateIndicatorDataPoint(currentSlice[symbol]);
+            }
         }
 
-        private void WarmIndicators(BaseData data)
+        private void UpdateIndicatorDataPoint(BaseData data)
         {
             var dp = new IndicatorDataPoint
             {

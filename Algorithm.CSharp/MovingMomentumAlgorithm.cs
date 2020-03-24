@@ -85,24 +85,18 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void WarmIndicators(BaseData data)
         {
-            SlowSmas[data.Symbol].Update(
-                new IndicatorDataPoint
-                {
-                    Value = data.Price,
-                    DataType = data.DataType,
-                    Symbol = data.Symbol,
-                    Time = data.Time,
-                    EndTime = data.EndTime
-                });
-            FastSmas[data.Symbol].Update(
-                new IndicatorDataPoint
-                {
-                    Value = data.Price,
-                    DataType = data.DataType,
-                    Symbol = data.Symbol,
-                    Time = data.Time,
-                    EndTime = data.EndTime
-                });
+            var dp = new IndicatorDataPoint
+            {
+                Value = data.Price,
+                DataType = data.DataType,
+                Symbol = data.Symbol,
+                Time = data.Time,
+                EndTime = data.EndTime
+            };
+            Macds[data.Symbol].Update(dp);
+            Stos[data.Symbol].Update(data);
+            SlowSmas[data.Symbol].Update(dp);
+            FastSmas[data.Symbol].Update(dp);
         }
 
         public override void OnData(Slice slice)

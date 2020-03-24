@@ -52,6 +52,7 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
         private Dictionary<string, SimpleMovingAverage> FastSmas = new Dictionary<string, SimpleMovingAverage>();
         private Dictionary<string, Stochastic> Stos = new Dictionary<string, Stochastic>();
+        private IEnumerable<Slice> theHistory;
 
         public override void Initialize()
         {
@@ -63,7 +64,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2019, 12, 2);
             SetEndDate(2020, 1, 8);
             SetCash(100000);
-            EnableAutomaticIndicatorWarmUp = true;
+            EnableAutomaticIndicatorWarmUp = false;
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             universe.ForEach(x =>
@@ -77,6 +78,18 @@ namespace QuantConnect.Algorithm.CSharp
             });
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+
+            //var allHistory = History(Securities.Keys, TimeSpan.FromDays(fastSmaDays+1));
+            var allHistory = History(fastSmaDays, Resolution.Daily);
+            allHistory.PushThrough(data => FastSmas[data.Symbol].Update(
+                new IndicatorDataPoint
+                {
+                    Value = data.Price,
+                    DataType = data.DataType,
+                    Symbol = data.Symbol,
+                    Time = data.Time,
+                    EndTime = data.EndTime
+                }));
         }
 
         public override void OnData(Slice slice)
@@ -117,7 +130,23 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void UpdateIndicators()
         {
-            // tbd
+            //var allHistory = History(Securities.Keys, TimeSpan.FromDays(fastSmaDays), Resolution.Daily);
+            ////FastSmas["IEF"] = SMA("IEF", fastSmaDays, Resolution.Daily);
+            //FastSmas["IEF"].Reset();
+            ////WarmUpIndicator("IEF", FastSmas["IEF"], Resolution.Daily);
+            //allHistory.PushThrough(data => FastSmas["IEF"].Update(
+            //    new IndicatorDataPoint
+            //    {
+            //        Value = data.Price,
+            //        DataType = data.DataType,
+            //        Symbol = data.Symbol,
+            //        Time = data.Time,
+            //        EndTime = data.EndTime
+            //    }));
+            //foreach (var slice in allHistory)
+            //{
+
+            //}
         }
 
         private bool BuySignal(string symbol)

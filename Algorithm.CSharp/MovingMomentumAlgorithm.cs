@@ -34,17 +34,17 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly List<string> universe = new List<string>
         {   
             "IEF", // treasuries
-            //"TLT",
-            //"SHY", 
-            //"XLB", // etfs
-            //"XLE",
-            //"XLF",
-            //"XLI",
-            //"XLK",
-            //"XLP",
-            //"XLU",
-            //"XLV",
-            //"XLY"
+            "TLT",
+            "SHY",
+            "XLB", // etfs
+            "XLE",
+            "XLF",
+            "XLI",
+            "XLK",
+            "XLP",
+            "XLU",
+            "XLV",
+            "XLY"
         };
         private DateTime? lastRun = null;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
@@ -52,7 +52,6 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
         private Dictionary<string, SimpleMovingAverage> FastSmas = new Dictionary<string, SimpleMovingAverage>();
         private Dictionary<string, Stochastic> Stos = new Dictionary<string, Stochastic>();
-        private IEnumerable<Slice> theHistory;
 
         public override void Initialize()
         {
@@ -79,9 +78,14 @@ namespace QuantConnect.Algorithm.CSharp
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
 
-            //var allHistory = History(Securities.Keys, TimeSpan.FromDays(fastSmaDays+1));
-            var allHistory = History(fastSmaDays, Resolution.Daily);
-            allHistory.PushThrough(data => FastSmas[data.Symbol].Update(
+            // TODO: warm up all indicators
+            var allHistory = History(slowSmaDays, Resolution.Daily);
+            allHistory.PushThrough(data => WarmIndicators(data));
+        }
+
+        private void WarmIndicators(BaseData data)
+        {
+            SlowSmas[data.Symbol].Update(
                 new IndicatorDataPoint
                 {
                     Value = data.Price,
@@ -89,7 +93,16 @@ namespace QuantConnect.Algorithm.CSharp
                     Symbol = data.Symbol,
                     Time = data.Time,
                     EndTime = data.EndTime
-                }));
+                });
+            FastSmas[data.Symbol].Update(
+                new IndicatorDataPoint
+                {
+                    Value = data.Price,
+                    DataType = data.DataType,
+                    Symbol = data.Symbol,
+                    Time = data.Time,
+                    EndTime = data.EndTime
+                });
         }
 
         public override void OnData(Slice slice)

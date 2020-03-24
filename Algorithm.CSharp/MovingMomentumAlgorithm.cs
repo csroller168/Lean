@@ -77,26 +77,6 @@ namespace QuantConnect.Algorithm.CSharp
             });
 
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
-
-            // TODO: warm up all indicators
-            var allHistory = History(slowSmaDays, Resolution.Daily);
-            allHistory.PushThrough(data => WarmIndicators(data));
-        }
-
-        private void WarmIndicators(BaseData data)
-        {
-            var dp = new IndicatorDataPoint
-            {
-                Value = data.Price,
-                DataType = data.DataType,
-                Symbol = data.Symbol,
-                Time = data.Time,
-                EndTime = data.EndTime
-            };
-            Macds[data.Symbol].Update(dp);
-            Stos[data.Symbol].Update(data);
-            SlowSmas[data.Symbol].Update(dp);
-            FastSmas[data.Symbol].Update(dp);
         }
 
         public override void OnData(Slice slice)
@@ -137,23 +117,31 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void UpdateIndicators()
         {
-            //var allHistory = History(Securities.Keys, TimeSpan.FromDays(fastSmaDays), Resolution.Daily);
-            ////FastSmas["IEF"] = SMA("IEF", fastSmaDays, Resolution.Daily);
-            //FastSmas["IEF"].Reset();
-            ////WarmUpIndicator("IEF", FastSmas["IEF"], Resolution.Daily);
-            //allHistory.PushThrough(data => FastSmas["IEF"].Update(
-            //    new IndicatorDataPoint
-            //    {
-            //        Value = data.Price,
-            //        DataType = data.DataType,
-            //        Symbol = data.Symbol,
-            //        Time = data.Time,
-            //        EndTime = data.EndTime
-            //    }));
-            //foreach (var slice in allHistory)
-            //{
+            foreach(var symbol in universe)
+            {
+                Macds[symbol].Reset();
+                Stos[symbol].Reset();
+                FastSmas[symbol].Reset();
+                SlowSmas[symbol].Reset();
+            }
+            var allHistory = History(slowSmaDays, Resolution.Daily);
+            allHistory.PushThrough(data => WarmIndicators(data));
+        }
 
-            //}
+        private void WarmIndicators(BaseData data)
+        {
+            var dp = new IndicatorDataPoint
+            {
+                Value = data.Price,
+                DataType = data.DataType,
+                Symbol = data.Symbol,
+                Time = data.Time,
+                EndTime = data.EndTime
+            };
+            Macds[data.Symbol].Update(dp);
+            Stos[data.Symbol].Update(data);
+            SlowSmas[data.Symbol].Update(dp);
+            FastSmas[data.Symbol].Update(dp);
         }
 
         private bool BuySignal(string symbol)

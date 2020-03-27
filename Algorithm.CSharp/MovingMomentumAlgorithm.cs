@@ -49,11 +49,7 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, List<BaseData>> histories;
         private Dictionary<string, decimal> macds;
-
-        //private Dictionary<string, MovingAverageConvergenceDivergence> Macds = new Dictionary<string, MovingAverageConvergenceDivergence>();
-        //private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
-        //private Dictionary<string, SimpleMovingAverage> FastSmas = new Dictionary<string, SimpleMovingAverage>();
-        //private Dictionary<string, Stochastic> Stos = new Dictionary<string, Stochastic>();
+        private Dictionary<string, decimal> stos;
 
         public override void Initialize()
         {
@@ -66,6 +62,13 @@ namespace QuantConnect.Algorithm.CSharp
             SetEndDate(2020, 1, 8);
             SetCash(100000);
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
+            universe.ForEach(x =>
+            {
+                var equity = AddEquity(x, resolution, null, true);
+                equity.SetSlippageModel(SlippageModel);
+            });
         }
 
         public override void OnData(Slice slice)

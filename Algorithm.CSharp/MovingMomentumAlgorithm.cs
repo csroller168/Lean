@@ -6,6 +6,8 @@ using QuantConnect.Orders;
 using QuantConnect.Data;
 using QuantConnect.Orders.Slippage;
 using QuantConnect.Algorithm.Framework.Portfolio;
+using QuantConnect.Indicators;
+using QuantConnect.Data.Market;
 using System.Collections.Generic;
 using System.Linq;
 using System;
@@ -29,7 +31,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int signalMacdDays = 9;
         private static readonly int slowSmaDays = 150;
         private static readonly int fastSmaDays = 20;
-        private static readonly int stoPeriod = 20;
+        private static readonly int stoLookbackPeriod = 20;
         private static readonly List<string> universe = new List<string>
         {
             "IEF", // treasuries
@@ -48,6 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
         private DateTime? lastRun = null;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, List<BaseData>> histories;
+        private Dictionary<string, List<QuoteBar>> StoHistories;
         private Dictionary<string, decimal> macds;
         private Dictionary<string, decimal> stos;
 
@@ -117,6 +120,11 @@ namespace QuantConnect.Algorithm.CSharp
                     .Union(new[] { currentSlice[symbol] as BaseData })
                     .OrderByDescending(x => x.Time)
                     .ToList();
+                StoHistories[symbol] = localHistories
+                    .Select(x => x[symbol] as QuoteBar)
+                    .Union(new[] { currentSlice[symbol] as QuoteBar })
+                    .OrderByDescending(x => x.Time)
+                    .ToList();
                 macds[symbol] = MacdHistogram(symbol);
             }
         }
@@ -131,39 +139,12 @@ namespace QuantConnect.Algorithm.CSharp
             return new MacdData(histories[symbol].Take(slowMacdDays).Select(x => x.Price)).Histogram;
         }
 
-        private class MacdData
+        private decimal Sto(string symbol)
         {
-            public decimal Histogram;
-            private decimal SmoothFactor(int periods) => 2.0m / (1 + periods);
-
-            // data is ordered most to least recent
-            public MacdData(IEnumerable<decimal> data)
-            {
-                var fastEma = Ema(data.Skip(data.Count() - fastMacdDays),
-                    SmoothFactor(fastMacdDays));
-                var slowEma = Ema(data.Skip(data.Count() - slowMacdDays),
-                    SmoothFactor(slowMacdDays));
-                var macdLine = Enumerable
-                    .Range(0, signalMacdDays)
-                    .Select(i => fastEma.ElementAt(i) - slowEma.ElementAt(i));
-                var signalLine = Ema(macdLine, SmoothFactor(signalMacdDays));
-                Histogram = macdLine.First() - signalLine.First();
-            }
-
-            private List<decimal> Ema(IEnumerable<decimal> data, decimal smoothFactor)
-            {
-                var currentPrice = data.First();
-                if(data.Count() == 1)
-                {
-                    return new List<decimal> { currentPrice };
-                }
-
-                var emas = Ema(data.Skip(1), smoothFactor);
-                var currentEma = currentPrice * smoothFactor
-                        + (1 - smoothFactor) * emas.First();
-                emas.Insert(0, currentEma);
-                return emas;
-            }
+            var currentClose = StoHistories[symbol].First().Price;
+            var low = StoHistories[symbol].Take(stoLookbackPeriod).Min(x => x.Low);
+            var high = StoHistories[symbol].Take(stoLookbackPeriod).Max(x => x.High);
+            return (currentClose - low) / (high - low) * 100;
         }
 
         private bool BuySignal(string symbol)
@@ -207,13 +188,12 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool SmaBuySignal(string symbol)
         {
-            //return FastSmas[symbol] > SlowSmas[symbol];
             return Sma(symbol, fastSmaDays) > Sma(symbol, slowSmaDays);
         }
 
-        private bool StoBuySignal(string signal)
+        private bool StoBuySignal(string symbol)
         {
-            return Stos[signal] < 20;
+            return Sto(symbol) < 20;
         }
 
         private bool MacdSellSignal(string symbol)
@@ -223,13 +203,47 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool SmaSellSignal(string symbol)
         {
-            //return FastSmas[symbol] < SlowSmas[symbol];
             return Sma(symbol, fastSmaDays) < Sma(symbol, slowSmaDays);
         }
 
-        private bool StoSellSignal(string signal)
+        private bool StoSellSignal(string symbol)
         {
-            return Stos[signal] > 80;
+            return Sto(symbol) > 80;
+        }
+
+        private class MacdData
+        {
+            public decimal Histogram;
+            private decimal SmoothFactor(int periods) => 2.0m / (1 + periods);
+
+            // data is ordered most to least recent
+            public MacdData(IEnumerable<decimal> data)
+            {
+                var fastEma = Ema(data.Skip(data.Count() - fastMacdDays),
+                    SmoothFactor(fastMacdDays));
+                var slowEma = Ema(data.Skip(data.Count() - slowMacdDays),
+                    SmoothFactor(slowMacdDays));
+                var macdLine = Enumerable
+                    .Range(0, signalMacdDays)
+                    .Select(i => fastEma.ElementAt(i) - slowEma.ElementAt(i));
+                var signalLine = Ema(macdLine, SmoothFactor(signalMacdDays));
+                Histogram = macdLine.First() - signalLine.First();
+            }
+
+            private List<decimal> Ema(IEnumerable<decimal> data, decimal smoothFactor)
+            {
+                var currentPrice = data.First();
+                if (data.Count() == 1)
+                {
+                    return new List<decimal> { currentPrice };
+                }
+
+                var emas = Ema(data.Skip(1), smoothFactor);
+                var currentEma = currentPrice * smoothFactor
+                        + (1 - smoothFactor) * emas.First();
+                emas.Insert(0, currentEma);
+                return emas;
+            }
         }
     }
 }

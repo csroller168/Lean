@@ -49,10 +49,9 @@ namespace QuantConnect.Algorithm.CSharp
         };
         private DateTime? lastRun = null;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
-        private Dictionary<string, List<BaseData>> histories;
-        private Dictionary<string, List<QuoteBar>> StoHistories;
-        private Dictionary<string, decimal> macds;
-        private Dictionary<string, decimal> stos;
+        private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
+        private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
+        private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
 
         public override void Initialize()
         {
@@ -120,12 +119,14 @@ namespace QuantConnect.Algorithm.CSharp
                     .Union(new[] { currentSlice[symbol] as BaseData })
                     .OrderByDescending(x => x.Time)
                     .ToList();
-                StoHistories[symbol] = localHistories
-                    .Select(x => x[symbol] as QuoteBar)
-                    .Union(new[] { currentSlice[symbol] as QuoteBar })
-                    .OrderByDescending(x => x.Time)
-                    .ToList();
                 macds[symbol] = MacdHistogram(symbol);
+
+                var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod)
+                    .Union(new [] { currentSlice[symbol] as TradeBar })
+                    .OrderByDescending(x => x.Time);
+                var low = stoHistories.Min(x => x.Low);
+                var high = stoHistories.Max(x => x.High);
+                stos[symbol] = (stoHistories.First().Price - low) / (high - low) * 100;
             }
         }
 
@@ -137,14 +138,6 @@ namespace QuantConnect.Algorithm.CSharp
         private decimal MacdHistogram(string symbol)
         {
             return new MacdData(histories[symbol].Take(slowMacdDays).Select(x => x.Price)).Histogram;
-        }
-
-        private decimal Sto(string symbol)
-        {
-            var currentClose = StoHistories[symbol].First().Price;
-            var low = StoHistories[symbol].Take(stoLookbackPeriod).Min(x => x.Low);
-            var high = StoHistories[symbol].Take(stoLookbackPeriod).Max(x => x.High);
-            return (currentClose - low) / (high - low) * 100;
         }
 
         private bool BuySignal(string symbol)
@@ -193,7 +186,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool StoBuySignal(string symbol)
         {
-            return Sto(symbol) < 20;
+            return stos[symbol] < 20;
         }
 
         private bool MacdSellSignal(string symbol)
@@ -208,7 +201,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool StoSellSignal(string symbol)
         {
-            return Sto(symbol) > 80;
+            return stos[symbol] > 80;
         }
 
         private class MacdData

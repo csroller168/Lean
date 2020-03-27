@@ -77,26 +77,32 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (TradedToday())
                 return;
-
-            UpdateIndicatorData(slice);
-            PlotPoints();
-            var toSell = universe
-                .Where(x => Portfolio[x].Invested && SellSignal(x));
-            var toBuy = universe
-                .Where(x => !Portfolio[x].Invested && BuySignal(x));
-            var toOwn = toBuy
-                .Union(universe.Where(x => Portfolio[x].Invested))
-                .Except(toSell);
-
-            if (toBuy.Any() || toSell.Any())
+            try
             {
-                foreach (var symbol in toSell)
+                UpdateIndicatorData(slice);
+                PlotPoints();
+                var toSell = universe
+                    .Where(x => Portfolio[x].Invested && SellSignal(x));
+                var toBuy = universe
+                    .Where(x => !Portfolio[x].Invested && BuySignal(x));
+                var toOwn = toBuy
+                    .Union(universe.Where(x => Portfolio[x].Invested))
+                    .Except(toSell);
+
+                if (toBuy.Any() || toSell.Any())
                 {
-                    Liquidate(symbol);
+                    foreach (var symbol in toSell)
+                    {
+                        Liquidate(symbol);
+                    }
+                    var pct = 0.98m / toOwn.Count();
+                    var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
+                    SetHoldings(targets.ToList());
                 }
-                var pct = 0.98m / toOwn.Count();
-                var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
-                SetHoldings(targets.ToList());
+            }
+            catch(Exception)
+            {
+                // try again in an hour
             }
         }
 

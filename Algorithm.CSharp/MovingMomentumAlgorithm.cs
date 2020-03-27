@@ -65,7 +65,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetCash(100000);
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
 
-            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             universe.ForEach(x =>
             {
                 var equity = AddEquity(x, resolution, null, true);
@@ -127,7 +127,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToList();
                 macds[symbol] = MacdHistogram(symbol);
 
-                var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod)
+                var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod, Resolution.Daily)
                     .Union(new [] { currentSlice[symbol] as TradeBar })
                     .OrderByDescending(x => x.Time);
                 var low = stoHistories.Min(x => x.Low);

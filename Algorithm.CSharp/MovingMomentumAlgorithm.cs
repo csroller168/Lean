@@ -6,11 +6,11 @@ using QuantConnect.Orders;
 using QuantConnect.Data;
 using QuantConnect.Orders.Slippage;
 using QuantConnect.Algorithm.Framework.Portfolio;
-using QuantConnect.Indicators;
 using QuantConnect.Data.Market;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using QuantConnect.Algorithm.Framework.Alphas;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -18,9 +18,10 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // TODOS:
         // optimize
+        //      test more sensitive sell criteria
+        //      add insight signals
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         // bugs
-        //      replace all indicators with custom code - I don't trust the built-in ones
         //      use deployed custom emailer
         // deployment
         //      trade with live $
@@ -84,15 +85,19 @@ namespace QuantConnect.Algorithm.CSharp
                 var toSell = universe
                     .Where(x => Portfolio[x].Invested && SellSignal(x));
                 var toBuy = universe
-                    .Where(x => !Portfolio[x].Invested && BuySignal(x));
+                    .Where(x => !Portfolio[x].Invested && BuySignal(x))
+                    .ToList();
                 var toOwn = toBuy
                     .Union(universe.Where(x => Portfolio[x].Invested))
-                    .Except(toSell);
+                    .Except(toSell)
+                    .ToList();
 
                 if (toBuy.Any() || toSell.Any())
                 {
+                    EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
                     {
+                        //EmitInsights(Insight.Price(_symbol, Resolution.Daily, 10, InsightDirection.Down));
                         Liquidate(symbol);
                     }
                     var pct = 0.98m / toOwn.Count();
@@ -104,6 +109,15 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 // try again in an hour
             }
+        }
+
+        private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)
+        {
+            var insights = toBuy
+                .Select(x => Insight.Price(x, Resolution.Daily, 10, InsightDirection.Up))
+                .Union(toSell.Select(x => Insight.Price(x, Resolution.Daily, 10, InsightDirection.Down)))
+                .ToArray();
+            EmitInsights(insights);
         }
 
         private bool TradedToday()

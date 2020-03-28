@@ -19,7 +19,7 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOS:
         // optimize
         //      test more sensitive sell criteria
-        //      add insight signals
+        //      test running hourly with no governor
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         // bugs
         //      use deployed custom emailer

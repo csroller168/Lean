@@ -107,7 +107,7 @@ namespace QuantConnect.Algorithm.CSharp
                     SetHoldings(targets.ToList());
                 }
             }
-            catch(Exception)
+            catch(Exception e)
             {
                 // try again in an hour
             }
@@ -136,6 +136,8 @@ namespace QuantConnect.Algorithm.CSharp
             var localHistories = History(slowSmaDays, Resolution.Daily).ToList();
             foreach (var symbol in universe)
             {
+                if (!localHistories[0].ContainsKey(symbol))
+                    continue;
                 histories[symbol] = localHistories
                     .Select(x => x[symbol] as BaseData)
                     .Union(new[] { currentSlice[symbol] as BaseData })
@@ -165,7 +167,8 @@ namespace QuantConnect.Algorithm.CSharp
         private bool BuySignal(string symbol)
         {
             return
-                MacdBuySignal(symbol)
+                macds.ContainsKey(symbol)
+                && MacdBuySignal(symbol)
                 && StoBuySignal(symbol)
                 && SmaBuySignal(symbol);
         }
@@ -173,7 +176,8 @@ namespace QuantConnect.Algorithm.CSharp
         private bool SellSignal(string symbol)
         {
             return
-                MacdSellSignal(symbol)
+                macds.ContainsKey(symbol)
+                && MacdSellSignal(symbol)
                 && StoSellSignal(symbol)
                 && SmaSellSignal(symbol);
         }

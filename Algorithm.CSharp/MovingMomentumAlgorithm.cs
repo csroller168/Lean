@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using QuantConnect.Algorithm.Framework.Alphas;
+using QuantConnect.Brokerages;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -65,6 +66,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetEndDate(2020, 1, 8);
             SetCash(100000);
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+            SetBrokerageModel(BrokerageName.AlphaStreams);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             universe.ForEach(x =>

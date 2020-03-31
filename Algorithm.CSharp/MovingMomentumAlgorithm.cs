@@ -47,7 +47,12 @@ namespace QuantConnect.Algorithm.CSharp
             "XLP",
             "XLU",
             "XLV",
-            "XLY"
+            "XLY",
+            "GLD", // other
+            "ICF",
+            "IHF",
+            "PBJ",
+            "VDC"
         };
         private DateTime? lastRun = null;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);

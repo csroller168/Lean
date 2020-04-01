@@ -19,9 +19,11 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // TODOS:
         // optimize
-        //      test more sensitive sell criteria
-        //      test running hourly with no governor
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
+        //      change buy criteria
+        //          (macd or sma) && sto
+        //              test this with different macd params
+        //          sell on negative macd histogram slope
         // bugs
         //      use deployed custom emailer
         // deployment
@@ -104,7 +106,6 @@ namespace QuantConnect.Algorithm.CSharp
                     EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
                     {
-                        //EmitInsights(Insight.Price(_symbol, Resolution.Daily, 10, InsightDirection.Down));
                         Liquidate(symbol);
                     }
                     var pct = 0.98m / toOwn.Count();

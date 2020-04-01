@@ -182,9 +182,8 @@ namespace QuantConnect.Algorithm.CSharp
         {
             return
                 macds.ContainsKey(symbol)
-                && MacdSellSignal(symbol)
-                && StoSellSignal(symbol)
-                && SmaSellSignal(symbol);
+                && SmaSellSignal(symbol)
+                && (MacdSellSignal(symbol) || StoSellSignal(symbol));
         }
 
         public override void OnOrderEvent(OrderEvent orderEvent)

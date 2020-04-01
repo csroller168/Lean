@@ -68,9 +68,9 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.Resolution = Resolution.Daily;
             SetBenchmark("SPY");
 
-            //SetStartDate(2003, 8, 1);
-            SetStartDate(2019, 12, 2);
-            SetEndDate(2020, 1, 8);
+            SetStartDate(2003, 8, 1);
+            //SetStartDate(2019, 12, 2);
+            SetEndDate(2020, 3, 27);
             SetCash(100000);
             SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
             SetBrokerageModel(BrokerageName.AlphaStreams);

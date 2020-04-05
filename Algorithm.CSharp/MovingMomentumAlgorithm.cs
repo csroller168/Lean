@@ -34,8 +34,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int fastMacdDays = 5;
         private static readonly int slowMacdDays = 35;
         private static readonly int signalMacdDays = 5;
-        private static readonly int slowSmaDays = 150;
-        private static readonly int fastSmaDays = 20;
+        private static readonly int slowSmaDays = 400;
+        private static readonly int fastSmaDays = 100;
         private static readonly int stoLookbackPeriod = 20;
         private static readonly List<string> universe = new List<string>
         {

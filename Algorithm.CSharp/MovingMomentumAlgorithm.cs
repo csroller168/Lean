@@ -41,7 +41,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int slowSmaDays = 150;
         private static readonly int fastSmaDays = 20;
         private static readonly int stoLookbackPeriod = 20;
-        private static readonly decimal stopLossPct = 0.15m;
+        private static readonly decimal stopLossPct = 0.1m;
+        private static readonly decimal equityPct = 0.98m;
         private static readonly List<string> universe = new List<string>
         {
             "IEF", // treasuries
@@ -79,10 +80,10 @@ namespace QuantConnect.Algorithm.CSharp
             //SetStartDate(2019, 12, 2);
             SetEndDate(2020, 3, 27);
             SetCash(100000);
-            //SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+            SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
-            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             universe.ForEach(x =>
             {
                 var equity = AddEquity(x, resolution, null, true);
@@ -108,7 +109,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .Except(toSell)
                     .ToList();
 
-                if (toBuy.Any() || toSell.Any())
+                if (toBuy.Any() || toSell.Any() || Portfolio.TotalHoldingsValue < Portfolio.TotalPortfolioValue * equityPct * equityPct)
                 {
                     EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
@@ -121,7 +122,7 @@ namespace QuantConnect.Algorithm.CSharp
                         stopLossTicket?.Cancel();
                         Liquidate(symbol);
                     }
-                    var pct = 0.98m / toOwn.Count();
+                    var pct = equityPct / toOwn.Count();
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct)).ToList();
                     SetStopOrders(slice, targets);
                     SetHoldings(targets);

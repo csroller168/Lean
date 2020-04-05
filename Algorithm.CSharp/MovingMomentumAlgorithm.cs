@@ -24,7 +24,12 @@ namespace QuantConnect.Algorithm.CSharp
         //          (macd or sma) && sto
         //              test this with different macd params
         //          sell on negative macd histogram slope
+        //      test run hourly (no governor) with trailing stop-loss
         // bugs
+        //      remove raw initialization? (default to adjusted price)
+        //          splits may trigger stop-loss inadvertently
+        //      Fix stop loss orders:
+        //          guard against buying when below stop-loss point
         //      use deployed custom emailer
         // deployment
         //      trade with live $
@@ -36,6 +41,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int slowSmaDays = 150;
         private static readonly int fastSmaDays = 20;
         private static readonly int stoLookbackPeriod = 20;
+        private static readonly decimal stopLossPct = 0.15m;
         private static readonly List<string> universe = new List<string>
         {
             "IEF", // treasuries
@@ -61,6 +67,7 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
         private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
+        private Dictionary<string, decimal> highs = new Dictionary<string, decimal>();
 
         public override void Initialize()
         {
@@ -72,10 +79,10 @@ namespace QuantConnect.Algorithm.CSharp
             //SetStartDate(2019, 12, 2);
             SetEndDate(2020, 3, 27);
             SetCash(100000);
-            SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+            //SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
-            var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             universe.ForEach(x =>
             {
                 var equity = AddEquity(x, resolution, null, true);
@@ -106,17 +113,76 @@ namespace QuantConnect.Algorithm.CSharp
                     EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
                     {
+                        var stopLossTicket = Transactions
+                            .GetOpenOrderTickets(x =>
+                                x.OrderType == OrderType.StopMarket
+                                && x.Symbol == symbol)
+                            .SingleOrDefault();
+                        stopLossTicket?.Cancel();
                         Liquidate(symbol);
                     }
                     var pct = 0.98m / toOwn.Count();
-                    var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
-                    SetHoldings(targets.ToList());
+                    var targets = toOwn.Select(x => new PortfolioTarget(x, pct)).ToList();
+                    SetStopOrders(slice, targets);
+                    SetHoldings(targets);
+                }
+                else
+                {
+                    var openStopLossTickets = Transactions.GetOpenOrderTickets(x => x.OrderType == OrderType.StopMarket);
+                    foreach (var ticket in openStopLossTickets)
+                    {
+                        ticket.Update(new UpdateOrderFields
+                        {
+                            StopPrice = GetStopPrice(ticket.Symbol, ticket)
+                        });
+                    }
+                    //Transactions
+                    //.GetOpenOrderTickets(x => x.OrderType == OrderType.StopMarket)
+                    //.ToList()
+                    //.ForEach(x => x.Update(new UpdateOrderFields
+                    //{
+                    //    StopPrice = GetStopPrice(slice, x.Symbol)
+                    //}));
                 }
             }
             catch(Exception e)
             {
                 // try again in an hour
             }
+        }
+
+        private void SetStopOrders(Slice slice, IEnumerable<PortfolioTarget> targets = null)
+        {
+            foreach(var target in targets)
+            {
+                var stopLossOrder = Transactions
+                    .GetOpenOrderTickets(x =>
+                        x.OrderType == OrderType.StopMarket
+                        && target.Symbol == x.Symbol)
+                    .SingleOrDefault();
+                var qty = PortfolioTarget.Percent(this, target.Symbol, target.Quantity).Quantity;
+                if (stopLossOrder == null)
+                {
+                    
+                    var id = StopMarketOrder(target.Symbol, -qty, GetStopPrice(target.Symbol));
+                }
+                else
+                {
+                    var r = stopLossOrder.Update(new UpdateOrderFields
+                    {
+                        StopPrice = GetStopPrice(target.Symbol, stopLossOrder),
+                        Quantity = -qty
+                    });
+                }
+            }
+        }
+
+        private decimal GetStopPrice(Symbol symbol, OrderTicket ticket = null)
+        {
+            var localHigh = Math.Round((1 - stopLossPct) * highs[symbol], 2);
+            var currentStop = ticket?.Get(OrderField.StopPrice) ?? 0m;
+            var newStop = Math.Max(localHigh, currentStop);
+            return newStop;
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)
@@ -157,6 +223,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var low = stoHistories.Min(x => x.Low);
                 var high = stoHistories.Max(x => x.High);
                 stos[symbol] = (stoHistories.First().Price - low) / (high - low) * 100;
+                highs[symbol] = high;
             }
         }
 
@@ -176,7 +243,8 @@ namespace QuantConnect.Algorithm.CSharp
                 macds.ContainsKey(symbol)
                 && MacdBuySignal(symbol)
                 && StoBuySignal(symbol)
-                && SmaBuySignal(symbol);
+                && SmaBuySignal(symbol)
+                && Portfolio[symbol].Price > GetStopPrice(symbol);
         }
 
         private bool SellSignal(string symbol)
@@ -189,6 +257,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnOrderEvent(OrderEvent orderEvent)
         {
+            Log(orderEvent.ToString());
             if (orderEvent.Status == OrderStatus.Filled
                 && orderEvent.Direction == OrderDirection.Buy)
             {

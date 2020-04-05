@@ -24,7 +24,6 @@ namespace QuantConnect.Algorithm.CSharp
         //          (macd or sma) && sto
         //              test this with different macd params
         //          sell on negative macd histogram slope
-        //          change macd to (5,35,5)
         //      replace 0.98m equity pct with (sum(universe share prices) / total portfolio val)
         // bugs
         //      use deployed custom emailer
@@ -32,9 +31,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      trade with live $
         //      if I eventually make this into a business, integrate directly with alpaca
 
-        private static readonly int slowMacdDays = 26;
-        private static readonly int fastMacdDays = 12;
-        private static readonly int signalMacdDays = 9;
+        private static readonly int fastMacdDays = 5;
+        private static readonly int slowMacdDays = 35;
+        private static readonly int signalMacdDays = 5;
         private static readonly int slowSmaDays = 150;
         private static readonly int fastSmaDays = 20;
         private static readonly int stoLookbackPeriod = 20;

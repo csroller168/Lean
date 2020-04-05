@@ -24,6 +24,8 @@ namespace QuantConnect.Algorithm.CSharp
         //          (macd or sma) && sto
         //              test this with different macd params
         //          sell on negative macd histogram slope
+        //          change macd to (5,35,5)
+        //      replace 0.98m equity pct with (sum(universe share prices) / total portfolio val)
         // bugs
         //      use deployed custom emailer
         // deployment
@@ -72,7 +74,7 @@ namespace QuantConnect.Algorithm.CSharp
             //SetStartDate(2019, 12, 2);
             SetEndDate(2020, 3, 27);
             SetCash(100000);
-            SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+            //SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;

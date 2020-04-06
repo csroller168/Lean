@@ -15,30 +15,48 @@
 
 using System;
 using System.Collections.Generic;
-using QuantConnect.Algorithm.Framework.Alphas;
+using System.Linq;
 using QuantConnect.Data;
+using QuantConnect.Indicators;
 using QuantConnect.Interfaces;
 
 namespace QuantConnect.Algorithm.CSharp
 {
     /// <summary>
-    /// Regression test showcasing backwards incompatible behavior
-    /// for framework bridge algorithms
+    /// Algorithm which reproduces GH issue 3861, where in some cases 2 consolidators were added when
+    /// using the automatic indicator warmup feature
     /// </summary>
-    public class InvalidEmitInsightsAlgorithm : QCAlgorithm, IRegressionAlgorithmDefinition
+    public class AutomaticIndicatorWarmupRegressionAlgorithm : QCAlgorithm, IRegressionAlgorithmDefinition
     {
-        private Symbol _symbol;
-
-        /// <summary>
-        /// Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.
-        /// </summary>
+        private Symbol _spy;
         public override void Initialize()
         {
-            SetStartDate(2013, 10, 07);  //Set Start Date
-            SetEndDate(2013, 10, 11);    //Set End Date
-            SetCash(100000);             //Set Strategy Cash
+            SetStartDate(2013, 10, 07);
+            SetEndDate(2013, 10, 11);
 
-            _symbol = AddEquity("SPY").Symbol;
+            EnableAutomaticIndicatorWarmUp = true;
+
+            // Test case 1
+            _spy = AddEquity("SPY").Symbol;
+            var sma = SMA(_spy, 10);
+            if (!sma.IsReady)
+            {
+                throw new Exception("Expected SMA to be warmed up");
+            }
+
+            // Test case 2
+            var indicator = new CustomIndicator(10);
+            RegisterIndicator(_spy, indicator, Resolution.Minute, (Func<IBaseData, decimal>) null);
+
+            if (indicator.IsReady)
+            {
+                throw new Exception("Expected CustomIndicator Not to be warmed up");
+            }
+            WarmUpIndicator(_spy, indicator);
+            if (!indicator.IsReady)
+            {
+                throw new Exception("Expected CustomIndicator to be warmed up");
+            }
         }
 
         /// <summary>
@@ -47,18 +65,33 @@ namespace QuantConnect.Algorithm.CSharp
         /// <param name="data">Slice object keyed by symbol containing the stock data</param>
         public override void OnData(Slice data)
         {
-            SetHoldings(_symbol, 1);
-            try
+            if (!Portfolio.Invested)
             {
-                EmitInsights(Insight.Price(_symbol, Resolution.Daily, 1, InsightDirection.Up));
-                throw new Exception("Expected an exception");
-            }
-            catch (InvalidOperationException exception)
-            {
-                if (!exception.Message.Contains("EmitInsights should be called before placing an order"))
+                var subscription = SubscriptionManager.SubscriptionDataConfigService.GetSubscriptionDataConfigs(_spy).Single();
+
+                // we expect 1 consolidator per indicator
+                if (subscription.Consolidators.Count != 2)
                 {
-                    throw;
+                    throw new Exception($"Unexpected consolidator count for subscription: {subscription.Consolidators.Count}");
                 }
+                SetHoldings(_spy, 1);
+            }
+        }
+
+        private class CustomIndicator : SimpleMovingAverage
+        {
+            private IndicatorDataPoint _previous;
+            public CustomIndicator(int period) : base(period)
+            {
+            }
+            protected override decimal ComputeNextValue(IReadOnlyWindow<IndicatorDataPoint> window, IndicatorDataPoint input)
+            {
+                if (_previous != null && input.EndTime == _previous.EndTime)
+                {
+                    throw new Exception($"Unexpected indicator double data point call: {_previous}");
+                }
+                _previous = input;
+                return base.ComputeNextValue(window, input);
             }
         }
 
@@ -84,18 +117,18 @@ namespace QuantConnect.Algorithm.CSharp
             {"Drawdown", "2.200%"},
             {"Expectancy", "0"},
             {"Net Profit", "1.663%"},
-            {"Sharpe Ratio", "4.824"},
+            {"Sharpe Ratio", "8.542"},
             {"Probabilistic Sharpe Ratio", "66.954%"},
             {"Loss Rate", "0%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "0"},
+            {"Alpha", "-0.005"},
             {"Beta", "0.996"},
             {"Annual Standard Deviation", "0.219"},
             {"Annual Variance", "0.048"},
-            {"Information Ratio", "-4.864"},
+            {"Information Ratio", "-13.938"},
             {"Tracking Error", "0.001"},
-            {"Treynor Ratio", "1.061"},
+            {"Treynor Ratio", "1.879"},
             {"Total Fees", "$3.26"},
             {"Fitness Score", "0.248"},
             {"Kelly Criterion Estimate", "0"},
@@ -103,10 +136,10 @@ namespace QuantConnect.Algorithm.CSharp
             {"Sortino Ratio", "79228162514264337593543950335"},
             {"Return Over Maximum Drawdown", "94.3"},
             {"Portfolio Turnover", "0.248"},
-            {"Total Insights Generated", "1"},
+            {"Total Insights Generated", "0"},
             {"Total Insights Closed", "0"},
             {"Total Insights Analysis Completed", "0"},
-            {"Long Insight Count", "1"},
+            {"Long Insight Count", "0"},
             {"Short Insight Count", "0"},
             {"Long/Short Ratio", "100%"},
             {"Estimated Monthly Alpha Value", "$0"},
@@ -116,7 +149,7 @@ namespace QuantConnect.Algorithm.CSharp
             {"Mean Population Magnitude", "0%"},
             {"Rolling Averaged Population Direction", "0%"},
             {"Rolling Averaged Population Magnitude", "0%"},
-            {"OrderListHash", "-148851580"}
+            {"OrderListHash", "710753227"}
         };
     }
 }

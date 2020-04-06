@@ -89,18 +89,18 @@ namespace QuantConnect.Algorithm.CSharp
             {"Drawdown", "2.200%"},
             {"Expectancy", "-1"},
             {"Net Profit", "1.606%"},
-            {"Sharpe Ratio", "4.824"},
+            {"Sharpe Ratio", "8.553"},
             {"Probabilistic Sharpe Ratio", "66.955%"},
             {"Loss Rate", "100%"},
             {"Win Rate", "0%"},
             {"Profit-Loss Ratio", "0"},
-            {"Alpha", "0"},
+            {"Alpha", "-0.002"},
             {"Beta", "0.998"},
             {"Annual Standard Deviation", "0.22"},
             {"Annual Variance", "0.048"},
-            {"Information Ratio", "-4.89"},
+            {"Information Ratio", "-14.028"},
             {"Tracking Error", "0"},
-            {"Treynor Ratio", "1.061"},
+            {"Treynor Ratio", "1.881"},
             {"Total Fees", "$61.90"},
             {"Fitness Score", "0.981"},
             {"Kelly Criterion Estimate", "39.573"},
@@ -121,7 +121,7 @@ namespace QuantConnect.Algorithm.CSharp
             {"Mean Population Magnitude", "54.5455%"},
             {"Rolling Averaged Population Direction", "59.8056%"},
             {"Rolling Averaged Population Magnitude", "59.8056%"},
-            {"OrderListHash", "-551769372"}
+            {"OrderListHash", "1129876685"}
         };
 
         private class TestBrokerageModel : DefaultBrokerageModel

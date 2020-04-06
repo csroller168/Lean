@@ -22,6 +22,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         //      sell on negative macd histogram slope
         // bugs
+        //      don't mark as traded if exception hit
         //      use deployed custom emailer
         // deployment
         //      trade with live $
@@ -141,7 +142,7 @@ namespace QuantConnect.Algorithm.CSharp
             var localHistories = History(slowSmaDays, Resolution.Daily).ToList();
             foreach (var symbol in universe)
             {
-                if (!localHistories[0].ContainsKey(symbol))
+                if (!localHistories[0].ContainsKey(symbol) || !currentSlice.ContainsKey(symbol))
                     continue;
                 histories[symbol] = localHistories
                     .Select(x => x[symbol] as BaseData)

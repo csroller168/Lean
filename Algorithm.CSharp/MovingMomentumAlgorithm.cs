@@ -20,11 +20,7 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOS:
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
-        //      change buy criteria
-        //          (macd or sma) && sto
-        //              test this with different macd params
-        //          sell on negative macd histogram slope
-        //      replace 0.98m equity pct with (sum(universe share prices) / total portfolio val)
+        //      sell on negative macd histogram slope
         // bugs
         //      use deployed custom emailer
         // deployment
@@ -109,7 +105,9 @@ namespace QuantConnect.Algorithm.CSharp
                     {
                         Liquidate(symbol);
                     }
-                    var pct = 0.98m / toOwn.Count();
+                    var cashPct = (Portfolio.Max(x => x.Value.Price)
+                        + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
+                    var pct = (1.0m-cashPct) / toOwn.Count();
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                     SetHoldings(targets.ToList());
                 }
@@ -176,8 +174,8 @@ namespace QuantConnect.Algorithm.CSharp
             return
                 macds.ContainsKey(symbol)
                 && MacdBuySignal(symbol)
-                && StoBuySignal(symbol)
-                && SmaBuySignal(symbol);
+                && SmaBuySignal(symbol)
+                && StoBuySignal(symbol);
         }
 
         private bool SellSignal(string symbol)

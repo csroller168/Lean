@@ -112,9 +112,12 @@ namespace QuantConnect.Algorithm.CSharp
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                     SetHoldings(targets.ToList());
                 }
+
+                SendEmailNotification($"{string.Join(",",toOwn)}");
             }
             catch(Exception e)
             {
+                SendEmailNotification($"\"{e.Message}\"");
                 // try again in an hour
             }
         }
@@ -160,6 +163,19 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        private void SendEmailNotification(string msg)
+        {
+            if (!LiveMode)
+                return;
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
+            startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            startInfo.FileName = "mono";
+            startInfo.Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com";
+            process.StartInfo = startInfo;
+            process.Start();
+        }
+
         private decimal Sma(string symbol, int periods)
         {
             return histories[symbol].Take(periods).Select(x => x.Price).Average();
@@ -187,17 +203,17 @@ namespace QuantConnect.Algorithm.CSharp
                 && (MacdSellSignal(symbol) || StoSellSignal(symbol));
         }
 
-        public override void OnOrderEvent(OrderEvent orderEvent)
-        {
-            if (orderEvent.Status == OrderStatus.Filled
-                && orderEvent.Direction == OrderDirection.Buy)
-            {
-                var address = "chrisshort168@gmail.com";
-                var subject = "Trading app notification";
-                var body = $"The app is now long {orderEvent.Symbol}";
-                Notify.Email(address, subject, body);
-            }
-        }
+        //public override void OnOrderEvent(OrderEvent orderEvent)
+        //{
+        //    if (orderEvent.Status == OrderStatus.Filled
+        //        && orderEvent.Direction == OrderDirection.Buy)
+        //    {
+        //        var address = "chrisshort168@gmail.com";
+        //        var subject = "Trading app notification";
+        //        var body = $"The app is now long {orderEvent.Symbol}";
+        //        Notify.Email(address, subject, body);
+        //    }
+        //}
 
         private void PlotPoints()
         {

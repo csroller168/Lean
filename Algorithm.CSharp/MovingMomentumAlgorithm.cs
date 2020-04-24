@@ -62,6 +62,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
+            SendEmailNotification();
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Daily;
             SetBenchmark("SPY");
@@ -160,6 +161,17 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        private void SendEmailNotification()
+        {
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
+            startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            startInfo.FileName = "mono";
+            startInfo.Arguments = "/Users/warren/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe a,b,c chrisshort168@gmail.com";
+            process.StartInfo = startInfo;
+            process.Start();
+        }
+
         private decimal Sma(string symbol, int periods)
         {
             return histories[symbol].Take(periods).Select(x => x.Price).Average();
@@ -187,17 +199,17 @@ namespace QuantConnect.Algorithm.CSharp
                 && (MacdSellSignal(symbol) || StoSellSignal(symbol));
         }
 
-        public override void OnOrderEvent(OrderEvent orderEvent)
-        {
-            if (orderEvent.Status == OrderStatus.Filled
-                && orderEvent.Direction == OrderDirection.Buy)
-            {
-                var address = "chrisshort168@gmail.com";
-                var subject = "Trading app notification";
-                var body = $"The app is now long {orderEvent.Symbol}";
-                Notify.Email(address, subject, body);
-            }
-        }
+        //public override void OnOrderEvent(OrderEvent orderEvent)
+        //{
+        //    if (orderEvent.Status == OrderStatus.Filled
+        //        && orderEvent.Direction == OrderDirection.Buy)
+        //    {
+        //        var address = "chrisshort168@gmail.com";
+        //        var subject = "Trading app notification";
+        //        var body = $"The app is now long {orderEvent.Symbol}";
+        //        Notify.Email(address, subject, body);
+        //    }
+        //}
 
         private void PlotPoints()
         {

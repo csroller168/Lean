@@ -2,7 +2,6 @@
  * Copyright Chris Short 2019
 */
 
-using QuantConnect.Orders;
 using QuantConnect.Data;
 using QuantConnect.Orders.Slippage;
 using QuantConnect.Algorithm.Framework.Portfolio;
@@ -21,9 +20,6 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         //      sell on negative macd histogram slope
-        // bugs
-        //      don't mark as traded if exception hit
-        //      use deployed custom emailer
         // deployment
         //      trade with live $
         //      if I eventually make this into a business, integrate directly with alpaca
@@ -59,11 +55,13 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
         private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
+        private static object myLock = new object();
 
         public override void Initialize()
         {
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Daily;
+            UniverseSettings.FillForward = true;
             SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
@@ -83,8 +81,13 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            if (TradedToday())
-                return;
+            // TODO: lock around this to prevent multiple entries
+            lock(myLock)
+            {
+                if (TradedToday())
+                    return;
+            }
+
             try
             {
                 UpdateIndicatorData(slice);
@@ -113,12 +116,13 @@ namespace QuantConnect.Algorithm.CSharp
                     SetHoldings(targets.ToList());
                 }
 
-                SendEmailNotification($"{string.Join(",",toOwn)}");
+                var longs = toOwn.Any() ? string.Join(",", toOwn) : "nothing";
+                SendEmailNotification($"{longs}");
             }
             catch(Exception e)
             {
+                lastRun = null;
                 SendEmailNotification($"\"{e.Message}\"");
-                // try again in an hour
             }
         }
 
@@ -147,6 +151,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 if (!localHistories[0].ContainsKey(symbol) || !currentSlice.ContainsKey(symbol))
                     continue;
+
                 histories[symbol] = localHistories
                     .Select(x => x[symbol] as BaseData)
                     .Union(new[] { currentSlice[symbol] as BaseData })

@@ -62,7 +62,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            SendEmailNotification();
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Daily;
             SetBenchmark("SPY");
@@ -113,9 +112,12 @@ namespace QuantConnect.Algorithm.CSharp
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                     SetHoldings(targets.ToList());
                 }
+
+                SendEmailNotification($"{string.Join(",",toOwn)}");
             }
             catch(Exception e)
             {
+                SendEmailNotification($"\"{e.Message}\"");
                 // try again in an hour
             }
         }
@@ -161,13 +163,15 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private void SendEmailNotification()
+        private void SendEmailNotification(string msg)
         {
+            if (!LiveMode)
+                return;
             System.Diagnostics.Process process = new System.Diagnostics.Process();
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
             startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
             startInfo.FileName = "mono";
-            startInfo.Arguments = "/Users/warren/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe a,b,c chrisshort168@gmail.com";
+            startInfo.Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com";
             process.StartInfo = startInfo;
             process.Start();
         }

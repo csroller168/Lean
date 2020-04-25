@@ -208,18 +208,6 @@ namespace QuantConnect.Algorithm.CSharp
                 && (MacdSellSignal(symbol) || StoSellSignal(symbol));
         }
 
-        //public override void OnOrderEvent(OrderEvent orderEvent)
-        //{
-        //    if (orderEvent.Status == OrderStatus.Filled
-        //        && orderEvent.Direction == OrderDirection.Buy)
-        //    {
-        //        var address = "chrisshort168@gmail.com";
-        //        var subject = "Trading app notification";
-        //        var body = $"The app is now long {orderEvent.Symbol}";
-        //        Notify.Email(address, subject, body);
-        //    }
-        //}
-
         private void PlotPoints()
         {
             Plot("leverage", "cash", Portfolio.Cash);

@@ -51,11 +51,12 @@ namespace QuantConnect.Algorithm.CSharp
             "VDC"
         };
         private DateTime? lastRun = null;
+        private int numAttemptsToTrade = 0;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
         private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
         private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
-        private static object myLock = new object();
+        private static object mutexLock = new object();
 
         public override void Initialize()
         {
@@ -81,11 +82,9 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            // TODO: lock around this to prevent multiple entries
-            lock(myLock)
+            if (!IsAllowedToTrade(slice))
             {
-                if (TradedToday())
-                    return;
+                return;
             }
 
             try
@@ -135,13 +134,31 @@ namespace QuantConnect.Algorithm.CSharp
             EmitInsights(insights);
         }
 
-        private bool TradedToday()
+        private bool IsAllowedToTrade(Slice slice)
         {
-            if (lastRun?.Day == Time.Day)
+            if(!LiveMode)
+            {
+                if (lastRun?.Day == Time.Day)
+                    return false;
+                lastRun = Time;
                 return true;
+            }
 
-            lastRun = Time;
-            return false;
+            lock(mutexLock)
+            {
+                if (lastRun?.Day == Time.Day)
+                    return false;
+
+                if(slice.Count < universe.Count
+                    && numAttemptsToTrade < universe.Count)
+                {
+                    numAttemptsToTrade++;
+                    return false;
+                }
+
+                lastRun = Time;
+                return true;
+            }
         }
 
         private void UpdateIndicatorData(Slice currentSlice)

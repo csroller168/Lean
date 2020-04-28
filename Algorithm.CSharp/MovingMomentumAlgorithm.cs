@@ -2,13 +2,15 @@
  * Copyright Chris Short 2019
 */
 
-using QuantConnect.Orders;
 using QuantConnect.Data;
 using QuantConnect.Orders.Slippage;
 using QuantConnect.Algorithm.Framework.Portfolio;
+using QuantConnect.Data.Market;
 using System.Collections.Generic;
-using QuantConnect.Indicators;
 using System.Linq;
+using System;
+using QuantConnect.Algorithm.Framework.Alphas;
+using QuantConnect.Brokerages;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -16,23 +18,23 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // TODOS:
         // optimize
-            // https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
-        // bugs
-            // get email notification working:  (ERROR:: Messaging.SendNotification(): Send not implemented for notification of type: NotificationEmail)
+        //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
+        //      sell on negative macd histogram slope
         // deployment
-            // trade with live $
+        //      trade with live $
+        //      if I eventually make this into a business, integrate directly with alpaca
 
-        private static readonly int slowMacdDays = 26;
-        private static readonly int fastMacdDays = 12;
-        private static readonly int signalMacdDays = 9;
-        private static readonly int slowSmaDays = 150;
-        private static readonly int fastSmaDays = 20;
-        private static readonly int stoPeriod = 20;
+        private static readonly int fastMacdDays = 5;
+        private static readonly int slowMacdDays = 35;
+        private static readonly int signalMacdDays = 5;
+        private static readonly int slowSmaDays = 400;
+        private static readonly int fastSmaDays = 100;
+        private static readonly int stoLookbackPeriod = 20;
         private static readonly List<string> universe = new List<string>
-        {   
+        {
             "IEF", // treasuries
             "TLT",
-            "SHY", 
+            "SHY",
             "XLB", // etfs
             "XLE",
             "XLF",
@@ -41,88 +43,186 @@ namespace QuantConnect.Algorithm.CSharp
             "XLP",
             "XLU",
             "XLV",
-            "XLY"
+            "XLY",
+            "GLD", // other
+            "ICF",
+            "IHF",
+            "PBJ",
+            "VDC"
         };
+        private DateTime? lastRun = null;
+        private int numAttemptsToTrade = 0;
         private readonly ISlippageModel SlippageModel = new ConstantSlippageModel(0.002m);
-        private Dictionary<string, MovingAverageConvergenceDivergence> Macds = new Dictionary<string, MovingAverageConvergenceDivergence>();
-        private Dictionary<string, SimpleMovingAverage> SlowSmas = new Dictionary<string, SimpleMovingAverage>();
-        private Dictionary<string, SimpleMovingAverage> FastSmas = new Dictionary<string, SimpleMovingAverage>();
-        private Dictionary<string, Stochastic> Stos = new Dictionary<string, Stochastic>();
+        private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
+        private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
+        private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
+        private static object mutexLock = new object();
 
         public override void Initialize()
         {
             // Set requested data resolution (NOTE: only needed for IB)
-            UniverseSettings.Resolution = Resolution.Minute;
+            UniverseSettings.Resolution = Resolution.Daily;
+            UniverseSettings.FillForward = true;
             SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
-            SetEndDate(2020, 1, 8);
+            //SetStartDate(2019, 12, 2);
+            SetEndDate(2020, 3, 27);
             SetCash(100000);
-            EnableAutomaticIndicatorWarmUp = true;
+            //SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+            SetBrokerageModel(BrokerageName.AlphaStreams);
 
-            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             universe.ForEach(x =>
             {
                 var equity = AddEquity(x, resolution, null, true);
                 equity.SetSlippageModel(SlippageModel);
-                Macds[x] = MACD(x, fastMacdDays, slowMacdDays, signalMacdDays, MovingAverageType.Exponential, Resolution.Daily);
-                SlowSmas[x] = SMA(x, slowSmaDays, Resolution.Daily);
-                FastSmas[x] = SMA(x, fastSmaDays, Resolution.Daily);
-                Stos[x] = STO(x, stoPeriod);
             });
-
-            SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
         }
 
         public override void OnData(Slice slice)
         {
-            PlotPoints();
-            var toSell = universe
-                .Where(x => Portfolio[x].Invested && SellSignal(x));
-            var toBuy = universe
-                .Where(x => !Portfolio[x].Invested && BuySignal(x));
-            var toOwn = toBuy
-                .Union(universe.Where(x => Portfolio[x].Invested))
-                .Except(toSell);
-            
-            if(toBuy.Any() || toSell.Any())
+            if (!IsAllowedToTrade(slice))
             {
-                foreach (var symbol in toSell)
-                {
-                    Liquidate(symbol);
-                }
-                var pct = 0.98m / toOwn.Count();
-                var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
-                SetHoldings(targets.ToList());
+                return;
             }
+
+            try
+            {
+                UpdateIndicatorData(slice);
+                PlotPoints();
+                var toSell = universe
+                    .Where(x => Portfolio[x].Invested && SellSignal(x));
+                var toBuy = universe
+                    .Where(x => !Portfolio[x].Invested && BuySignal(x))
+                    .ToList();
+                var toOwn = toBuy
+                    .Union(universe.Where(x => Portfolio[x].Invested))
+                    .Except(toSell)
+                    .ToList();
+
+                if (toBuy.Any() || toSell.Any())
+                {
+                    EmitAllInsights(toBuy, toSell);
+                    foreach (var symbol in toSell)
+                    {
+                        Liquidate(symbol);
+                    }
+                    var cashPct = (Portfolio.Max(x => x.Value.Price)
+                        + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
+                    var pct = (1.0m-cashPct) / toOwn.Count();
+                    var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
+                    SetHoldings(targets.ToList());
+                }
+
+                var longs = toOwn.Any() ? string.Join(",", toOwn) : "nothing";
+                SendEmailNotification($"{longs}");
+            }
+            catch(Exception e)
+            {
+                lastRun = null;
+                SendEmailNotification($"\"{e.Message}\"");
+            }
+        }
+
+        private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)
+        {
+            var insights = toBuy
+                .Select(x => Insight.Price(x, Resolution.Daily, 10, InsightDirection.Up))
+                .Union(toSell.Select(x => Insight.Price(x, Resolution.Daily, 10, InsightDirection.Down)))
+                .ToArray();
+            EmitInsights(insights);
+        }
+
+        private bool IsAllowedToTrade(Slice slice)
+        {
+            if(!LiveMode)
+            {
+                if (lastRun?.Day == Time.Day)
+                    return false;
+                lastRun = Time;
+                return true;
+            }
+
+            lock(mutexLock)
+            {
+                if (lastRun?.Day == Time.Day)
+                    return false;
+
+                if(slice.Count < universe.Count
+                    && numAttemptsToTrade < universe.Count)
+                {
+                    numAttemptsToTrade++;
+                    return false;
+                }
+
+                lastRun = Time;
+                return true;
+            }
+        }
+
+        private void UpdateIndicatorData(Slice currentSlice)
+        {
+            var localHistories = History(slowSmaDays, Resolution.Daily).ToList();
+            foreach (var symbol in universe)
+            {
+                if (!localHistories[0].ContainsKey(symbol) || !currentSlice.ContainsKey(symbol))
+                    continue;
+
+                histories[symbol] = localHistories
+                    .Select(x => x[symbol] as BaseData)
+                    .Union(new[] { currentSlice[symbol] as BaseData })
+                    .OrderByDescending(x => x.Time)
+                    .ToList();
+                macds[symbol] = MacdHistogram(symbol);
+
+                var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod, Resolution.Daily)
+                    .Union(new [] { currentSlice[symbol] as TradeBar })
+                    .OrderByDescending(x => x.Time);
+                var low = stoHistories.Min(x => x.Low);
+                var high = stoHistories.Max(x => x.High);
+                stos[symbol] = (stoHistories.First().Price - low) / (high - low) * 100;
+            }
+        }
+
+        private void SendEmailNotification(string msg)
+        {
+            if (!LiveMode)
+                return;
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
+            startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            startInfo.FileName = "mono";
+            startInfo.Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com";
+            process.StartInfo = startInfo;
+            process.Start();
+        }
+
+        private decimal Sma(string symbol, int periods)
+        {
+            return histories[symbol].Take(periods).Select(x => x.Price).Average();
+        }
+
+        private decimal MacdHistogram(string symbol)
+        {
+            return new MacdData(histories[symbol].Take(slowMacdDays).Select(x => x.Price)).Histogram;
         }
 
         private bool BuySignal(string symbol)
         {
             return
-                MacdBuySignal(symbol)
-                && StoBuySignal(symbol)
-                && SmaBuySignal(symbol);
+                macds.ContainsKey(symbol)
+                && MacdBuySignal(symbol)
+                && SmaBuySignal(symbol)
+                && StoBuySignal(symbol);
         }
 
         private bool SellSignal(string symbol)
         {
             return
-                MacdSellSignal(symbol)
-                && StoSellSignal(symbol)
-                && SmaSellSignal(symbol);
-        }
-
-        public override void OnOrderEvent(OrderEvent orderEvent)
-        {
-            if (orderEvent.Status == OrderStatus.Filled
-                && orderEvent.Direction == OrderDirection.Buy)
-            {
-                var address = "chrisshort168@gmail.com";
-                var subject = "Trading app notification";
-                var body = $"The app is now long {orderEvent.Symbol}";
-                Notify.Email(address, subject, body);
-            }
+                macds.ContainsKey(symbol)
+                && SmaSellSignal(symbol)
+                && (MacdSellSignal(symbol) || StoSellSignal(symbol));
         }
 
         private void PlotPoints()
@@ -133,32 +233,67 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool MacdBuySignal(string symbol)
         {
-            return Macds[symbol].Histogram > 0;
+            return macds[symbol] > 0;
         }
 
         private bool SmaBuySignal(string symbol)
         {
-            return FastSmas[symbol] > SlowSmas[symbol];
+            return Sma(symbol, fastSmaDays) > Sma(symbol, slowSmaDays);
         }
 
-        private bool StoBuySignal(string signal)
+        private bool StoBuySignal(string symbol)
         {
-            return Stos[signal] < 20;
+            return stos[symbol] < 20;
         }
 
         private bool MacdSellSignal(string symbol)
         {
-            return Macds[symbol].Histogram < 0;
+            return macds[symbol] < 0;
         }
 
         private bool SmaSellSignal(string symbol)
         {
-            return FastSmas[symbol] < SlowSmas[symbol];
+            return Sma(symbol, fastSmaDays) < Sma(symbol, slowSmaDays);
         }
 
-        private bool StoSellSignal(string signal)
+        private bool StoSellSignal(string symbol)
         {
-            return Stos[signal] > 80;
+            return stos[symbol] > 80;
+        }
+
+        private class MacdData
+        {
+            public decimal Histogram;
+            private decimal SmoothFactor(int periods) => 2.0m / (1 + periods);
+
+            // data is ordered most to least recent
+            public MacdData(IEnumerable<decimal> data)
+            {
+                var fastEma = Ema(data.Skip(data.Count() - fastMacdDays),
+                    SmoothFactor(fastMacdDays));
+                var slowEma = Ema(data.Skip(data.Count() - slowMacdDays),
+                    SmoothFactor(slowMacdDays));
+                var macdLine = Enumerable
+                    .Range(0, signalMacdDays)
+                    .Select(i => fastEma.ElementAt(i) - slowEma.ElementAt(i));
+                var signalLine = Ema(macdLine, SmoothFactor(signalMacdDays));
+                Histogram = macdLine.First() - signalLine.First();
+            }
+
+            private List<decimal> Ema(IEnumerable<decimal> data, decimal smoothFactor)
+            {
+                var currentPrice = data.First();
+                if (data.Count() == 1)
+                {
+                    return new List<decimal> { currentPrice };
+                }
+
+                var emas = Ema(data.Skip(1), smoothFactor);
+                var currentEma = currentPrice * smoothFactor
+                        + (1 - smoothFactor) * emas.First();
+                emas.Insert(0, currentEma);
+                return emas;
+            }
         }
     }
 }

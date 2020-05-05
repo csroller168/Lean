@@ -189,10 +189,11 @@ namespace QuantConnect.Algorithm.CSharp
             var localHistories = History(slowSmaDays, Resolution.Daily).ToList();
             foreach (var symbol in universe)
             {
-                if (!localHistories[0].ContainsKey(symbol) || !currentSlice.ContainsKey(symbol))
+                if (!currentSlice.ContainsKey(symbol))
                     continue;
 
                 histories[symbol] = localHistories
+                    .Where(x => x.ContainsKey(symbol))
                     .Select(x => x[symbol] as BaseData)
                     .Union(new[] { currentSlice[symbol] as BaseData })
                     .OrderByDescending(x => x.Time)

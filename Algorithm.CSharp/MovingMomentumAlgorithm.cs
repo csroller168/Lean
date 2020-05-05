@@ -3,6 +3,7 @@
 */
 
 using QuantConnect.Data;
+using QuantConnect.Data.Custom.CBOE;
 using QuantConnect.Orders.Slippage;
 using QuantConnect.Algorithm.Framework.Portfolio;
 using QuantConnect.Data.Market;
@@ -57,6 +58,8 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
         private static object mutexLock = new object();
+        private Symbol _cboeVix;
+        private bool tooVolatile = false;
 
         public override void Initialize()
         {
@@ -66,10 +69,9 @@ namespace QuantConnect.Algorithm.CSharp
             SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
-            //SetStartDate(2019, 12, 2);
             SetEndDate(2020, 3, 27);
             SetCash(100000);
-            //SetSecurityInitializer(x => x.SetDataNormalizationMode(DataNormalizationMode.Raw));
+
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
@@ -78,10 +80,12 @@ namespace QuantConnect.Algorithm.CSharp
                 var equity = AddEquity(x, resolution, null, true);
                 equity.SetSlippageModel(SlippageModel);
             });
+            _cboeVix = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
         }
 
         public override void OnData(Slice slice)
         {
+            HandleVixData(slice);
             if (!IsAllowedToTrade(slice))
             {
                 return;
@@ -101,7 +105,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .Except(toSell)
                     .ToList();
 
-                if (toBuy.Any() || toSell.Any())
+                if (toBuy.Any() || toSell.Any() || NeedToReactToVix())
                 {
                     EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
@@ -110,7 +114,8 @@ namespace QuantConnect.Algorithm.CSharp
                     }
                     var cashPct = (Portfolio.Max(x => x.Value.Price)
                         + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
-                    var pct = (1.0m-cashPct) / toOwn.Count();
+                    if (tooVolatile) cashPct = 0.7m;
+                    var pct = (1.0m - cashPct) / toOwn.Count();
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                     SetHoldings(targets.ToList());
                 }
@@ -118,11 +123,29 @@ namespace QuantConnect.Algorithm.CSharp
                 var longs = toOwn.Any() ? string.Join(",", toOwn) : "nothing";
                 SendEmailNotification($"{longs}");
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 lastRun = null;
                 SendEmailNotification($"\"{e.Message}\"");
             }
+        }
+
+        private void HandleVixData(Slice slice)
+        {
+            if (slice.ContainsKey(_cboeVix))
+            {
+                var vix = slice.Get<CBOE>(_cboeVix);
+                Plot("VIX", "price", vix.Price);
+                Log($"VIX: {vix}");
+
+                tooVolatile = vix.Price > 40m;
+            }
+        }
+
+        private bool NeedToReactToVix()
+        {
+            return (tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
+                || (!tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)

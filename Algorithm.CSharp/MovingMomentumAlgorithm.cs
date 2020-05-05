@@ -68,8 +68,10 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBenchmark("SPY");
 
-            SetStartDate(2003, 8, 1);
-            SetEndDate(2020, 3, 27);
+            //SetStartDate(2003, 8, 1);
+            //SetEndDate(2020, 3, 27);
+            SetStartDate(2007, 3, 12);
+            SetEndDate(2012, 10, 8);
             SetCash(100000);
 
             SetBrokerageModel(BrokerageName.AlphaStreams);

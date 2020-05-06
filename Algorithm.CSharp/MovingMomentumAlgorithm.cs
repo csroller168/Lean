@@ -116,7 +116,7 @@ namespace QuantConnect.Algorithm.CSharp
                     }
                     var cashPct = (Portfolio.Max(x => x.Value.Price)
                         + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
-                    if (tooVolatile) cashPct = 0.7m;
+                    if (tooVolatile) cashPct = 0.45m;
                     var pct = (1.0m - cashPct) / toOwn.Count();
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                     SetHoldings(targets.ToList());

@@ -57,6 +57,7 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
         private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
+        private Dictionary<string, decimal> stoMomentums = new Dictionary<string, decimal>();
         private static object mutexLock = new object();
         private Symbol _cboeVix;
         private bool tooVolatile = false;
@@ -68,10 +69,10 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBenchmark("SPY");
 
-            //SetStartDate(2003, 8, 1);
-            //SetEndDate(2020, 3, 27);
-            SetStartDate(2007, 3, 12);
-            SetEndDate(2012, 10, 8);
+            SetStartDate(2003, 8, 1);
+            SetEndDate(2020, 3, 27);
+            //SetStartDate(2007, 3, 12);
+            //SetEndDate(2012, 10, 8);
             SetCash(100000);
 
             SetBrokerageModel(BrokerageName.AlphaStreams);
@@ -114,11 +115,8 @@ namespace QuantConnect.Algorithm.CSharp
                     {
                         Liquidate(symbol);
                     }
-                    var cashPct = (Portfolio.Max(x => x.Value.Price)
-                        + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
-                    if (tooVolatile) cashPct = 0.45m;
-                    var pct = (1.0m - cashPct) / toOwn.Count();
-                    var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
+                    
+                    var targets = toOwn.Select(x => new PortfolioTarget(x, TargetPctToOwn(x, toOwn)));
                     SetHoldings(targets.ToList());
                 }
 
@@ -142,6 +140,26 @@ namespace QuantConnect.Algorithm.CSharp
 
                 tooVolatile = vix.Price > 40m;
             }
+        }
+
+        private decimal RankScore(List<string> toOwn, string target)
+        {
+            const double scaleFactor = 0.8;
+            var result = toOwn.Count * Math.Pow(scaleFactor, toOwn.IndexOf(target));
+            return (decimal)result;
+        }
+
+        private decimal TargetPctToOwn(string symbol, List<string> toOwn)
+        {
+            var cashPct = (Portfolio.Max(x => x.Value.Price)
+                        + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
+            if (tooVolatile) cashPct = 0.45m;
+
+            var orderedSymbolsToOwn = toOwn.OrderByDescending(x => stoMomentums[x]).ToList();
+            var stoPct = RankScore(orderedSymbolsToOwn, symbol) / toOwn.Sum(x => RankScore(orderedSymbolsToOwn, x));
+            var pct = (1.0m - cashPct) * stoPct;
+
+            return pct;
         }
 
         private bool NeedToReactToVix()
@@ -186,6 +204,13 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        private decimal StoValue(IEnumerable<TradeBar> stoHistories)
+        {
+            var low = stoHistories.Min(x => x.Low);
+            var high = stoHistories.Max(x => x.High);
+            return (stoHistories.First().Price - low) / (high - low) * 100;
+        }
+
         private void UpdateIndicatorData(Slice currentSlice)
         {
             var localHistories = History(slowSmaDays, Resolution.Daily).ToList();
@@ -202,12 +227,17 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToList();
                 macds[symbol] = MacdHistogram(symbol);
 
-                var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod, Resolution.Daily)
+                // TODO: populate fastStos with 3 day moving average of stos
+                var momentumDays = 6;
+                var longStoHistories = History<TradeBar>(symbol, stoLookbackPeriod + momentumDays, Resolution.Daily)
                     .Union(new [] { currentSlice[symbol] as TradeBar })
                     .OrderByDescending(x => x.Time);
+                var stoHistories = longStoHistories.Take(stoLookbackPeriod);
                 var low = stoHistories.Min(x => x.Low);
                 var high = stoHistories.Max(x => x.High);
-                stos[symbol] = (stoHistories.First().Price - low) / (high - low) * 100;
+                stos[symbol] = StoValue(stoHistories);
+
+                stoMomentums[symbol] = stos[symbol] / StoValue(longStoHistories.Skip(momentumDays));
             }
         }
 

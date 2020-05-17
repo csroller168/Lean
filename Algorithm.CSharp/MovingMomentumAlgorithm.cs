@@ -59,7 +59,7 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
         private static object mutexLock = new object();
         private Symbol _cboeVix;
-        private bool tooVolatile = false;
+        private CBOE _vix = null;
 
         public override void Initialize()
         {
@@ -134,7 +134,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             var cashPct = (Portfolio.Max(x => x.Value.Price)
                         + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
-            if (tooVolatile) cashPct = 0.45m;
+            if (_vix?.Price > 40) cashPct = 0.45m;
             return cashPct;
         }
 
@@ -142,11 +142,9 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (slice.ContainsKey(_cboeVix))
             {
-                var vix = slice.Get<CBOE>(_cboeVix);
-                Plot("VIX", "price", vix.Price);
-                Log($"VIX: {vix}");
-
-                tooVolatile = vix.Price > 40m;
+                _vix = slice.Get<CBOE>(_cboeVix);
+                Plot("VIX", "price", _vix.Price);
+                Log($"VIX: {_vix}");
             }
         }
 

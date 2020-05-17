@@ -107,16 +107,14 @@ namespace QuantConnect.Algorithm.CSharp
                     .Except(toSell)
                     .ToList();
 
-                if (toBuy.Any() || toSell.Any() || NeedToReactToVix())
+                if (toBuy.Any() || toSell.Any() || NeedToReactToVix(slice))
                 {
                     EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
                     {
                         Liquidate(symbol);
                     }
-                    var cashPct = (Portfolio.Max(x => x.Value.Price)
-                        + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
-                    if (tooVolatile) cashPct = 0.45m;
+                    var cashPct = GetCashPercent(slice);
                     var pct = (1.0m - cashPct) / toOwn.Count();
                     var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
                     SetHoldings(targets.ToList());
@@ -132,6 +130,14 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        private decimal GetCashPercent(Slice slice)
+        {
+            var cashPct = (Portfolio.Max(x => x.Value.Price)
+                        + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
+            if (tooVolatile) cashPct = 0.45m;
+            return cashPct;
+        }
+
         private void HandleVixData(Slice slice)
         {
             if (slice.ContainsKey(_cboeVix))
@@ -144,10 +150,12 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private bool NeedToReactToVix()
+        private bool NeedToReactToVix(Slice currentSlice)
         {
-            return (tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
-                || (!tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
+            var desiredCashPct = GetCashPercent(currentSlice);
+            var currentCashPct = Portfolio.Cash / Portfolio.TotalPortfolioValue;
+            var diff = Math.Abs(desiredCashPct - currentCashPct);
+            return diff > .15m;
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)
@@ -205,10 +213,15 @@ namespace QuantConnect.Algorithm.CSharp
                 var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod, Resolution.Daily)
                     .Union(new [] { currentSlice[symbol] as TradeBar })
                     .OrderByDescending(x => x.Time);
-                var low = stoHistories.Min(x => x.Low);
-                var high = stoHistories.Max(x => x.High);
-                stos[symbol] = (stoHistories.First().Price - low) / (high - low) * 100;
+                stos[symbol] = Sto(stoHistories);
             }
+        }
+
+        private decimal Sto(IEnumerable<TradeBar> bars)
+        {
+            var low = bars.Min(x => x.Low);
+            var high = bars.Max(x => x.High);
+            return (bars.First().Price - low) / (high - low) * 100;
         }
 
         private void SendEmailNotification(string msg)

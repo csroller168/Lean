@@ -57,6 +57,7 @@ namespace QuantConnect.Algorithm.CSharp
         private Dictionary<string, List<BaseData>> histories = new Dictionary<string, List<BaseData>>();
         private Dictionary<string, decimal> macds = new Dictionary<string, decimal>();
         private Dictionary<string, decimal> stos = new Dictionary<string, decimal>();
+        //private Dictionary<string, decimal> stdDevs = new Dictionary<string, decimal>();
         private static object mutexLock = new object();
         private Symbol _cboeVix;
         private CBOE _vix = null;
@@ -69,14 +70,15 @@ namespace QuantConnect.Algorithm.CSharp
             SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
-            SetEndDate(2020, 3, 27);
+            SetEndDate(2003, 10, 27);
+            //SetEndDate(2020, 3, 27);
             //SetStartDate(2007, 3, 12);
             //SetEndDate(2012, 10, 8);
             SetCash(100000);
 
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
-            var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
+            var resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             universe.ForEach(x =>
             {
                 var equity = AddEquity(x, resolution, null, true);
@@ -107,16 +109,14 @@ namespace QuantConnect.Algorithm.CSharp
                     .Except(toSell)
                     .ToList();
 
-                if (toBuy.Any() || toSell.Any() || NeedToReactToVix(slice))
+                if (NeedToRebalance(toBuy, toSell, toOwn, slice))
                 {
                     EmitAllInsights(toBuy, toSell);
                     foreach (var symbol in toSell)
                     {
                         Liquidate(symbol);
                     }
-                    var cashPct = GetCashPercent(slice);
-                    var pct = (1.0m - cashPct) / toOwn.Count();
-                    var targets = toOwn.Select(x => new PortfolioTarget(x, pct));
+                    var targets = GetPortfolioTargets(toOwn, slice);
                     SetHoldings(targets.ToList());
                 }
 
@@ -128,6 +128,59 @@ namespace QuantConnect.Algorithm.CSharp
                 lastRun = null;
                 SendEmailNotification($"\"{e.Message}\"");
             }
+        }
+
+        private IEnumerable<PortfolioTarget> GetPortfolioTargets(List<string> toOwn, Slice slice)
+        {
+            var cashPct = GetCashPercent(slice);
+            var targets = toOwn.Select(x => new PortfolioTarget(
+                x, TargetPctToOwn(x, cashPct, toOwn)));
+            return targets;
+        }
+
+        private bool NeedToRebalance(
+            IEnumerable<string> toBuy,
+            IEnumerable<string> toSell,
+            List<string> toOwn,
+            Slice slice)
+        {
+            var needToRebal = toBuy.Any() || toSell.Any() || NeedToReactToVix(slice);
+            return needToRebal;
+
+            //if (needToRebal || toOwn.Count < 3)
+            //    return needToRebal;
+
+            //var currentRanks = Portfolio
+            //    .Securities
+            //    .Where(x => x.Value.HoldStock)
+            //    .Select(x => x.Key)
+            //    .OrderByDescending(x => Portfolio[x].AbsoluteHoldingsValue)
+            //    .ToList();
+            //var targets = GetPortfolioTargets(toOwn, slice)
+            //    .OrderByDescending(x => x.Quantity)
+            //    .Select(x => x.Symbol)
+            //    .ToList();
+            //needToRebal = Enumerable.Range(0, Math.Max(targets.Count() - 1, 0))
+            //    .Any(i => targets[i].Value != currentRanks[i].Value);
+
+            //return needToRebal;
+        }
+
+        private decimal RankScore(List<string> toOwn, string target)
+        {
+            const double scaleFactor = 0.8;
+            var result = toOwn.Count * Math.Pow(scaleFactor, toOwn.IndexOf(target));
+            return (decimal)result;
+        }
+
+        private decimal TargetPctToOwn(string symbol, decimal cashPct, List<string> toOwn)
+        {
+            var pct = (1.0m - cashPct) / toOwn.Count();
+            //var orderedSymbolsToOwn = toOwn.OrderBy(x => stdDevs[x]).ToList();
+            //var stoPct = RankScore(orderedSymbolsToOwn, symbol) / toOwn.Sum(x => RankScore(orderedSymbolsToOwn, x));
+            //var pct = (1.0m - cashPct) * stoPct;
+
+            return pct;
         }
 
         private decimal GetCashPercent(Slice slice)
@@ -210,9 +263,22 @@ namespace QuantConnect.Algorithm.CSharp
 
                 var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod, Resolution.Daily)
                     .Union(new [] { currentSlice[symbol] as TradeBar })
-                    .OrderByDescending(x => x.Time);
+                    .ToList();
                 stos[symbol] = Sto(stoHistories);
+
+                //var hourlyHistories = History<TradeBar>(symbol, stoLookbackPeriod * 7, Resolution.Hour)
+                //    .Union(new[] { currentSlice[symbol] as TradeBar })
+                //    .Select(x => x.Price);
+                //stdDevs[symbol] = StdDev(hourlyHistories);
             }
+        }
+
+        private decimal StdDev(IEnumerable<decimal> prices)
+        {
+            var mean = prices.Average();
+            //var meansums = prices.Select(x => x < mean ? Math.Pow((double)(x - mean), 2) : 0);
+            var meansums = prices.Select(x => Math.Pow((double)(x - mean), 2));
+            return (decimal)Math.Sqrt(meansums.Average());
         }
 
         private decimal Sto(IEnumerable<TradeBar> bars)

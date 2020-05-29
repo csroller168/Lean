@@ -69,7 +69,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
-            SetEndDate(2020, 3, 27);
+            SetEndDate(2020, 5, 28);
             //SetStartDate(2007, 3, 12);
             //SetEndDate(2012, 10, 8);
             SetCash(100000);

@@ -28,8 +28,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int fastMacdDays = 5;
         private static readonly int slowMacdDays = 35;
         private static readonly int signalMacdDays = 5;
-        private static readonly int slowSmaDays = 400;
-        private static readonly int fastSmaDays = 100;
+        private static readonly int slowSmaDays = 300;
+        private static readonly int fastSmaDays = 30;
         private static readonly int stoLookbackPeriod = 20;
         private static readonly List<string> universe = new List<string>
         {
@@ -66,12 +66,12 @@ namespace QuantConnect.Algorithm.CSharp
             // Set requested data resolution (NOTE: only needed for IB)
             UniverseSettings.Resolution = Resolution.Daily;
             UniverseSettings.FillForward = true;
-            SetBenchmark("SPY");
 
             SetStartDate(2003, 8, 1);
             SetEndDate(2020, 5, 28);
-            //SetStartDate(2007, 3, 12);
-            //SetEndDate(2012, 10, 8);
+
+            //SetStartDate(2006, 10, 2);
+            //SetEndDate(2013, 12, 31);
             SetCash(100000);
 
             SetBrokerageModel(BrokerageName.AlphaStreams);
@@ -83,6 +83,9 @@ namespace QuantConnect.Algorithm.CSharp
                 equity.SetSlippageModel(SlippageModel);
             });
             _cboeVix = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
+
+            AddEquity("SPY");
+            SetBenchmark("SPY");
         }
 
         public override void OnData(Slice slice)
@@ -162,14 +165,12 @@ namespace QuantConnect.Algorithm.CSharp
             if (slice.ContainsKey(_cboeVix))
             {
                 _vix = slice.Get<CBOE>(_cboeVix);
-                Plot("VIX", "price", _vix.Price);
-                Log($"VIX: {_vix}");
             }
         }
 
         private bool NeedToReactToVix()
         {
-        	var tooVolatile = _vix?.Price > 40m;
+            var tooVolatile = _vix?.Price > 40m;
             return (tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
                 || (!tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
         }
@@ -185,7 +186,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool IsAllowedToTrade(Slice slice)
         {
-            if(!LiveMode)
+            if (!LiveMode)
             {
                 if (lastRun?.Day == Time.Day)
                     return false;
@@ -193,12 +194,12 @@ namespace QuantConnect.Algorithm.CSharp
                 return true;
             }
 
-            lock(mutexLock)
+            lock (mutexLock)
             {
                 if (lastRun?.Day == Time.Day)
                     return false;
 
-                if(slice.Count < universe.Count
+                if (slice.Count < universe.Count
                     && numAttemptsToTrade < universe.Count)
                 {
                     numAttemptsToTrade++;
@@ -227,7 +228,7 @@ namespace QuantConnect.Algorithm.CSharp
                 macds[symbol] = MacdHistogram(symbol);
 
                 var stoHistories = History<TradeBar>(symbol, stoLookbackPeriod, Resolution.Daily)
-                    .Union(new [] { currentSlice[symbol] as TradeBar });
+                    .Union(new[] { currentSlice[symbol] as TradeBar });
                 stos[symbol] = Sto(stoHistories);
             }
         }
@@ -283,6 +284,31 @@ namespace QuantConnect.Algorithm.CSharp
         {
             Plot("leverage", "cash", Portfolio.Cash);
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);
+
+            Plot("VIX", "price", _vix.Price);
+
+            //var plotTargets = new string[]
+            //{
+            //    "XLB", // etfs
+            // "XLE",
+            //    "XLF",
+            //    "XLI",
+            //    "XLK",
+            // // "XLP",
+            // // "XLU",
+            // // "XLV",
+            // // "XLY"
+            //};
+
+            //foreach (var symbol in plotTargets)
+            //{
+            //    Plot("SMA", $"{symbol}-fast", Sma(symbol, fastSmaDays));
+            //    Plot("SMA", $"{symbol}-slow", Sma(symbol, slowSmaDays));
+            //    //Plot("FastSMA", symbol, Sma(symbol, fastSmaDays));
+            //    //Plot("SlowSMA", symbol, Sma(symbol, slowSmaDays));
+            //    //Plot("MacdHistogram", symbol, macds[symbol]);
+            //    //Plot("Sto", symbol, stos[symbol]);
+            //}
         }
 
         private bool MacdBuySignal(string symbol)

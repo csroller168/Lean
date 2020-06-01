@@ -20,7 +20,6 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOS:
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
-        //      sell on negative macd histogram slope
         // deployment
         //      trade with live $
         //      if I eventually make this into a business, integrate directly with alpaca
@@ -166,7 +165,19 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool NeedToReactToVix()
         {
-            var tooVolatile = _vix?.Price > 40m;
+            // tooVolatile if > 2x in 30 days (5 day sma now vs. 5 day sma 30 days ago
+            var vixHistories = History<CBOE>(_cboeVix, 35, Resolution.Daily).OrderByDescending(x => x.Time);
+            var momentum = vixHistories
+                .Take(5)
+                .Select(x => x.Price)
+                .Average()
+                /
+                vixHistories
+                .Reverse()
+                .Take(5)
+                .Select(x => x.Price)
+                .Average();
+            var tooVolatile = momentum > 2; //_vix?.Price > 40m;
             return (tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
                 || (!tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
         }

@@ -69,11 +69,7 @@ namespace QuantConnect.Algorithm.CSharp
 
             SetStartDate(2003, 8, 1);
             SetEndDate(2020, 5, 28);
-
-            //SetStartDate(2006, 10, 2);
-            //SetEndDate(2013, 12, 31);
             SetCash(100000);
-
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
             var resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
@@ -286,29 +282,6 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);
 
             Plot("VIX", "price", _vix.Price);
-
-            //var plotTargets = new string[]
-            //{
-            //    "XLB", // etfs
-            // "XLE",
-            //    "XLF",
-            //    "XLI",
-            //    "XLK",
-            // // "XLP",
-            // // "XLU",
-            // // "XLV",
-            // // "XLY"
-            //};
-
-            //foreach (var symbol in plotTargets)
-            //{
-            //    Plot("SMA", $"{symbol}-fast", Sma(symbol, fastSmaDays));
-            //    Plot("SMA", $"{symbol}-slow", Sma(symbol, slowSmaDays));
-            //    //Plot("FastSMA", symbol, Sma(symbol, fastSmaDays));
-            //    //Plot("SlowSMA", symbol, Sma(symbol, slowSmaDays));
-            //    //Plot("MacdHistogram", symbol, macds[symbol]);
-            //    //Plot("Sto", symbol, stos[symbol]);
-            //}
         }
 
         private bool MacdBuySignal(string symbol)

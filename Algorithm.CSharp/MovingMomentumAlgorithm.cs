@@ -160,6 +160,7 @@ namespace QuantConnect.Algorithm.CSharp
             if (slice.ContainsKey(_cboeVix))
             {
                 _vix = slice.Get<CBOE>(_cboeVix);
+                Plot("VIX", "price", _vix.Price);
             }
         }
 
@@ -294,9 +295,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             Plot("leverage", "cash", Portfolio.Cash);
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);
-
-            // TODO
-            //Plot("VIX", "price", _vix.Price);
         }
 
         private bool MacdBuySignal(string symbol)

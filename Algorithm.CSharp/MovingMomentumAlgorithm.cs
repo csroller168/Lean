@@ -166,18 +166,21 @@ namespace QuantConnect.Algorithm.CSharp
         private bool NeedToReactToVix()
         {
             // tooVolatile if > 2x in 30 days (5 day sma now vs. 5 day sma 30 days ago
-            var vixHistories = History<CBOE>(_cboeVix, 35, Resolution.Daily).OrderByDescending(x => x.Time);
-            var momentum = vixHistories
-                .Take(5)
-                .Select(x => x.Price)
-                .Average()
-                /
-                vixHistories
-                .Reverse()
-                .Take(5)
-                .Select(x => x.Price)
-                .Average();
-            var tooVolatile = momentum > 2; //_vix?.Price > 40m;
+
+            // TODO
+            //var vixHistories = History<CBOE>(_cboeVix, 35, Resolution.Daily).OrderByDescending(x => x.Time);
+            //var momentum = vixHistories
+            //    .Take(5)
+            //    .Select(x => x.Price)
+            //    .Average()
+            //    /
+            //    vixHistories
+            //    .Reverse()
+            //    .Take(5)
+            //    .Select(x => x.Price)
+            //    .Average();
+            //var tooVolatile = momentum > 2;
+            var tooVolatile = _vix?.Price > 40m;
             return (tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
                 || (!tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
         }
@@ -292,7 +295,8 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("leverage", "cash", Portfolio.Cash);
             Plot("leverage", "holdings", Portfolio.TotalHoldingsValue);
 
-            Plot("VIX", "price", _vix.Price);
+            // TODO
+            //Plot("VIX", "price", _vix.Price);
         }
 
         private bool MacdBuySignal(string symbol)

@@ -20,7 +20,6 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOS:
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
-        //      why doesn't leverage increase sooner than march?
         //      tune vix momentum indicator (or number of sma days - e.g. 3)
         //      consider bump start/end dates again to get full 4000 days of analysis
         // deployment
@@ -195,8 +194,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool NeedToReactToVix()
         {
-            return (_tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
-                || (!_tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
+            return (_tooVolatile && Portfolio.Cash < 0.1m * Portfolio.TotalPortfolioValue)
+                || (!_tooVolatile && Portfolio.Cash > 0.1m * Portfolio.TotalPortfolioValue);
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)

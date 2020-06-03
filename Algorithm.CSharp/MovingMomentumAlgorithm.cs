@@ -68,7 +68,7 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.Resolution = Resolution.Daily;
             UniverseSettings.FillForward = true;
 
-            SetStartDate(2004, 1, 2);
+            SetStartDate(2005, 1, 2);
             SetEndDate(2020, 5, 28);
 
             SetCash(100000);

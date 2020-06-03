@@ -20,7 +20,10 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOS:
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
-        //  bump up start date to when VIX started
+        //      why doesn't leverage increase sooner than march?
+        //      put benchmark back for analysis
+        //      tune vix momentum indicator (or number of sma days - e.g. 3)
+        //      consider bump start/end dates again to get full 4000 days of analysis
         // deployment
         //      trade with live $
         //      if I eventually make this into a business, integrate directly with alpaca

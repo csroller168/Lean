@@ -20,6 +20,7 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOS:
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
+        //  bump up start date to when VIX started
         // deployment
         //      trade with live $
         //      if I eventually make this into a business, integrate directly with alpaca
@@ -59,6 +60,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static object mutexLock = new object();
         private Symbol _cboeVix;
         private CBOE _vix = null;
+        private bool _tooVolatile = false;
 
         public override void Initialize()
         {
@@ -66,8 +68,9 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.Resolution = Resolution.Daily;
             UniverseSettings.FillForward = true;
 
-            SetStartDate(2003, 8, 1);
+            SetStartDate(2004, 1, 2);
             SetEndDate(2020, 5, 28);
+
             SetCash(100000);
             SetBrokerageModel(BrokerageName.AlphaStreams);
 
@@ -151,39 +154,47 @@ namespace QuantConnect.Algorithm.CSharp
         {
             var cashPct = (Portfolio.Max(x => x.Value.Price)
                         + Portfolio.Min(x => x.Value.Price)) / Portfolio.TotalPortfolioValue;
-            if (_vix?.Price > 40) cashPct = 0.45m;
+            if (_tooVolatile)
+                cashPct = 0.45m;
             return cashPct;
         }
 
         private void HandleVixData(Slice slice)
         {
-            if (slice.ContainsKey(_cboeVix))
+            if (!slice.ContainsKey(_cboeVix))
+                return;
+
+            if (_vix != null && (_vix as TradeBar).Time.Day == slice.Time.Day)
+                return;
+
+            _vix = slice.Get<CBOE>(_cboeVix);
+
+            var vixHistories = History<CBOE>(_cboeVix, 35, Resolution.Daily)
+            .Cast<TradeBar>();
+            if(vixHistories.Any())
             {
-                _vix = slice.Get<CBOE>(_cboeVix);
-                Plot("VIX", "price", _vix.Price);
+                var momentum = vixHistories
+                .OrderByDescending(x => x.Time)
+                .Take(5)
+                .Select(x => x.Price)
+                .Average()
+                /
+                vixHistories
+                .OrderBy(x => x.Time)
+                .Take(5)
+                .Select(x => x.Price)
+                .Average();
+                _tooVolatile = momentum > 2;
+                Plot("VIX-momentum", "momentum", momentum);
             }
+            
+            Plot("VIX", "price", _vix.Price);
         }
 
         private bool NeedToReactToVix()
         {
-            // tooVolatile if > 2x in 30 days (5 day sma now vs. 5 day sma 30 days ago
-
-            // TODO
-            //var vixHistories = History<CBOE>(_cboeVix, 35, Resolution.Daily).OrderByDescending(x => x.Time);
-            //var momentum = vixHistories
-            //    .Take(5)
-            //    .Select(x => x.Price)
-            //    .Average()
-            //    /
-            //    vixHistories
-            //    .Reverse()
-            //    .Take(5)
-            //    .Select(x => x.Price)
-            //    .Average();
-            //var tooVolatile = momentum > 2;
-            var tooVolatile = _vix?.Price > 40m;
-            return (tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
-                || (!tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
+            return (_tooVolatile && Portfolio.Cash < 0.5m * Portfolio.TotalPortfolioValue)
+                || (!_tooVolatile && Portfolio.Cash > 0.5m * Portfolio.TotalPortfolioValue);
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)

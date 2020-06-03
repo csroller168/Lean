@@ -21,7 +21,6 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize
         //      https://docs.google.com/spreadsheets/d/1i3Mru0C7E7QxuyxgKxuoO1Pa4keSAmlGCehmA2a7g88/edit#gid=138205234
         //      why doesn't leverage increase sooner than march?
-        //      put benchmark back for analysis
         //      tune vix momentum indicator (or number of sma days - e.g. 3)
         //      consider bump start/end dates again to get full 4000 days of analysis
         // deployment
@@ -71,8 +70,8 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.Resolution = Resolution.Daily;
             UniverseSettings.FillForward = true;
 
-            SetStartDate(2005, 1, 2);
-            SetEndDate(2020, 5, 28);
+            SetStartDate(2005, 2, 1);
+            SetEndDate(2020, 5, 31);
 
             SetCash(100000);
             SetBrokerageModel(BrokerageName.AlphaStreams);

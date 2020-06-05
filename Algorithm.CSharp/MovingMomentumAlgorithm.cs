@@ -62,11 +62,11 @@ namespace QuantConnect.Algorithm.CSharp
             "SPTL",
             "SPIP",
             "SPMB",
-            "IJH", // ishares non-S&P small/mid cap etfs
-            "SMMD",
-            "IJR",
-            "IWM",
-            "ESML"
+            //"IJH", // ishares non-S&P small/mid cap etfs
+            //"SMMD",
+            //"IJR",
+            //"IWM",
+            //"ESML"
 
         };
         private DateTime? lastRun = null;

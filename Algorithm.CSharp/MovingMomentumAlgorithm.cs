@@ -61,7 +61,12 @@ namespace QuantConnect.Algorithm.CSharp
             "SPTI",
             "SPTL",
             "SPIP",
-            "SPMB"  //... MAYBE DON'T KEEP THIS ONE
+            "SPMB",
+            "IJH", // ishares non-S&P small/mid cap etfs
+            "SMMD",
+            "IJR",
+            "IWM",
+            "ESML"
 
         };
         private DateTime? lastRun = null;

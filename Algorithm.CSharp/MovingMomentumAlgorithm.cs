@@ -50,7 +50,19 @@ namespace QuantConnect.Algorithm.CSharp
             "ICF",
             "IHF",
             "PBJ",
-            "VDC"
+            "VDC",
+            "SPAB", // spdr bond etfs
+            "SPHY",
+            "SPSB",
+            "SPIB",
+            "SPLB",
+            "SPBO",
+            "SPTS",
+            "SPTI",
+            "SPTL",
+            "SPIP",
+            "SPMB"  //... MAYBE DON'T KEEP THIS ONE
+
         };
         private DateTime? lastRun = null;
         private int numAttemptsToTrade = 0;

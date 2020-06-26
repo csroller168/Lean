@@ -32,6 +32,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int slowSmaDays = 300;
         private static readonly int fastSmaDays = 30;
         private static readonly int stoLookbackPeriod = 20;
+        private static readonly decimal maxPctPerStock = 0.06m;
         private static readonly List<string> universe = new List<string>
         {
             "IEF", // treasuries
@@ -163,7 +164,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private decimal TargetPctToOwn(string symbol, decimal cashPct, List<string> toOwn)
         {
-            return (1.0m - cashPct) / toOwn.Count();
+            return Math.Min((1.0m - cashPct) / toOwn.Count(), maxPctPerStock);
         }
 
         private decimal GetCashPercent(Slice slice)
@@ -209,8 +210,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool NeedToReactToVix()
         {
-            return (_tooVolatile && Portfolio.Cash < 0.1m * Portfolio.TotalPortfolioValue)
-                || (!_tooVolatile && Portfolio.Cash > 0.1m * Portfolio.TotalPortfolioValue);
+            return (_tooVolatile && Portfolio.Cash < 0.2m * Portfolio.TotalPortfolioValue)
+                || (!_tooVolatile && Portfolio.Cash > 0.2m * Portfolio.TotalPortfolioValue);
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)

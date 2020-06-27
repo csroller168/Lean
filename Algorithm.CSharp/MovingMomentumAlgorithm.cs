@@ -210,8 +210,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool NeedToReactToVix()
         {
-            return (_tooVolatile && Portfolio.Cash < 0.2m * Portfolio.TotalPortfolioValue)
-                || (!_tooVolatile && Portfolio.Cash > 0.2m * Portfolio.TotalPortfolioValue);
+            return (_tooVolatile && Portfolio.Cash < 0.1m * Portfolio.TotalPortfolioValue)
+                || (!_tooVolatile && Portfolio.Cash > 0.1m * Portfolio.TotalPortfolioValue);
         }
 
         private void EmitAllInsights(List<string> toBuy, IEnumerable<string> toSell)

@@ -70,7 +70,8 @@ namespace QuantConnect.Report
             var dataCacheProvider = new ZipDataCacheProvider(new DefaultDataProvider(), false);
             var historyProvider = Composer.Instance.GetExportedValueByTypeName<IHistoryProvider>("SubscriptionDataReaderHistoryProvider");
 
-            historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, null, dataCacheProvider, mapFileProvider, factorFileProvider, (_) => { }, false));
+            var dataPermissionManager = new DataPermissionManager();
+            historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, null, dataCacheProvider, mapFileProvider, factorFileProvider, (_) => { }, false, dataPermissionManager));
             Algorithm = new PortfolioLooperAlgorithm((decimal)startingCash, orders);
             Algorithm.SetHistoryProvider(historyProvider);
 
@@ -89,12 +90,14 @@ namespace QuantConnect.Report
                         symbolPropertiesDataBase,
                         Algorithm,
                         RegisteredSecurityDataTypesProvider.Null,
-                        new SecurityCacheProvider(Algorithm.Portfolio))),
+                        new SecurityCacheProvider(Algorithm.Portfolio)),
+                    dataPermissionManager),
                 Algorithm,
                 Algorithm.TimeKeeper,
                 marketHoursDatabase,
                 false,
-                RegisteredSecurityDataTypesProvider.Null);
+                RegisteredSecurityDataTypesProvider.Null,
+                dataPermissionManager);
 
             _securityService = new SecurityService(Algorithm.Portfolio.CashBook,
                 marketHoursDatabase,
@@ -122,7 +125,7 @@ namespace QuantConnect.Report
             results.Initialize(job, new Messaging.Messaging(), new Api.Api(), transactions);
             results.SetAlgorithm(Algorithm, Algorithm.Portfolio.TotalPortfolioValue);
             transactions.Initialize(Algorithm, new BacktestingBrokerage(Algorithm), results);
-            feed.Initialize(Algorithm, job, results, null, null, null, _dataManager, null);
+            feed.Initialize(Algorithm, job, results, null, null, null, _dataManager, null, null);
 
             // Begin setting up the currency conversion feed if needed
             var coreSecurities = Algorithm.Securities.Values.ToList();
@@ -232,8 +235,9 @@ namespace QuantConnect.Report
         /// </summary>
         /// <param name="equityCurve">Equity curve series</param>
         /// <param name="orders">Orders</param>
+        /// <param name="liveSeries">Equity curve series originates from LiveResult</param>
         /// <returns>Enumerable of <see cref="PointInTimePortfolio"/></returns>
-        public static IEnumerable<PointInTimePortfolio> FromOrders(Series<DateTime, double> equityCurve, IEnumerable<Order> orders)
+        public static IEnumerable<PointInTimePortfolio> FromOrders(Series<DateTime, double> equityCurve, IEnumerable<Order> orders, bool liveSeries = false)
         {
             // Don't do anything if we have no orders or equity curve to process
             if (!orders.Any() || equityCurve.IsEmpty)
@@ -279,6 +283,13 @@ namespace QuantConnect.Report
                 if (deployment.IsEmpty)
                 {
                     Log.Trace($"PortfolioLooper.FromOrders(): Equity series is empty after filtering with upper bound: {startTime}");
+                    continue;
+                }
+
+                // Skip any deployments that haven't been ran long enough to be generated in live mode
+                if (liveSeries && deploymentOrders.First().Time.Date == deploymentOrders.Last().Time.Date)
+                {
+                    Log.Trace("PortfolioLooper.FromOrders(): Filtering deployment because it has not been deployed for more than one day");
                     continue;
                 }
 

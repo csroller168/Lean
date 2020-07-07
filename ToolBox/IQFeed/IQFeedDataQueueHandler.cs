@@ -25,6 +25,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using QuantConnect.Util;
 using HistoryRequest = QuantConnect.Data.HistoryRequest;
 using Timer = System.Timers.Timer;
 
@@ -208,10 +210,7 @@ namespace QuantConnect.ToolBox.IQFeed
         /// <summary>
         /// Indicates the connection is live.
         /// </summary>
-        private bool IsConnected
-        {
-            get { return _isConnected; }
-        }
+        public bool IsConnected => _isConnected;
 
         /// <summary>
         /// Connect to the IQ Feed using supplied username and password information.
@@ -315,12 +314,13 @@ namespace QuantConnect.ToolBox.IQFeed
         /// </summary>
         /// <param name="lookupName">String representing the name to lookup</param>
         /// <param name="securityType">Expected security type of the returned symbols (if any)</param>
+        /// <param name="includeExpired">Include expired contracts</param>
         /// <param name="securityCurrency">Expected security currency(if any)</param>
         /// <param name="securityExchange">Expected security exchange name(if any)</param>
         /// <returns></returns>
-        public IEnumerable<Symbol> LookupSymbols(string lookupName, SecurityType securityType, string securityCurrency = null, string securityExchange = null)
+        public IEnumerable<Symbol> LookupSymbols(string lookupName, SecurityType securityType, bool includeExpired, string securityCurrency = null, string securityExchange = null)
         {
-            return _symbolUniverse.LookupSymbols(lookupName, securityType, securityCurrency, securityExchange);
+            return _symbolUniverse.LookupSymbols(lookupName, securityType, includeExpired, securityCurrency, securityExchange);
         }
 
         /// <summary>
@@ -331,6 +331,14 @@ namespace QuantConnect.ToolBox.IQFeed
         public bool CanAdvanceTime(SecurityType securityType)
         {
             return _symbolUniverse.CanAdvanceTime(securityType);
+        }
+
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
+            _symbolUniverse.DisposeSafely();
         }
     }
 
@@ -584,7 +592,7 @@ namespace QuantConnect.ToolBox.IQFeed
                 (securityType == SecurityType.Equity && market == Market.USA) ||
                 (securityType == SecurityType.Forex && market == Market.FXCM) ||
                 (securityType == SecurityType.Option && market == Market.USA) ||
-                (securityType == SecurityType.Future);
+                (securityType == SecurityType.Future && IQFeedDataQueueUniverseProvider.FuturesExchanges.Values.Contains(market));
         }
 
         /// <summary>

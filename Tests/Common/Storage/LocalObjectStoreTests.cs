@@ -16,11 +16,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using QuantConnect.Configuration;
 using QuantConnect.Lean.Engine.Storage;
 using QuantConnect.Packets;
 using QuantConnect.Storage;
+using QuantConnect.Util;
 
 namespace QuantConnect.Tests.Common.Storage
 {
@@ -32,7 +34,7 @@ namespace QuantConnect.Tests.Common.Storage
 
         private ObjectStore _store;
 
-        [TestFixtureSetUp]
+        [OneTimeSetUp]
         public void Setup()
         {
             Config.Set("object-store-root", TestStorageRoot);
@@ -41,17 +43,159 @@ namespace QuantConnect.Tests.Common.Storage
             _store.Initialize("CSharp-TestAlgorithm", 0, 0, "", new Controls());
         }
 
-        [TestFixtureTearDown]
+        [OneTimeTearDown]
         public void Cleanup()
         {
+            _store.DisposeSafely();
             Config.Set("object-store-root", StorageRootConfigurationValue);
             try
             {
-                Directory.Delete(TestStorageRoot);
+                Directory.Delete(TestStorageRoot, true);
             }
             catch
             {
             }
+        }
+
+        [TestCase(FileAccess.Read, false)]
+        [TestCase(FileAccess.ReadWrite, false)]
+        [TestCase(0, true)]
+        [TestCase(FileAccess.Write, true)]
+        public void GetFilePathPermissions(FileAccess permissions, bool shouldThrow)
+        {
+            var store = new TestLocalObjectStore();
+            store.Initialize($"CSharp-TestAlgorithm-{permissions}", 0, 0, "", new Controls { StoragePermissions = permissions });
+
+            if (shouldThrow)
+            {
+                Assert.Throws<InvalidOperationException>(() => store.GetFilePath("Jose"));
+            }
+            else
+            {
+                Assert.Throws<KeyNotFoundException>(() => store.GetFilePath("Jose"));
+            }
+        }
+
+        [TestCase(FileAccess.Read, false)]
+        [TestCase(FileAccess.ReadWrite, false)]
+        [TestCase(0, true)]
+        [TestCase(FileAccess.Write, true)]
+        public void ReadBytesPermissions(FileAccess permissions, bool shouldThrow)
+        {
+            var store = new TestLocalObjectStore();
+            store.Initialize($"CSharp-TestAlgorithm-{permissions}", 0, 0, "", new Controls { StoragePermissions = permissions });
+
+            if (shouldThrow)
+            {
+                Assert.Throws<InvalidOperationException>(() => store.ReadBytes("Jose"));
+            }
+            else
+            {
+                Assert.Throws<KeyNotFoundException>(() => store.ReadBytes("Jose"));
+            }
+        }
+
+        [TestCase(FileAccess.Read, true)]
+        [TestCase(FileAccess.ReadWrite, false)]
+        [TestCase(0, true)]
+        [TestCase(FileAccess.Write, false)]
+        public void SaveBytesPermissions(FileAccess permissions, bool shouldThrow)
+        {
+            var store = new TestLocalObjectStore();
+            store.Initialize($"CSharp-TestAlgorithm-{permissions}", 0, 0, "", new Controls { StoragePermissions = permissions });
+
+            if (shouldThrow)
+            {
+                Assert.Throws<InvalidOperationException>(() => store.SaveBytes("Jose", new byte[] { 0 }));
+            }
+            else
+            {
+                Assert.IsTrue(store.SaveBytes("Jose", new byte[] { 0 }));
+            }
+        }
+
+        [TestCase(FileAccess.Read, true)]
+        [TestCase(FileAccess.ReadWrite, false)]
+        [TestCase(0, true)]
+        [TestCase(FileAccess.Write, false)]
+        public void DeletePermissions(FileAccess permissions, bool shouldThrow)
+        {
+            var store = new TestLocalObjectStore();
+            store.Initialize($"CSharp-TestAlgorithm-{permissions}", 0, 0, "", new Controls { StoragePermissions = permissions });
+
+            if (shouldThrow)
+            {
+                Assert.Throws<InvalidOperationException>(() => store.Delete("Jose"));
+            }
+            else
+            {
+                Assert.IsFalse(store.Delete("Jose"));
+            }
+        }
+
+        [TestCase(FileAccess.Read, false)]
+        [TestCase(FileAccess.ReadWrite, false)]
+        [TestCase(0, true)]
+        [TestCase(FileAccess.Write, true)]
+        public void ContainsKeyPermissions(FileAccess permissions, bool shouldThrow)
+        {
+            var store = new TestLocalObjectStore();
+            store.Initialize($"CSharp-TestAlgorithm-{permissions}", 0, 0, "", new Controls {StoragePermissions = permissions});
+
+            if (shouldThrow)
+            {
+                Assert.Throws<InvalidOperationException>(() => store.ContainsKey("Jose"));
+            }
+            else
+            {
+                Assert.IsFalse(store.ContainsKey("Jose"));
+            }
+        }
+
+        [TestCase(FileAccess.Read, false)]
+        [TestCase(FileAccess.ReadWrite, false)]
+        [TestCase(0, true)]
+        [TestCase(FileAccess.Write, true)]
+        public void InitializationPermissions(FileAccess permissions, bool shouldThrow)
+        {
+            var store = new TestLocalObjectStore();
+            var dir = Path.Combine(TestStorageRoot, $"CSharp-TestAlgorithm-8");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "Jose"), "Pepe");
+            store.Initialize($"CSharp-TestAlgorithm-8", 0, 0, "", new Controls { StoragePermissions = permissions });
+
+            if (shouldThrow)
+            {
+                Assert.Throws<InvalidOperationException>(() => store.ContainsKey("Jose"));
+            }
+            else
+            {
+                Assert.IsTrue(store.ContainsKey("Jose"));
+            }
+
+            Directory.Delete(dir, true);
+        }
+
+        [Test]
+        public void PersistCalledSynchronously()
+        {
+            var store = new TestLocalObjectStore();
+            store.Initialize("CSharp-TestAlgorithm2", 0, 0, "", new Controls
+            {
+                PersistenceIntervalSeconds = -1
+            });
+
+            store.SaveBytes("Pepe", new byte[] {1});
+            Assert.AreEqual(1, store.ReadBytes("Pepe").Single());
+            Assert.IsTrue(store.PersistDataCalled);
+
+            store.PersistDataCalled = false;
+
+            store.Delete("Pepe");
+            Assert.IsTrue(store.PersistDataCalled);
+            Assert.IsFalse(store.ContainsKey("Pepe"));
+
+            store.DisposeSafely();
         }
 
         [Test]
@@ -152,6 +296,16 @@ namespace QuantConnect.Tests.Common.Storage
         {
             public int EmaFastPeriod { get; set; }
             public int EmaSlowPeriod { get; set; }
+        }
+
+        private class TestLocalObjectStore : LocalObjectStore
+        {
+            public bool PersistDataCalled { get; set; }
+            protected override bool PersistData(IEnumerable<KeyValuePair<string, byte[]>> data)
+            {
+                PersistDataCalled = true;
+                return base.PersistData(data);
+            }
         }
     }
 }

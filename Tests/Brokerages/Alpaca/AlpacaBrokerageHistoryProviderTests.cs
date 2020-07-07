@@ -29,7 +29,7 @@ namespace QuantConnect.Tests.Brokerages.Alpaca
     [TestFixture, Ignore("This test requires a configured and testable Alpaca practice account. Since it uses the Polygon API, the account needs to be funded.")]
     public class AlpacaBrokerageHistoryProviderTests
     {
-        public TestCaseData[] TestParameters
+        private static TestCaseData[] TestParameters
         {
             get
             {
@@ -38,8 +38,10 @@ namespace QuantConnect.Tests.Brokerages.Alpaca
                 return new[]
                 {
                     // valid parameters
-                    new TestCaseData(aapl, Resolution.Tick, TimeSpan.FromMinutes(15), false),
-                    new TestCaseData(aapl, Resolution.Second, TimeSpan.FromMinutes(15), false),
+                    // Setting TimeSpan to 18 hours ensures that the market is open when running
+                    // the test during weekdays
+                    new TestCaseData(aapl, Resolution.Tick, TimeSpan.FromHours(18), false),
+                    new TestCaseData(aapl, Resolution.Second, TimeSpan.FromHours(18), false),
                     new TestCaseData(aapl, Resolution.Minute, Time.OneDay, false),
                     new TestCaseData(aapl, Resolution.Hour, Time.OneDay, false),
                     new TestCaseData(aapl, Resolution.Daily, TimeSpan.FromDays(30), false),
@@ -69,7 +71,7 @@ namespace QuantConnect.Tests.Brokerages.Alpaca
             {
                 var historyProvider = new BrokerageHistoryProvider();
                 historyProvider.SetBrokerage(brokerage);
-                historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, null, null, null, null, null, false));
+                historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, null, null, null, null, null, false, null));
 
                 var now = DateTime.UtcNow;
 

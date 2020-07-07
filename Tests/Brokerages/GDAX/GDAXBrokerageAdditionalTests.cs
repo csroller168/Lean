@@ -13,11 +13,14 @@
  * limitations under the License.
 */
 
+using System.Linq;
+using System.Threading;
 using NUnit.Framework;
 using QuantConnect.Algorithm;
 using QuantConnect.Brokerages;
 using QuantConnect.Brokerages.GDAX;
 using QuantConnect.Configuration;
+using QuantConnect.Logging;
 using RestSharp;
 
 namespace QuantConnect.Tests.Brokerages.GDAX
@@ -30,6 +33,7 @@ namespace QuantConnect.Tests.Brokerages.GDAX
         {
             using (var brokerage = GetBrokerage())
             {
+                brokerage.Connect();
                 Assert.IsTrue(brokerage.IsConnected);
 
                 for (var i = 0; i < 50; i++)
@@ -44,6 +48,7 @@ namespace QuantConnect.Tests.Brokerages.GDAX
         {
             using (var brokerage = GetBrokerage())
             {
+                brokerage.Connect();
                 Assert.IsTrue(brokerage.IsConnected);
 
                 for (var i = 0; i < 50; i++)
@@ -53,10 +58,73 @@ namespace QuantConnect.Tests.Brokerages.GDAX
             }
         }
 
-        private static GDAXBrokerage GetBrokerage()
+        [Test]
+        public void ClientConnects()
+        {
+            using (var brokerage = GetBrokerage())
+            {
+                var hasError = false;
+
+                brokerage.Message += (s, e) => { hasError = true; };
+
+                Log.Trace("Connect #1");
+                brokerage.Connect();
+                Assert.IsTrue(brokerage.IsConnected);
+
+                Assert.IsFalse(hasError);
+
+                Log.Trace("Disconnect #1");
+                brokerage.Disconnect();
+                Assert.IsFalse(brokerage.IsConnected);
+
+                Log.Trace("Connect #2");
+                brokerage.Connect();
+                Assert.IsTrue(brokerage.IsConnected);
+
+                Log.Trace("Disconnect #2");
+                brokerage.Disconnect();
+                Assert.IsFalse(brokerage.IsConnected);
+            }
+        }
+
+        [Test]
+        public void DataQueueHandlerConnectsAndSubscribes()
+        {
+            var symbols = new[]
+            {
+                "LTCUSD", "LTCEUR", "LTCBTC",
+                "BTCUSD", "BTCEUR", "BTCGBP",
+                "ETHBTC", "ETHUSD", "ETHEUR",
+                "BCHBTC", "BCHUSD", "BCHEUR",
+                "XRPUSD", "XRPEUR", "XRPBTC",
+                "EOSUSD", "EOSEUR", "EOSBTC",
+                "XLMUSD", "XLMEUR", "XLMBTC",
+                "ETCUSD", "ETCEUR", "ETCBTC",
+                "ZRXUSD", "ZRXEUR", "ZRXBTC"
+            }
+            .Select(ticker => Symbol.Create(ticker, SecurityType.Crypto, Market.GDAX))
+            .ToList();
+
+            using (var dqh = GetDataQueueHandler())
+            {
+                dqh.Connect();
+                Assert.IsTrue(dqh.IsConnected);
+
+                dqh.Subscribe(symbols);
+
+                Thread.Sleep(5000);
+
+                dqh.Unsubscribe(symbols);
+
+                dqh.Disconnect();
+                Assert.IsFalse(dqh.IsConnected);
+            }
+        }
+
+        private static GDAXDataQueueHandler GetDataQueueHandler()
         {
             var wssUrl = Config.Get("gdax-url", "wss://ws-feed.pro.coinbase.com");
-            var webSocketClient = new WebSocketWrapper();
+            var webSocketClient = new WebSocketClientWrapper();
             var restClient = new RestClient("https://api.pro.coinbase.com");
             var apiKey = Config.Get("gdax-api-key");
             var apiSecret = Config.Get("gdax-api-secret");
@@ -66,10 +134,23 @@ namespace QuantConnect.Tests.Brokerages.GDAX
             var userToken = Config.Get("api-access-token");
             var priceProvider = new ApiPriceProvider(userId, userToken);
 
-            var brokerage = new GDAXBrokerage(wssUrl, webSocketClient, restClient, apiKey, apiSecret, passPhrase, algorithm, priceProvider);
-            brokerage.Connect();
+            return new GDAXDataQueueHandler(wssUrl, webSocketClient, restClient, apiKey, apiSecret, passPhrase, algorithm, priceProvider);
+        }
 
-            return brokerage;
+        private static GDAXBrokerage GetBrokerage()
+        {
+            var wssUrl = Config.Get("gdax-url", "wss://ws-feed.pro.coinbase.com");
+            var webSocketClient = new WebSocketClientWrapper();
+            var restClient = new RestClient("https://api.pro.coinbase.com");
+            var apiKey = Config.Get("gdax-api-key");
+            var apiSecret = Config.Get("gdax-api-secret");
+            var passPhrase = Config.Get("gdax-passphrase");
+            var algorithm = new QCAlgorithm();
+            var userId = Config.GetInt("job-user-id");
+            var userToken = Config.Get("api-access-token");
+            var priceProvider = new ApiPriceProvider(userId, userToken);
+
+            return new GDAXBrokerage(wssUrl, webSocketClient, restClient, apiKey, apiSecret, passPhrase, algorithm, priceProvider);
         }
     }
 }

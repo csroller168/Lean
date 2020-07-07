@@ -40,6 +40,7 @@ namespace QuantConnect.Lean.Engine.DataFeeds
         private readonly ITimeKeeper _timeKeeper;
         private readonly bool _liveMode;
         private readonly IRegisteredSecurityDataTypesProvider _registeredTypesProvider;
+        private readonly IDataPermissionManager _dataPermissionManager;
 
         /// There is no ConcurrentHashSet collection in .NET,
         /// so we use ConcurrentDictionary with byte value to minimize memory usage
@@ -66,7 +67,8 @@ namespace QuantConnect.Lean.Engine.DataFeeds
             ITimeKeeper timeKeeper,
             MarketHoursDatabase marketHoursDatabase,
             bool liveMode,
-            IRegisteredSecurityDataTypesProvider registeredTypesProvider)
+            IRegisteredSecurityDataTypesProvider registeredTypesProvider,
+            IDataPermissionManager dataPermissionManager)
         {
             _dataFeed = dataFeed;
             UniverseSelection = universeSelection;
@@ -77,6 +79,7 @@ namespace QuantConnect.Lean.Engine.DataFeeds
             _marketHoursDatabase = marketHoursDatabase;
             _liveMode = liveMode;
             _registeredTypesProvider = registeredTypesProvider;
+            _dataPermissionManager = dataPermissionManager;
 
             // wire ourselves up to receive notifications when universes are added/removed
             algorithm.UniverseManager.CollectionChanged += (sender, args) =>
@@ -179,6 +182,9 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                 return subscription.AddSubscriptionRequest(request);
             }
 
+            // before adding the configuration to the data feed let's assert it's valid
+            _dataPermissionManager.AssertConfiguration(request.Configuration);
+
             subscription = _dataFeed.CreateSubscription(request);
 
             if (subscription == null)
@@ -279,11 +285,6 @@ namespace QuantConnect.Lean.Engine.DataFeeds
         #region IAlgorithmSubscriptionManager
 
         /// <summary>
-        /// Flags the existence of custom data in the subscriptions
-        /// </summary>
-        public bool HasCustomData { get; set; }
-
-        /// <summary>
         /// Gets all the current data config subscriptions that are being processed for the SubscriptionManager
         /// </summary>
         public IEnumerable<SubscriptionDataConfig> SubscriptionManagerSubscriptions =>
@@ -329,9 +330,6 @@ namespace QuantConnect.Lean.Engine.DataFeeds
 
                 // add the time zone to our time keeper
                 _timeKeeper.AddTimeZone(newConfig.ExchangeTimeZone);
-
-                // if is custom data, sets HasCustomData to true
-                HasCustomData = HasCustomData || newConfig.IsCustomData;
             }
 
             return config;
@@ -344,14 +342,10 @@ namespace QuantConnect.Lean.Engine.DataFeeds
         /// <param name="subscription">The <see cref="Subscription"/> owning the configuration to remove</param>
         private void RemoveSubscriptionDataConfig(Subscription subscription)
         {
-            SubscriptionDataConfig config;
-            if (subscription.RemovedFromUniverse.Value
-                && _subscriptionManagerSubscriptions.TryRemove(subscription.Configuration, out config))
+            if (subscription.RemovedFromUniverse.Value)
             {
-                if (HasCustomData && config.IsCustomData)
-                {
-                    HasCustomData = _subscriptionManagerSubscriptions.Any(x => x.Key.IsCustomData);
-                }
+                SubscriptionDataConfig config;
+                _subscriptionManagerSubscriptions.TryRemove(subscription.Configuration, out config);
             }
         }
 
@@ -454,7 +448,19 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                 }
             }
 
-            var marketHoursDbEntry = _marketHoursDatabase.GetEntry(symbol.ID.Market, symbol, symbol.ID.SecurityType);
+            MarketHoursDatabase.Entry marketHoursDbEntry;
+            if (!_marketHoursDatabase.TryGetEntry(symbol.ID.Market, symbol, symbol.ID.SecurityType, out marketHoursDbEntry))
+            {
+                if (symbol.SecurityType == SecurityType.Base)
+                {
+                    var baseInstance = dataTypes.Single().Item1.GetBaseDataInstance();
+                    baseInstance.Symbol = symbol;
+                    _marketHoursDatabase.SetEntryAlwaysOpen(symbol.ID.Market, null, SecurityType.Base, baseInstance.DataTimeZone());
+                }
+
+                marketHoursDbEntry = _marketHoursDatabase.GetEntry(symbol.ID.Market, symbol, symbol.ID.SecurityType);
+            }
+
             var exchangeHours = marketHoursDbEntry.ExchangeHours;
             if (symbol.ID.SecurityType == SecurityType.Option || symbol.ID.SecurityType == SecurityType.Future)
             {
@@ -518,7 +524,15 @@ namespace QuantConnect.Lean.Engine.DataFeeds
                 return new List<Tuple<Type, TickType>> { new Tuple<Type, TickType>(typeof(ZipEntryName), TickType.Quote) };
             }
 
-            return AvailableDataTypes[symbolSecurityType]
+            IEnumerable<TickType> availableDataType = AvailableDataTypes[symbolSecurityType];
+            // Equities will only look for trades in case of low resolutions.
+            if (symbolSecurityType == SecurityType.Equity && (resolution == Resolution.Daily || resolution == Resolution.Hour))
+            {
+                // we filter out quote tick type
+                availableDataType = availableDataType.Where(t => t != TickType.Quote);
+            }
+
+            return availableDataType
                 .Select(tickType => new Tuple<Type, TickType>(LeanData.GetDataType(resolution, tickType), tickType)).ToList();
         }
 

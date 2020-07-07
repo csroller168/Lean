@@ -13,7 +13,6 @@
  * limitations under the License.
 */
 
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -60,7 +59,7 @@ namespace QuantConnect.Tests.Compression
             var fileBytes = File.ReadAllBytes(file);
             var zippedBytes = QuantConnect.Compression.ZipBytes(fileBytes, "entry");
 
-            Assert.AreEqual(612631, zippedBytes.Length);
+            Assert.AreEqual(899352, zippedBytes.Length);
         }
 
         [Test]

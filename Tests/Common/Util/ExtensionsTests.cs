@@ -35,6 +35,16 @@ namespace QuantConnect.Tests.Common.Util
     [TestFixture]
     public class ExtensionsTests
     {
+        [TestCase("A", "a")]
+        [TestCase("", "")]
+        [TestCase(null, null)]
+        [TestCase("Buy", "buy")]
+        [TestCase("BuyTheDip", "buyTheDip")]
+        public void ToCamelCase(string toConvert, string expected)
+        {
+            Assert.AreEqual(expected, toConvert.ToCamelCase());
+        }
+
         [Test]
         public void BatchAlphaResultPacket()
         {
@@ -1089,6 +1099,15 @@ actualDictionary.update({'IBM': 5})
 
             value = decimal.MinValue + 1;
             Assert.DoesNotThrow(() => value.TruncateTo3DecimalPlaces());
+        }
+
+        [Test]
+        public void DecimalAllowExponentTests()
+        {
+            const string strWithExponent = "5e-5";
+            Assert.AreEqual(strWithExponent.ToDecimalAllowExponent(), 0.00005);
+            Assert.AreNotEqual(strWithExponent.ToDecimal(), 0.00005);
+            Assert.AreEqual(strWithExponent.ToDecimal(), 10275);
         }
 
         [Test]

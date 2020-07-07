@@ -27,6 +27,7 @@ using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.TransactionHandlers;
 using QuantConnect.Logging;
 using QuantConnect.Orders;
+using QuantConnect.Orders.Serialization;
 using QuantConnect.Packets;
 using QuantConnect.Statistics;
 
@@ -87,6 +88,16 @@ namespace QuantConnect.Lean.Engine.Results
         /// Lock to be used when accessing the chart collection
         /// </summary>
         protected object ChartLock { get; }
+
+        /// <summary>
+        /// The algorithm project id
+        /// </summary>
+        protected int ProjectId { get; set; }
+
+        /// <summary>
+        /// The maximum amount of RAM (in MB) this algorithm is allowed to utilize
+        /// </summary>
+        protected string RamAllocation { get; set; }
 
         /// <summary>
         /// The algorithm unique compilation id
@@ -166,7 +177,12 @@ namespace QuantConnect.Lean.Engine.Results
         /// Directory location to store results
         /// </summary>
         protected string ResultsDestinationFolder;
-        
+
+        /// <summary>
+        /// The order event json converter instance to use
+        /// </summary>
+        protected OrderEventJsonConverter OrderEventJsonConverter { get; set; }
+
         /// <summary>
         /// Creates a new instance
         /// </summary>
@@ -192,6 +208,18 @@ namespace QuantConnect.Lean.Engine.Results
         }
 
         /// <summary>
+        /// Gets the current Server statistics
+        /// </summary>
+        protected virtual Dictionary<string, string> GetServerStatistics(DateTime utcNow)
+        {
+            var serverStatistics = OS.GetServerStatistics();
+            var upTime = utcNow - StartTime;
+            serverStatistics["Up Time"] = $"{upTime.Days}d {upTime:hh\\:mm\\:ss}";
+            serverStatistics["Total RAM (MB)"] = RamAllocation;
+            return serverStatistics;
+        }
+
+        /// <summary>
         /// Stores the order events
         /// </summary>
         /// <param name="utcTime">The utc date associated with these order events</param>
@@ -203,8 +231,10 @@ namespace QuantConnect.Lean.Engine.Results
                 return;
             }
 
-            var path = $"{AlgorithmId}-order-events.json";
-            var data = JsonConvert.SerializeObject(orderEvents, Formatting.None);
+            var filename = $"{AlgorithmId}-order-events.json";
+            var path = GetResultsPath(filename);
+
+            var data = JsonConvert.SerializeObject(orderEvents, Formatting.None, OrderEventJsonConverter);
 
             File.WriteAllText(path, data);
         }
@@ -260,6 +290,9 @@ namespace QuantConnect.Lean.Engine.Results
             TransactionHandler = transactionHandler;
             CompileId = job.CompileId;
             AlgorithmId = job.AlgorithmId;
+            ProjectId = job.ProjectId;
+            RamAllocation = job.RamAllocation.ToStringInvariant();
+            OrderEventJsonConverter = new OrderEventJsonConverter(AlgorithmId);
             _updateRunner = new Thread(Run, 0) { IsBackground = true, Name = "Result Thread" };
             _updateRunner.Start();
         }
@@ -278,7 +311,7 @@ namespace QuantConnect.Lean.Engine.Results
         {
             return Path.Combine(ResultsDestinationFolder, filename);
         }
-        
+
         /// <summary>
         /// Returns the location of the logs
         /// </summary>
@@ -519,6 +552,73 @@ namespace QuantConnect.Lean.Engine.Results
             }
 
             return statisticsResults;
+        }
+
+        /// <summary>
+        /// Save an algorithm message to the log store. Uses a different timestamped method of adding messaging to interweve debug and logging messages.
+        /// </summary>
+        /// <param name="message">String message to store</param>
+        protected abstract void AddToLogStore(string message);
+
+        /// <summary>
+        /// Processes algorithm logs.
+        /// Logs of the same type are batched together one per line and are sent out
+        /// </summary>
+        protected void ProcessAlgorithmLogs(int? messageQueueLimit = null)
+        {
+            ProcessAlgorithmLogsImpl(Algorithm.DebugMessages, PacketType.Debug, messageQueueLimit);
+            ProcessAlgorithmLogsImpl(Algorithm.ErrorMessages, PacketType.HandledError, messageQueueLimit);
+            ProcessAlgorithmLogsImpl(Algorithm.LogMessages, PacketType.Log, messageQueueLimit);
+        }
+
+        private void ProcessAlgorithmLogsImpl(ConcurrentQueue<string> concurrentQueue, PacketType packetType, int? messageQueueLimit = null)
+        {
+            if (concurrentQueue.Count <= 0)
+            {
+                return;
+            }
+
+            var result = new List<string>();
+            var endTime = DateTime.UtcNow.AddMilliseconds(250).Ticks;
+            string message;
+            var currentMessageCount = -1;
+            while (DateTime.UtcNow.Ticks < endTime && concurrentQueue.TryDequeue(out message))
+            {
+                if (messageQueueLimit.HasValue)
+                {
+                    if (currentMessageCount == -1)
+                    {
+                        // this is expensive, so let's get it once
+                        currentMessageCount = Messages.Count;
+                    }
+                    if (currentMessageCount > messageQueueLimit)
+                    {
+                        //if too many in the queue already skip the logging and drop the messages
+                        continue;
+                    }
+                }
+                AddToLogStore(message);
+                result.Add(message);
+                // increase count after we add
+                currentMessageCount++;
+            }
+
+            if (result.Count > 0)
+            {
+                message = string.Join(Environment.NewLine, result);
+                if (packetType == PacketType.Debug)
+                {
+                    Messages.Enqueue(new DebugPacket(ProjectId, AlgorithmId, CompileId, message));
+                }
+                else if (packetType == PacketType.Log)
+                {
+                    Messages.Enqueue(new LogPacket(AlgorithmId, message));
+                }
+                else if (packetType == PacketType.HandledError)
+                {
+                    Messages.Enqueue(new HandledErrorPacket(AlgorithmId, message));
+                }
+            }
         }
     }
 }

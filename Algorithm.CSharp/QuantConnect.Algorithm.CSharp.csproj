@@ -377,10 +377,6 @@
     <Compile Include="Benchmarks\CoarseFineUniverseSelectionBenchmark.cs" />
     <Compile Include="Benchmarks\IndicatorRibbonBenchmark.cs" />
     <Compile Include="ZeroFeeRegressionAlgorithm.cs" />
-    <Compile Include="PairsTradingAlgorithm.cs" />
-    <Compile Include="MovingMomentumAlgorithm.cs" />
-    <Compile Include="SectorMomentumAlgorithm.cs" />
-    <Compile Include="IbIndicatorIntegrationTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Algorithm.Framework\QuantConnect.Algorithm.Framework.csproj">

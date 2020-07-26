@@ -25,7 +25,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         // short-term TODOs:
         // 
-        // DateMeter appears to not work, likely because of exception thrown during rebal
+        // why so many orders?
         //
         // Implement moving momentum here
         //      trade daily

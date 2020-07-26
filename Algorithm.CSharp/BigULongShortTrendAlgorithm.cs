@@ -24,6 +24,9 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // short-term TODOs:
+        // 
+        // DateMeter appears to not work, likely because of exception thrown during rebal
+        //
         // Implement moving momentum here
         //      trade daily
         //      consider large universe
@@ -59,7 +62,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int FastSmaDays = 20;
         private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
-        private readonly Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>> _smaIndicator = new Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>>();
+        private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>(); 
+        //private readonly Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>> _smaIndicator = new Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>>();
 
         public override void Initialize()
         {
@@ -113,9 +117,9 @@ namespace QuantConnect.Algorithm.CSharp
                 var momentums = ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
-                        && _smaIndicator.ContainsKey(x.Key)
-                        && _smaIndicator[x.Key].IsReady)
-                    .OrderByDescending(x => _smaIndicator[x.Key][0])
+                        && _momentums.ContainsKey(x.Key)
+                        && _momentums[x.Key].IsReady)
+                    .OrderByDescending(x => _momentums[x.Key])
                     .ToList();
 
                 insights.AddRange(momentums
@@ -153,21 +157,21 @@ namespace QuantConnect.Algorithm.CSharp
                     var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
                     var slope = fastIndicator.Minus(slowIndicator);
-                    var window = new RollingWindow<CompositeIndicator<IndicatorDataPoint>>(2);
-                    slope.Updated += (sender, updated) => window.Add(sender as CompositeIndicator<IndicatorDataPoint>);
-                    _smaIndicator[addition.Symbol] = window;
+                    //var window = new RollingWindow<CompositeIndicator<IndicatorDataPoint>>(2);
+                    //slope.Updated += (sender, updated) => window.Add(sender as CompositeIndicator<IndicatorDataPoint>);
+                    _momentums[addition.Symbol] = slope;
 
                     var history = History(addition.Symbol, SlowSmaDays, Resolution.Daily);
-                    foreach(var bar in history)
+                    foreach (var bar in history)
                     {
-                        slowIndicator.Update(bar);
-                        fastIndicator.Update(bar);
+                        slowIndicator.Update(bar.EndTime, bar.Close);
+                        fastIndicator.Update(bar.EndTime, bar.Close);
                     }
                 }
 
                 foreach (var removedSecurity in changes.RemovedSecurities)
                 {
-                    _smaIndicator.Remove(removedSecurity.Symbol);
+                    _momentums.Remove(removedSecurity.Symbol);
                 }
             }
             catch (Exception e)

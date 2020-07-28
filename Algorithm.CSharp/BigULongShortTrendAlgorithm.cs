@@ -25,7 +25,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         // short-term TODOs:
         // 
-        // why so many orders?
+        // build the rolling window indicators
         //
         // Implement moving momentum here
         //      trade daily
@@ -63,7 +63,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>(); 
-        //private readonly Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>> _smaIndicator = new Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>>();
+        private readonly Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>> _smaIndicator = new Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>>();
 
         public override void Initialize()
         {
@@ -119,7 +119,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady)
-                    .OrderByDescending(x => _momentums[x.Key])
+                    .OrderByDescending(x => _momentums[x.Key].Current.Value)
                     .ToList();
 
                 insights.AddRange(momentums
@@ -157,9 +157,11 @@ namespace QuantConnect.Algorithm.CSharp
                     var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
                     var slope = fastIndicator.Minus(slowIndicator);
-                    //var window = new RollingWindow<CompositeIndicator<IndicatorDataPoint>>(2);
-                    //slope.Updated += (sender, updated) => window.Add(sender as CompositeIndicator<IndicatorDataPoint>);
                     _momentums[addition.Symbol] = slope;
+
+                    var window = new RollingWindow<CompositeIndicator<IndicatorDataPoint>>(2);
+                    slope.Updated += (sender, updated) => window.Add(sender as CompositeIndicator<IndicatorDataPoint>);
+                    _smaIndicator[addition.Symbol] = window;
 
                     var history = History(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     foreach (var bar in history)
@@ -172,6 +174,7 @@ namespace QuantConnect.Algorithm.CSharp
                 foreach (var removedSecurity in changes.RemovedSecurities)
                 {
                     _momentums.Remove(removedSecurity.Symbol);
+                    _smaIndicator.Remove(removedSecurity.Symbol);
                 }
             }
             catch (Exception e)

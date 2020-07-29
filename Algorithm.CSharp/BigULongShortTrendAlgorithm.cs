@@ -61,6 +61,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SlowSmaDays = 150;
         private static readonly int FastSmaDays = 20;
         private static readonly int StoDays = 10;
+        private static readonly int StoBuyThreshold = 20;
+        private static readonly int StoSellThreshold = 80;
         private static readonly int FastMacdDays = 5;
         private static readonly int SlowMacdDays = 30;
         private static readonly int SignalMacdDays = 9;
@@ -111,6 +113,44 @@ namespace QuantConnect.Algorithm.CSharp
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
             SendEmailNotification(targetsStr);
+        }
+
+        private InsightDirection MomentumDirection(Symbol symbol)
+        {
+            if (!_momentums.ContainsKey(symbol)
+                || !_momentums[symbol].IsReady)
+                return InsightDirection.Flat;
+
+            return _momentums[symbol] > 0 ? InsightDirection.Up : InsightDirection.Down;
+        }
+
+        private SignalStatus StoStatus(Symbol symbol)
+        {
+            var status = new SignalStatus();
+
+            if (!_stos.ContainsKey(symbol)
+                || !_stos[symbol].IsReady)
+                return status;
+
+            var stos = _stos[symbol].Select(x => x.Value).ToList();
+
+            var daysSinceInBuyRange = stos.FindIndex(x => x < StoBuyThreshold);
+            var daysSinceOutBuyRange = stos.FindIndex(x => x >= StoBuyThreshold);
+            if(daysSinceInBuyRange > 0 && daysSinceOutBuyRange > 0)
+            {
+                status.DaysPastSignal = daysSinceInBuyRange;
+                status.Direction = InsightDirection.Up;
+            }
+
+            var daysSinceInSellRange = stos.FindIndex(x => x > StoSellThreshold);
+            var daysSinceOutSellRange = stos.FindIndex(x => x <= StoSellThreshold);
+            if (daysSinceInSellRange > 0 && daysSinceOutSellRange > 0)
+            {
+                status.DaysPastSignal = daysSinceInSellRange;
+                status.Direction = InsightDirection.Down;
+            }
+
+            return status;
         }
 
         private IEnumerable<Insight> GetInsights(Slice slice)
@@ -167,13 +207,13 @@ namespace QuantConnect.Algorithm.CSharp
 
                     // STO
                     var stoIndicator = STO(addition.Symbol, StoDays, Resolution.Daily);
-                    var stoWindow = new RollingWindow<IndicatorDataPoint>(2);
+                    var stoWindow = new RollingWindow<IndicatorDataPoint>(5);
                     stoIndicator.Updated += (sender, dataPoint) => stoWindow.Add(dataPoint);
                     _stos[addition.Symbol] = stoWindow;
 
                     // MACD
                     var macdIndicator = MACD(addition.Symbol, FastMacdDays, SlowMacdDays, SignalMacdDays, MovingAverageType.Exponential, Resolution.Daily);
-                    var macdWindow = new RollingWindow<IndicatorDataPoint>(2);
+                    var macdWindow = new RollingWindow<IndicatorDataPoint>(5);
                     macdIndicator.Histogram.Updated += (sender, dataPoint) => macdWindow.Add(dataPoint);
                     _macdHistograms.Add(addition.Symbol, macdWindow);
 
@@ -298,5 +338,11 @@ namespace QuantConnect.Algorithm.CSharp
         {
             _lastUpdate = now;
         }
+    }
+
+    public class SignalStatus
+    {
+        public InsightDirection Direction = InsightDirection.Flat;
+        public int DaysPastSignal = -1;
     }
 }

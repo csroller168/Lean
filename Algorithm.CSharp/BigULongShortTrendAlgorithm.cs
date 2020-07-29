@@ -60,10 +60,11 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int UniverseSmaDays = 5;
         private static readonly int SlowSmaDays = 150;
         private static readonly int FastSmaDays = 20;
+        private static readonly int StoDays = 10;
         private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
-        private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>(); 
-        private readonly Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>> _smaIndicator = new Dictionary<Symbol, RollingWindow<CompositeIndicator<IndicatorDataPoint>>>();
+        private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
+        private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _stos = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
 
         public override void Initialize()
         {
@@ -159,22 +160,24 @@ namespace QuantConnect.Algorithm.CSharp
                     var slope = fastIndicator.Minus(slowIndicator);
                     _momentums[addition.Symbol] = slope;
 
-                    var window = new RollingWindow<CompositeIndicator<IndicatorDataPoint>>(2);
-                    slope.Updated += (sender, updated) => window.Add(sender as CompositeIndicator<IndicatorDataPoint>);
-                    _smaIndicator[addition.Symbol] = window;
+                    var stoIndicator = STO(addition.Symbol, StoDays, Resolution.Daily);
+                    var stoWindow = new RollingWindow<IndicatorDataPoint>(2);
+                    stoIndicator.Updated += (sender, dataPoint) => stoWindow.Add(dataPoint);
+                    _stos[addition.Symbol] = stoWindow;
 
                     var history = History(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     foreach (var bar in history)
                     {
                         slowIndicator.Update(bar.EndTime, bar.Close);
                         fastIndicator.Update(bar.EndTime, bar.Close);
+                        stoIndicator.Update(bar);
                     }
                 }
 
                 foreach (var removedSecurity in changes.RemovedSecurities)
                 {
                     _momentums.Remove(removedSecurity.Symbol);
-                    _smaIndicator.Remove(removedSecurity.Symbol);
+                    _stos.Remove(removedSecurity.Symbol);
                 }
             }
             catch (Exception e)

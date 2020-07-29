@@ -144,11 +144,35 @@ namespace QuantConnect.Algorithm.CSharp
 
             var daysSinceInSellRange = stos.FindIndex(x => x > StoSellThreshold);
             var daysSinceOutSellRange = stos.FindIndex(x => x <= StoSellThreshold);
-            if (daysSinceInSellRange > 0 && daysSinceOutSellRange > 0)
+            if (daysSinceInSellRange >= 0 && daysSinceOutSellRange >= 0)
             {
                 status.DaysPastSignal = daysSinceInSellRange;
                 status.Direction = InsightDirection.Down;
             }
+
+            return status;
+        }
+
+        private SignalStatus MacdStatus(Symbol symbol)
+        {
+            var status = new SignalStatus();
+
+            if (!_macdHistograms.ContainsKey(symbol)
+                || !_macdHistograms[symbol].IsReady)
+                return status;
+
+            var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
+
+            var daysSinceInBuyRange = histograms.FindIndex(x => x > 0);
+            var daysSinceInSellRange = histograms.FindIndex(x => x <= 0);
+
+            if (daysSinceInBuyRange < 0 || daysSinceInSellRange < 0)
+                return status;
+
+            status.Direction = daysSinceInBuyRange < daysSinceInSellRange
+                ? InsightDirection.Up
+                : InsightDirection.Down;
+            status.DaysPastSignal = Math.Min(daysSinceInBuyRange, daysSinceInSellRange);
 
             return status;
         }

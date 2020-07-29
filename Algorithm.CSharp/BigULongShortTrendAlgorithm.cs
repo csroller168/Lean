@@ -61,10 +61,14 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SlowSmaDays = 150;
         private static readonly int FastSmaDays = 20;
         private static readonly int StoDays = 10;
+        private static readonly int FastMacdDays = 5;
+        private static readonly int SlowMacdDays = 30;
+        private static readonly int SignalMacdDays = 9;
         private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _stos = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
+        private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _macdHistograms = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
 
         public override void Initialize()
         {
@@ -155,15 +159,23 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 foreach (var addition in changes.AddedSecurities)
                 {
+                    // momentum
                     var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
                     var slope = fastIndicator.Minus(slowIndicator);
                     _momentums[addition.Symbol] = slope;
 
+                    // STO
                     var stoIndicator = STO(addition.Symbol, StoDays, Resolution.Daily);
                     var stoWindow = new RollingWindow<IndicatorDataPoint>(2);
                     stoIndicator.Updated += (sender, dataPoint) => stoWindow.Add(dataPoint);
                     _stos[addition.Symbol] = stoWindow;
+
+                    // MACD
+                    var macdIndicator = MACD(addition.Symbol, FastMacdDays, SlowMacdDays, SignalMacdDays, MovingAverageType.Exponential, Resolution.Daily);
+                    var macdWindow = new RollingWindow<IndicatorDataPoint>(2);
+                    macdIndicator.Histogram.Updated += (sender, dataPoint) => macdWindow.Add(dataPoint);
+                    _macdHistograms.Add(addition.Symbol, macdWindow);
 
                     var history = History(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     foreach (var bar in history)
@@ -171,6 +183,7 @@ namespace QuantConnect.Algorithm.CSharp
                         slowIndicator.Update(bar.EndTime, bar.Close);
                         fastIndicator.Update(bar.EndTime, bar.Close);
                         stoIndicator.Update(bar);
+                        macdIndicator.Update(bar.EndTime, bar.Close);
                     }
                 }
 
@@ -178,6 +191,7 @@ namespace QuantConnect.Algorithm.CSharp
                 {
                     _momentums.Remove(removedSecurity.Symbol);
                     _stos.Remove(removedSecurity.Symbol);
+                    _macdHistograms.Remove(removedSecurity.Symbol);
                 }
             }
             catch (Exception e)

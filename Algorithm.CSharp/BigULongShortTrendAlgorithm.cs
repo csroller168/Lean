@@ -57,7 +57,7 @@ namespace QuantConnect.Algorithm.CSharp
         // consider refining long/short universe with dividend yield or age of company
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly int UniverseSize = 300;
+        private static readonly int UniverseSize = 150;
         private static readonly int NumLongShort = 6;
         private static readonly int UniverseSmaDays = 5;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
@@ -197,22 +197,22 @@ namespace QuantConnect.Algorithm.CSharp
 
                 //*****
 
-                var momentumCount = ActiveSecurities
-                    .Where(x => x.Value.IsTradable
-                        && slice.ContainsKey(x.Key)
-                        && MomentumDirection(x.Key) == InsightDirection.Up)
-                    .Count();
-                var stoCount = ActiveSecurities
-                    .Where(x => x.Value.IsTradable
-                        && slice.ContainsKey(x.Key)
-                        && stoStatuses[x.Key].Direction == InsightDirection.Up)
-                    .Count();
-                var macdCount = ActiveSecurities
-                    .Where(x => x.Value.IsTradable
-                        && slice.ContainsKey(x.Key)
-                        && macdStatuses[x.Key].Direction == InsightDirection.Up)
-                    .Count();
-                Log($"{Time}: momCount={momentumCount}, stoCount={stoCount}, macdCount={macdCount}");
+                //var momentumCount = ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && MomentumDirection(x.Key) == InsightDirection.Up)
+                //    .Count();
+                //var stoCount = ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && stoStatuses[x.Key].Direction == InsightDirection.Up)
+                //    .Count();
+                //var macdCount = ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && macdStatuses[x.Key].Direction == InsightDirection.Up)
+                //    .Count();
+                //Log($"{Time}: momCount={momentumCount}, stoCount={stoCount}, macdCount={macdCount}");
 
                 //*****
 
@@ -311,29 +311,6 @@ namespace QuantConnect.Algorithm.CSharp
                 .OrderByDescending(x => x.DollarVolume)
                 .Take(UniverseSize)
                 .Select(x => x.Symbol);
-
-            //var avgDollarVolumes = new Dictionary<CoarseFundamental, decimal>();
-
-            //foreach (var candidate in candidates.OrderByDescending(x => x.DollarVolume).Take(UniverseSize * 3))
-            //{
-            //    try
-            //    {
-            //        var history = History<TradeBar>(candidate.Symbol, UniverseSmaDays, Resolution.Daily);
-            //        if(history.Any())
-            //            avgDollarVolumes[candidate] = history.Average(x => x.Volume * x.Price);
-            //    }
-            //    catch (Exception e)
-            //    {
-            //        Log($"Exception getting avg dollar volume for {candidate.Symbol.Value}: {e.Message}");
-            //    }
-            //}
-
-            //return candidates
-            //    .Where(x => x.HasFundamentalData
-            //        && avgDollarVolumes.ContainsKey(x))
-            //    .OrderByDescending(x => avgDollarVolumes[x])
-            //    .Take(UniverseSize)
-            //    .Select(x => x.Symbol);
         }
 
         private void SendEmailNotification(string msg)

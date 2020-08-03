@@ -25,7 +25,9 @@ namespace QuantConnect.Algorithm.CSharp
 
         // short-term TODOs:
         // 
-        // build the rolling window indicators
+        // why is every sto indicator firing?
+        // can i get more macds to fire?
+        // fix slowness in selection (single day volume > 5M?)
         //
         // Implement moving momentum here
         //      trade daily
@@ -55,9 +57,10 @@ namespace QuantConnect.Algorithm.CSharp
         // consider refining long/short universe with dividend yield or age of company
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly int UniverseSize = 150;
+        private static readonly int UniverseSize = 300;
         private static readonly int NumLongShort = 6;
         private static readonly int UniverseSmaDays = 5;
+        private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private static readonly int SlowSmaDays = 150;
         private static readonly int FastSmaDays = 20;
         private static readonly int StoDays = 10;
@@ -132,21 +135,20 @@ namespace QuantConnect.Algorithm.CSharp
                 || !_stos[symbol].IsReady)
                 return status;
 
-            var stos = _stos[symbol].Select(x => x.Value).ToList();
+            //var stos = _stos[symbol].Select(x => x.Value).ToList();
+            var stos = new List<decimal> { 18m, 19m, 21m, 22m, 23m };
 
-            var daysSinceInBuyRange = stos.FindIndex(x => x < StoBuyThreshold);
-            var daysSinceOutBuyRange = stos.FindIndex(x => x >= StoBuyThreshold);
-            if(daysSinceInBuyRange > 0 && daysSinceOutBuyRange > 0)
+            var daysSinceOutBuyRange = stos.FindIndex(x => x > StoBuyThreshold) - 1;
+            if (stos[0] <= StoBuyThreshold && daysSinceOutBuyRange > 0)
             {
-                status.DaysPastSignal = daysSinceInBuyRange;
+                status.DaysPastSignal = daysSinceOutBuyRange;
                 status.Direction = InsightDirection.Up;
             }
 
-            var daysSinceInSellRange = stos.FindIndex(x => x > StoSellThreshold);
-            var daysSinceOutSellRange = stos.FindIndex(x => x <= StoSellThreshold);
-            if (daysSinceInSellRange >= 0 && daysSinceOutSellRange >= 0)
+            var daysSinceOutSellRange = stos.FindIndex(x => x < StoSellThreshold) - 1;
+            if (stos[0] >= StoSellThreshold && daysSinceOutSellRange > 0)
             {
-                status.DaysPastSignal = daysSinceInSellRange;
+                status.DaysPastSignal = daysSinceOutSellRange;
                 status.Direction = InsightDirection.Down;
             }
 
@@ -163,16 +165,19 @@ namespace QuantConnect.Algorithm.CSharp
 
             var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
 
+            var daysSinceInSellRange = histograms.FindIndex(x => x < 0);
+            if(histograms[0] > 0 && daysSinceInSellRange > 0)
+            {
+                status.Direction = InsightDirection.Up;
+                status.DaysPastSignal = daysSinceInSellRange - 1;
+            }
+
             var daysSinceInBuyRange = histograms.FindIndex(x => x > 0);
-            var daysSinceInSellRange = histograms.FindIndex(x => x <= 0);
-
-            if (daysSinceInBuyRange < 0 || daysSinceInSellRange < 0)
-                return status;
-
-            status.Direction = daysSinceInBuyRange < daysSinceInSellRange
-                ? InsightDirection.Up
-                : InsightDirection.Down;
-            status.DaysPastSignal = Math.Min(daysSinceInBuyRange, daysSinceInSellRange);
+            if (histograms[0] < 0 && daysSinceInBuyRange > 0)
+            {
+                status.Direction = InsightDirection.Down;
+                status.DaysPastSignal = daysSinceInBuyRange - 1;
+            }
 
             return status;
         }
@@ -183,24 +188,55 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 var insights = new List<Insight>();
 
-                var momentums = ActiveSecurities
+                var stoStatuses = _stos.ToDictionary(
+                    x => x.Key,
+                    x => StoStatus(x.Key));
+                var macdStatuses = _macdHistograms.ToDictionary(
+                    x => x.Key,
+                    x => MacdStatus(x.Key));
+
+                //*****
+
+                var momentumCount = ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
-                        && _momentums.ContainsKey(x.Key)
-                        && _momentums[x.Key].IsReady)
-                    .OrderByDescending(x => _momentums[x.Key].Current.Value)
-                    .ToList();
+                        && MomentumDirection(x.Key) == InsightDirection.Up)
+                    .Count();
+                var stoCount = ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && stoStatuses[x.Key].Direction == InsightDirection.Up)
+                    .Count();
+                var macdCount = ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && macdStatuses[x.Key].Direction == InsightDirection.Up)
+                    .Count();
+                Log($"{Time}: momCount={momentumCount}, stoCount={stoCount}, macdCount={macdCount}");
 
-                insights.AddRange(momentums
+                //*****
+
+                insights.AddRange(ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && MomentumDirection(x.Key) == InsightDirection.Up
+                        && stoStatuses[x.Key].Direction == InsightDirection.Up
+                        && macdStatuses[x.Key].Direction == InsightDirection.Up
+                        && macdStatuses[x.Key].DaysPastSignal < stoStatuses[x.Key].DaysPastSignal)
                     .Take(NumLongShort)
                     .Select(x => new Insight(
                             x.Value.Symbol,
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up)));
-                momentums.Reverse();
 
-                insights.AddRange(momentums
+                insights.AddRange(ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && MomentumDirection(x.Key) == InsightDirection.Down
+                        && stoStatuses[x.Key].Direction == InsightDirection.Down
+                        && macdStatuses[x.Key].Direction == InsightDirection.Down
+                        && macdStatuses[x.Key].DaysPastSignal < stoStatuses[x.Key].DaysPastSignal)
                     .Take(NumLongShort)
                     .Select(x => new Insight(
                             x.Value.Symbol,
@@ -269,28 +305,35 @@ namespace QuantConnect.Algorithm.CSharp
             if (!_rebalanceMeter.IsDue(Time))
                 return Universe.Unchanged;
 
-            var avgDollarVolumes = new Dictionary<CoarseFundamental, decimal>();
-
-            foreach (var candidate in candidates.OrderByDescending(x => x.DollarVolume).Take(UniverseSize * 3))
-            {
-                try
-                {
-                    var history = History<TradeBar>(candidate.Symbol, UniverseSmaDays, Resolution.Daily);
-                    if(history.Any())
-                        avgDollarVolumes[candidate] = history.Average(x => x.Volume * x.Price);
-                }
-                catch (Exception e)
-                {
-                    Log($"Exception getting avg dollar volume for {candidate.Symbol.Value}: {e.Message}");
-                }
-            }
-
-            return candidates
-                .Where(x => x.HasFundamentalData
-                    && avgDollarVolumes.ContainsKey(x))
-                .OrderByDescending(x => avgDollarVolumes[x])
+            return candidates.Where(x =>
+                x.HasFundamentalData
+                && x.DollarVolume > UniverseMinDollarVolume)
+                .OrderByDescending(x => x.DollarVolume)
                 .Take(UniverseSize)
                 .Select(x => x.Symbol);
+
+            //var avgDollarVolumes = new Dictionary<CoarseFundamental, decimal>();
+
+            //foreach (var candidate in candidates.OrderByDescending(x => x.DollarVolume).Take(UniverseSize * 3))
+            //{
+            //    try
+            //    {
+            //        var history = History<TradeBar>(candidate.Symbol, UniverseSmaDays, Resolution.Daily);
+            //        if(history.Any())
+            //            avgDollarVolumes[candidate] = history.Average(x => x.Volume * x.Price);
+            //    }
+            //    catch (Exception e)
+            //    {
+            //        Log($"Exception getting avg dollar volume for {candidate.Symbol.Value}: {e.Message}");
+            //    }
+            //}
+
+            //return candidates
+            //    .Where(x => x.HasFundamentalData
+            //        && avgDollarVolumes.ContainsKey(x))
+            //    .OrderByDescending(x => avgDollarVolumes[x])
+            //    .Take(UniverseSize)
+            //    .Select(x => x.Symbol);
         }
 
         private void SendEmailNotification(string msg)

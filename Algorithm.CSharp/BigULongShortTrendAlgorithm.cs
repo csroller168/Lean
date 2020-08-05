@@ -25,9 +25,9 @@ namespace QuantConnect.Algorithm.CSharp
 
         // short-term TODOs:
         // 
-        // why is every sto indicator firing?
         // can i get more macds to fire?
-        // fix slowness in selection (single day volume > 5M?)
+        // if I cannot increase universe size, put avg daily volume code back
+        // NOTE: getInsights is called multiple times just because it's not finding any. no error
         //
         // Implement moving momentum here
         //      trade daily
@@ -58,7 +58,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly int UniverseSize = 150;
-        private static readonly int NumLongShort = 6;
+        private static readonly int NumLongShort = 15;
         private static readonly int UniverseSmaDays = 5;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private static readonly int SlowSmaDays = 150;
@@ -78,7 +78,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2015, 1, 1);
-            SetEndDate(2016, 6, 30);
+            SetEndDate(2015, 3, 30);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute
@@ -96,12 +96,9 @@ namespace QuantConnect.Algorithm.CSharp
                     return;
 
                 var insights = GetInsights(slice).ToArray();
-                if(insights.Count() >= NumLongShort * 2)
-                {
-                    EmitInsights(insights);
-                    Rebalance(insights);
-                    _rebalanceMeter.Update(Time);
-                }
+                EmitInsights(insights);
+                Rebalance(insights);
+                _rebalanceMeter.Update(Time);
             }
             catch(Exception e)
             {
@@ -115,6 +112,7 @@ namespace QuantConnect.Algorithm.CSharp
                 .CreateTargets(this, insights);
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
+            Log(targetsStr);
             SendEmailNotification(targetsStr);
         }
 
@@ -136,7 +134,7 @@ namespace QuantConnect.Algorithm.CSharp
                 return status;
 
             //var stos = _stos[symbol].Select(x => x.Value).ToList();
-            var stos = new List<decimal> { 18m, 19m, 21m, 22m, 23m };
+            var stos = new List<decimal> { 18m, 19m, 18, 19m, 23m };
 
             var daysSinceOutBuyRange = stos.FindIndex(x => x > StoBuyThreshold) - 1;
             if (stos[0] <= StoBuyThreshold && daysSinceOutBuyRange > 0)
@@ -163,7 +161,8 @@ namespace QuantConnect.Algorithm.CSharp
                 || !_macdHistograms[symbol].IsReady)
                 return status;
 
-            var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
+            //var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
+            var histograms = new List<decimal> { 1, 1, 1, -0.5m, -1m };
 
             var daysSinceInSellRange = histograms.FindIndex(x => x < 0);
             if(histograms[0] > 0 && daysSinceInSellRange > 0)
@@ -196,6 +195,25 @@ namespace QuantConnect.Algorithm.CSharp
                     x => MacdStatus(x.Key));
 
                 //*****
+
+                //var sym = _stos.First().Key;
+                //var stoStatus = stoStatuses[sym];
+                //var macdStatus = macdStatuses[sym];
+                //Log($"{Time}: sto={stoStatus.Direction},{stoStatus.DaysPastSignal}.  macd={macdStatus.Direction},{macdStatus.DaysPastSignal}");
+                //Log($"{slice.ContainsKey(sym)},{MomentumDirection(sym) == InsightDirection.Up},{stoStatuses[sym].Direction == InsightDirection.Up},{macdStatuses[sym].Direction == InsightDirection.Up},{macdStatuses[sym].DaysPastSignal < stoStatuses[sym].DaysPastSignal}");
+
+
+                /*
+                 && slice.ContainsKey(x.Key)
+                        && MomentumDirection(x.Key) == InsightDirection.Up
+                        && stoStatuses[x.Key].Direction == InsightDirection.Up
+                        && macdStatuses[x.Key].Direction == InsightDirection.Up
+                        && macdStatuses[x.Key].DaysPastSignal < stoStatuses[x.Key].DaysPastSignal)*/
+
+
+
+                //var aSto = _stos[sym][0].Value;
+                //Log($"{Time}: sto[{sym.Value}]={aSto}");
 
                 //var momentumCount = ActiveSecurities
                 //    .Where(x => x.Value.IsTradable
@@ -230,6 +248,8 @@ namespace QuantConnect.Algorithm.CSharp
                             InsightType.Price,
                             InsightDirection.Up)));
 
+                Log($"a{insights.Count}");
+
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
@@ -249,7 +269,7 @@ namespace QuantConnect.Algorithm.CSharp
             catch (Exception e)
             {
                 Log($"Exception: GetInsights: {e.Message}");
-                return Enumerable.Empty<Insight>();
+                throw;
             }
         }
 

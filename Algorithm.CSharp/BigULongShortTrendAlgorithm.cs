@@ -24,7 +24,13 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // short-term TODOs:
-        // 
+        //
+        // debug todo:
+        //      sto window may not be working
+        //      build universe only of positive momentum
+        //          for loop that breaks when universe big enough
+        //      tweak macd/sto params to not fire/unfire so quickly
+        //          maybe just one of them
         // can i get more macds to fire?
         // if I cannot increase universe size, put avg daily volume code back
         // NOTE: getInsights is called multiple times just because it's not finding any. no error
@@ -57,7 +63,7 @@ namespace QuantConnect.Algorithm.CSharp
         // consider refining long/short universe with dividend yield or age of company
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly int UniverseSize = 150;
+        private static readonly int UniverseSize = 500;
         private static readonly int NumLongShort = 15;
         private static readonly int UniverseSmaDays = 5;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
@@ -93,6 +99,9 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 if (!_rebalanceMeter.IsDue(Time))
+                    return;
+
+                if (slice.Count() == 0)
                     return;
 
                 var insights = GetInsights(slice).ToArray();
@@ -133,8 +142,8 @@ namespace QuantConnect.Algorithm.CSharp
                 || !_stos[symbol].IsReady)
                 return status;
 
-            //var stos = _stos[symbol].Select(x => x.Value).ToList();
-            var stos = new List<decimal> { 18m, 19m, 18, 19m, 23m };
+            var stos = _stos[symbol].Select(x => x.Value).ToList();
+            //var stos = new List<decimal> { 18m, 19m, 18, 19m, 23m };
 
             var daysSinceOutBuyRange = stos.FindIndex(x => x > StoBuyThreshold) - 1;
             if (stos[0] <= StoBuyThreshold && daysSinceOutBuyRange > 0)
@@ -161,8 +170,8 @@ namespace QuantConnect.Algorithm.CSharp
                 || !_macdHistograms[symbol].IsReady)
                 return status;
 
-            //var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
-            var histograms = new List<decimal> { 1, 1, 1, -0.5m, -1m };
+            var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
+            //var histograms = new List<decimal> { 1, 1, 1, -0.5m, -1m };
 
             var daysSinceInSellRange = histograms.FindIndex(x => x < 0);
             if(histograms[0] > 0 && daysSinceInSellRange > 0)
@@ -195,22 +204,46 @@ namespace QuantConnect.Algorithm.CSharp
                     x => MacdStatus(x.Key));
 
                 //*****
+                Log(slice.Count());
 
-                //var sym = _stos.First().Key;
-                //var stoStatus = stoStatuses[sym];
-                //var macdStatus = macdStatuses[sym];
-                //Log($"{Time}: sto={stoStatus.Direction},{stoStatus.DaysPastSignal}.  macd={macdStatus.Direction},{macdStatus.DaysPastSignal}");
-                //Log($"{slice.ContainsKey(sym)},{MomentumDirection(sym) == InsightDirection.Up},{stoStatuses[sym].Direction == InsightDirection.Up},{macdStatuses[sym].Direction == InsightDirection.Up},{macdStatuses[sym].DaysPastSignal < stoStatuses[sym].DaysPastSignal}");
-
-
-                /*
-                 && slice.ContainsKey(x.Key)
-                        && MomentumDirection(x.Key) == InsightDirection.Up
-                        && stoStatuses[x.Key].Direction == InsightDirection.Up
-                        && macdStatuses[x.Key].Direction == InsightDirection.Up
-                        && macdStatuses[x.Key].DaysPastSignal < stoStatuses[x.Key].DaysPastSignal)*/
+                //var aSymbol = _stos.Keys.Single(x => x.Value == "AAPL");
+                //var sto = _stos[aSymbol];
+                //var strElements = Enumerable.Range(0, sto.Count)
+                //    .Select(x => $"{x}({sto[x].Value})");
+                //var str = string.Join(", ", strElements);
+                //Log(str);
 
 
+
+                //var momentumCount = ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && MomentumDirection(x.Key) == InsightDirection.Up)
+                //    .Count();
+
+                //var stoHistogram = ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && stoStatuses[x.Key].Direction == InsightDirection.Up)
+                //    .Select(x => x.Key)
+                //    .GroupBy(x => stoStatuses[x].DaysPastSignal)
+                //    .Select(x => new { Days = x.Key, Count = x.Count() })
+                //    .OrderBy(x => x.Count)
+                //    .Select(x => $"{x.Days}({x.Count})");
+
+                //var macdHistogram = ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && macdStatuses[x.Key].Direction == InsightDirection.Up)
+                //    .Select(x => x.Key)
+                //    .GroupBy(x => macdStatuses[x].DaysPastSignal)
+                //    .Select(x => new { Days = x.Key, Count = x.Count() })
+                //    .OrderBy(x => x.Count)
+                //    .Select(x => $"{x.Days}({x.Count})");
+
+                //Log($"momentumCount={momentumCount}, stos[{string.Join(",", stoHistogram)}], macds[{string.Join(",", macdHistogram)}]");
+
+                //////////
 
                 //var aSto = _stos[sym][0].Value;
                 //Log($"{Time}: sto[{sym.Value}]={aSto}");
@@ -247,8 +280,6 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up)));
-
-                Log($"a{insights.Count}");
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable

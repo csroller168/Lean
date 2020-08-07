@@ -26,14 +26,10 @@ namespace QuantConnect.Algorithm.CSharp
         // short-term TODOs:
         //
         // debug todo:
-        //      sto window may not be working
-        //      build universe only of positive momentum
-        //          for loop that breaks when universe big enough
-        //      tweak macd/sto params to not fire/unfire so quickly
-        //          maybe just one of them
-        // can i get more macds to fire?
-        // if I cannot increase universe size, put avg daily volume code back
-        // NOTE: getInsights is called multiple times just because it's not finding any. no error
+        //      optimize indicator params for more signals
+        //      optimize universe selection
+        //          build universe only of positive momentum
+        //              for loop that breaks when universe big enough
         //
         // Implement moving momentum here
         //      trade daily
@@ -143,7 +139,6 @@ namespace QuantConnect.Algorithm.CSharp
                 return status;
 
             var stos = _stos[symbol].Select(x => x.Value).ToList();
-            //var stos = new List<decimal> { 18m, 19m, 18, 19m, 23m };
 
             var daysSinceOutBuyRange = stos.FindIndex(x => x > StoBuyThreshold) - 1;
             if (stos[0] <= StoBuyThreshold && daysSinceOutBuyRange > 0)
@@ -171,7 +166,6 @@ namespace QuantConnect.Algorithm.CSharp
                 return status;
 
             var histograms = _macdHistograms[symbol].Select(x => x.Value).ToList();
-            //var histograms = new List<decimal> { 1, 1, 1, -0.5m, -1m };
 
             var daysSinceInSellRange = histograms.FindIndex(x => x < 0);
             if(histograms[0] > 0 && daysSinceInSellRange > 0)
@@ -204,7 +198,6 @@ namespace QuantConnect.Algorithm.CSharp
                     x => MacdStatus(x.Key));
 
                 //*****
-                Log(slice.Count());
 
                 //var aSymbol = _stos.Keys.Single(x => x.Value == "AAPL");
                 //var sto = _stos[aSymbol];
@@ -248,22 +241,22 @@ namespace QuantConnect.Algorithm.CSharp
                 //var aSto = _stos[sym][0].Value;
                 //Log($"{Time}: sto[{sym.Value}]={aSto}");
 
-                //var momentumCount = ActiveSecurities
-                //    .Where(x => x.Value.IsTradable
-                //        && slice.ContainsKey(x.Key)
-                //        && MomentumDirection(x.Key) == InsightDirection.Up)
-                //    .Count();
-                //var stoCount = ActiveSecurities
-                //    .Where(x => x.Value.IsTradable
-                //        && slice.ContainsKey(x.Key)
-                //        && stoStatuses[x.Key].Direction == InsightDirection.Up)
-                //    .Count();
-                //var macdCount = ActiveSecurities
-                //    .Where(x => x.Value.IsTradable
-                //        && slice.ContainsKey(x.Key)
-                //        && macdStatuses[x.Key].Direction == InsightDirection.Up)
-                //    .Count();
-                //Log($"{Time}: momCount={momentumCount}, stoCount={stoCount}, macdCount={macdCount}");
+                var momentumCount = ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && MomentumDirection(x.Key) == InsightDirection.Up)
+                    .Count();
+                var stoCount = ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && stoStatuses[x.Key].Direction == InsightDirection.Up)
+                    .Count();
+                var macdCount = ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && macdStatuses[x.Key].Direction == InsightDirection.Up)
+                    .Count();
+                Log($"{Time}: momCount={momentumCount}, stoCount={stoCount}, macdCount={macdCount}");
 
                 //*****
 

@@ -13,7 +13,6 @@ using QuantConnect.Algorithm.Framework.Selection;
 using QuantConnect.Data;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
-using QuantConnect.Data.Market;
 using QuantConnect.Util;
 
 namespace QuantConnect.Algorithm.CSharp
@@ -27,9 +26,20 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // debug todo:
         //      optimize indicator params for more signals
+        //          price > slowSma
+        //          reduce StoDays
+        //          increase SlowMacdDays
         //      optimize universe selection
+        //          maybe do the lowest X stocks > 5M volume
         //          build universe only of positive momentum
         //              for loop that breaks when universe big enough
+        //      other possible optimizations
+        //          set a static holding period > 1 day
+        //          increasing rolling window size to allow macd to turn later
+        //          event study:
+        //              download range of daily prices for 3-4 stocks and plot avg performance for n days on certain events
+        //              pick up/down/flat ranges
+        //         
         //
         // Implement moving momentum here
         //      trade daily
@@ -80,7 +90,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2015, 1, 1);
-            SetEndDate(2015, 3, 30);
+            SetEndDate(2019, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute

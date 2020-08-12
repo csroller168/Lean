@@ -73,7 +73,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumLongShort = 15;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private static readonly int SlowSmaDays = 150;
-        private static readonly int StoDays = 10;
+        private static readonly int StoDays = 4;
         private static readonly int StoBuyThreshold = 20;
         private static readonly int StoSellThreshold = 80;
         private static readonly int FastMacdDays = 5;

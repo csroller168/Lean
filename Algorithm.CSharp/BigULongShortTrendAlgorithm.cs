@@ -26,7 +26,6 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // debug todo:
         //      optimize indicator params for more signals
-        //          price > slowSma
         //          reduce StoDays
         //          increase SlowMacdDays
         //      optimize universe selection
@@ -39,6 +38,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          event study:
         //              download range of daily prices for 3-4 stocks and plot avg performance for n days on certain events
         //              pick up/down/flat ranges
+        //          increase fixed % or discard
         //         
         //
         // Implement moving momentum here
@@ -71,10 +71,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly int UniverseSize = 500;
         private static readonly int NumLongShort = 15;
-        private static readonly int UniverseSmaDays = 5;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private static readonly int SlowSmaDays = 150;
-        private static readonly int FastSmaDays = 20;
         private static readonly int StoDays = 10;
         private static readonly int StoBuyThreshold = 20;
         private static readonly int StoSellThreshold = 80;
@@ -83,7 +81,6 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SignalMacdDays = 9;
         private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
-        private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, SimpleMovingAverage> _slowSmas = new Dictionary<Symbol, SimpleMovingAverage>();
         private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _stos = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _macdHistograms = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
@@ -139,12 +136,6 @@ namespace QuantConnect.Algorithm.CSharp
                 return InsightDirection.Flat;
 
             return (slice[symbol] as BaseData).Price > _slowSmas[symbol] ? InsightDirection.Up : InsightDirection.Down;
-
-            //if (!_momentums.ContainsKey(symbol)
-            //    || !_momentums[symbol].IsReady)
-            //    return InsightDirection.Flat;
-
-            //return _momentums[symbol] > 0 ? InsightDirection.Up : InsightDirection.Down;
         }
 
         private SignalStatus StoStatus(Symbol symbol)
@@ -327,7 +318,6 @@ namespace QuantConnect.Algorithm.CSharp
                     //var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
                     //var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
                     //var slope = fastIndicator.Minus(slowIndicator);
-                    //_momentums[addition.Symbol] = slope;
 
                     // STO
                     var stoIndicator = STO(addition.Symbol, StoDays, Resolution.Daily);
@@ -353,7 +343,6 @@ namespace QuantConnect.Algorithm.CSharp
 
                 foreach (var removedSecurity in changes.RemovedSecurities)
                 {
-                    _momentums.Remove(removedSecurity.Symbol);
                     _slowSmas.Remove(removedSecurity.Symbol);
                     _stos.Remove(removedSecurity.Symbol);
                     _macdHistograms.Remove(removedSecurity.Symbol);

@@ -84,13 +84,14 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
+        private readonly Dictionary<Symbol, SimpleMovingAverage> _slowSmas = new Dictionary<Symbol, SimpleMovingAverage>();
         private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _stos = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, RollingWindow<IndicatorDataPoint>> _macdHistograms = new Dictionary<Symbol, RollingWindow<IndicatorDataPoint>>();
 
         public override void Initialize()
         {
-            SetStartDate(2015, 1, 1);
-            SetEndDate(2019, 1, 1);
+            SetStartDate(2006, 1, 1);
+            SetEndDate(2011, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute
@@ -131,13 +132,19 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification(targetsStr);
         }
 
-        private InsightDirection MomentumDirection(Symbol symbol)
+        private InsightDirection MomentumDirection(Symbol symbol, Slice slice)
         {
-            if (!_momentums.ContainsKey(symbol)
-                || !_momentums[symbol].IsReady)
+            if (!_slowSmas.ContainsKey(symbol)
+                || !_slowSmas[symbol].IsReady)
                 return InsightDirection.Flat;
 
-            return _momentums[symbol] > 0 ? InsightDirection.Up : InsightDirection.Down;
+            return (slice[symbol] as BaseData).Price > _slowSmas[symbol] ? InsightDirection.Up : InsightDirection.Down;
+
+            //if (!_momentums.ContainsKey(symbol)
+            //    || !_momentums[symbol].IsReady)
+            //    return InsightDirection.Flat;
+
+            //return _momentums[symbol] > 0 ? InsightDirection.Up : InsightDirection.Down;
         }
 
         private SignalStatus StoStatus(Symbol symbol)
@@ -254,7 +261,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var momentumCount = ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
-                        && MomentumDirection(x.Key) == InsightDirection.Up)
+                        && MomentumDirection(x.Key, slice) == InsightDirection.Up)
                     .Count();
                 var stoCount = ActiveSecurities
                     .Where(x => x.Value.IsTradable
@@ -273,7 +280,7 @@ namespace QuantConnect.Algorithm.CSharp
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
-                        && MomentumDirection(x.Key) == InsightDirection.Up
+                        && MomentumDirection(x.Key, slice) == InsightDirection.Up
                         && stoStatuses[x.Key].Direction == InsightDirection.Up
                         && macdStatuses[x.Key].Direction == InsightDirection.Up
                         && macdStatuses[x.Key].DaysPastSignal < stoStatuses[x.Key].DaysPastSignal)
@@ -287,7 +294,7 @@ namespace QuantConnect.Algorithm.CSharp
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
-                        && MomentumDirection(x.Key) == InsightDirection.Down
+                        && MomentumDirection(x.Key, slice) == InsightDirection.Down
                         && stoStatuses[x.Key].Direction == InsightDirection.Down
                         && macdStatuses[x.Key].Direction == InsightDirection.Down
                         && macdStatuses[x.Key].DaysPastSignal < stoStatuses[x.Key].DaysPastSignal)
@@ -315,9 +322,12 @@ namespace QuantConnect.Algorithm.CSharp
                 {
                     // momentum
                     var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
-                    var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
-                    var slope = fastIndicator.Minus(slowIndicator);
-                    _momentums[addition.Symbol] = slope;
+                    _slowSmas[addition.Symbol] = slowIndicator;
+                    
+                    //var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
+                    //var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
+                    //var slope = fastIndicator.Minus(slowIndicator);
+                    //_momentums[addition.Symbol] = slope;
 
                     // STO
                     var stoIndicator = STO(addition.Symbol, StoDays, Resolution.Daily);
@@ -335,7 +345,7 @@ namespace QuantConnect.Algorithm.CSharp
                     foreach (var bar in history)
                     {
                         slowIndicator.Update(bar.EndTime, bar.Close);
-                        fastIndicator.Update(bar.EndTime, bar.Close);
+                        //fastIndicator.Update(bar.EndTime, bar.Close);
                         stoIndicator.Update(bar);
                         macdIndicator.Update(bar.EndTime, bar.Close);
                     }
@@ -344,6 +354,7 @@ namespace QuantConnect.Algorithm.CSharp
                 foreach (var removedSecurity in changes.RemovedSecurities)
                 {
                     _momentums.Remove(removedSecurity.Symbol);
+                    _slowSmas.Remove(removedSecurity.Symbol);
                     _stos.Remove(removedSecurity.Symbol);
                     _macdHistograms.Remove(removedSecurity.Symbol);
                 }

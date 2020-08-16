@@ -1,3 +1,5 @@
+config.json
+
 # Object files
 *.o
 *.ko
@@ -9,7 +11,7 @@
 *.suo
 
 # Precompiled Headers
-*.gch
+/*.gch
 *.pch
 
 # Libraries

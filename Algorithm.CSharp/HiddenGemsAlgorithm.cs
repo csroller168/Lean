@@ -14,6 +14,7 @@ using QuantConnect.Data;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
 using QuantConnect.Util;
+using QuantConnect.Data.Fundamental;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -28,11 +29,11 @@ namespace QuantConnect.Algorithm.CSharp
         // figure out some short criteria too
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly int UniverseSize = 500;
+        private static readonly int CoarseUniverseSize = 2000;
+        private static readonly int FineUniverseSize = 500;
         private static readonly int NumLong = 15;
         private static readonly int NumShort = 0;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
-        private static readonly double CashPct = 0.005;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
         public override void Initialize()
@@ -45,7 +46,7 @@ namespace QuantConnect.Algorithm.CSharp
                 : Resolution.Hour;
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
-            AddUniverseSelection(new CoarseFundamentalUniverseSelectionModel(SelectCoarse));
+            AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
         }
 
         public override void OnData(Slice slice)
@@ -71,7 +72,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void Rebalance(Insight[] insights)
         {
-            var targets = new FixedPercentPortfolioConstructionModel(NumLong + NumShort, CashPct)
+            var targets = new EqualWeightingPortfolioConstructionModel()
                 .CreateTargets(this, insights);
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
@@ -100,7 +101,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key))
                     .OrderByDescending(x => x.Key.Value)
-                    .Take(NumLong)
+                    .Take(NumShort)
                     .Select(x => new Insight(
                             x.Value.Symbol,
                             RebalancePeriod,
@@ -133,11 +134,22 @@ namespace QuantConnect.Algorithm.CSharp
             if (!_rebalanceMeter.IsDue(Time))
                 return Universe.Unchanged;
 
-            return candidates.Where(x =>
-                x.HasFundamentalData
+            return candidates
+                .Where(x => x.HasFundamentalData
                 && x.DollarVolume > UniverseMinDollarVolume)
                 .OrderByDescending(x => x.DollarVolume)
-                .Take(UniverseSize)
+                .Take(CoarseUniverseSize)
+                .Select(x => x.Symbol);
+        }
+
+        private IEnumerable<Symbol> SelectFine(IEnumerable<FineFundamental> candidates)
+        {
+            if (!_rebalanceMeter.IsDue(Time))
+                return Universe.Unchanged;
+
+            return candidates
+                .Where(x => x.AssetClassification.MorningstarSectorCode == 311)
+                .Take(FineUniverseSize)
                 .Select(x => x.Symbol);
         }
 
@@ -152,12 +164,6 @@ namespace QuantConnect.Algorithm.CSharp
             startInfo.Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com";
             process.StartInfo = startInfo;
             process.Start();
-        }
-
-        public override void OnEndOfDay()
-        {
-            if (Portfolio.Invested)
-                Liquidate();
         }
     }
 
@@ -176,22 +182,6 @@ namespace QuantConnect.Algorithm.CSharp
                     && !targets.Any(y => y.Symbol.Equals(x.Key)))
                 .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
             base.Execute(algorithm, adjustedTargets.ToArray());
-        }
-    }
-
-    public class FixedPercentPortfolioConstructionModel : PortfolioConstructionModel
-    {
-        private readonly double Percent = 0;
-        public FixedPercentPortfolioConstructionModel(
-            int maxNumHoldings,
-            double cashPct)
-        {
-            Percent = (1.0 - cashPct) / maxNumHoldings;
-        }
-
-        protected override Dictionary<Insight, double> DetermineTargetPercent(List<Insight> activeInsights)
-        {
-            return activeInsights.ToDictionary(x => x, x => Percent * (double)x.Direction);
         }
     }
 

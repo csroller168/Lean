@@ -23,26 +23,24 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
-        // short-term TODOs:
-        // Set universe criteria
-        //      US companies, tech industry, recently established, maybe little/no debt
-        //      https://www.quantconnect.com/docs/data-library/fundamentals
-        // Set insight criteria
-        //      momentum:  SMA(7)/SMA(7) 6 months ago or SMA(7)/SMA(200)
-        // figure out some short criteria too
-        //      maybe high debt, high p/e, low momentum
-        //      if no short criteria, maybe implement trailing stops
-        //      or... rebalance daily?
-        // try limiting to NYSE or NASDAQ exchange (ExchangeId)
+        // optimize todos:
+        //      try price / sma momentum
+        //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
+        //      risk control
+        //          short criteria
+        //              maybe high debt, high p/e, or low momentum
+        //          trailing stops?
+        //      limit to NYSE or NASDAQ exchange (ExchangeId)
+        //      replace MinYearEstablished with YearEstablishedLookback
 
-        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(30);
+        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly int CoarseUniverseSize = 2000;
         private static readonly int FineUniverseSize = 500;
         private static readonly int MinYearEstablished = 1992;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
-        private static readonly int SmaWindowDays = 7;
+        private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 15;
         private static readonly int NumShort = 0;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
@@ -52,7 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2006, 1, 1);
-            SetEndDate(2011, 1, 1);
+            SetEndDate(2020, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute

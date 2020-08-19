@@ -32,6 +32,7 @@ namespace QuantConnect.Algorithm.CSharp
         // figure out some short criteria too
         //      maybe high debt, high p/e, low momentum
         //      if no short criteria, maybe implement trailing stops
+        //      or... rebalance daily?
         // try limiting to NYSE or NASDAQ exchange (ExchangeId)
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(30);
@@ -131,41 +132,22 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        //public void UpdatePastSma(IndicatorDataPoint dataPoint)
-        //{
-        //    // todo: https://www.quantconnect.com/forum/discussion/8991/creating-an-offset-displacement-for-sma/p1
-        //}
-
         public override void OnSecuritiesChanged(SecurityChanges changes)
         {
             try
             {
                 foreach(var addition in changes.AddedSecurities)
                 {
-                    // TODO: call UpdatePastSma above on currentSma update, and examine aggregate indicator compatibility
                     var currentSma = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
                     var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
-                    //currentSma.Updated += (sender, dataPoint) => pastSma.Update(dataPoint);
                     var momentum = currentSma.Over(pastSma);
                     _momentums[addition.Symbol] = momentum;
-
-                    //var slowIndicator = SMA(addition.Symbol, SlowSmaDays, Resolution.Daily);
-                    //var fastIndicator = SMA(addition.Symbol, FastSmaDays, Resolution.Daily);
-                    //var slope = fastIndicator.Minus(slowIndicator);
 
                     var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
                     foreach(var bar in history)
                     {
                         currentSma.Update(bar.EndTime, bar.Close);
                     }
-                    //var pastSma = history
-                    //    .Take(SmaWindowDays)
-                    //    .Average(x => x.Close);
-                    //var recentSma = history
-                    //    .Skip(SmaLookbackDays - SmaWindowDays)
-                    //    .Take(SmaWindowDays)
-                    //    .Average(x => x.Close);
-                    //_momentums[addition.Symbol] = recentSma / pastSma;
                 }
                 foreach(var removal in changes.RemovedSecurities)
                 {

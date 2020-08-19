@@ -24,17 +24,29 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // short-term TODOs:
-        // experiment with "hidden gem" selection
-        // go back to equal weight selection
+        // Set universe criteria
+        //      US companies, tech industry, recently established, maybe little/no debt
+        //      https://www.quantconnect.com/docs/data-library/fundamentals
+        // Set insight criteria
+        //      momentum:  SMA(7)/SMA(7) 6 months ago or SMA(7)/SMA(200)
         // figure out some short criteria too
+        //      maybe high debt, high p/e, low momentum
+        //      if no short criteria, maybe implement trailing stops
+        // try limiting to NYSE or NASDAQ exchange (ExchangeId)
 
-        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
+        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(30);
         private static readonly int CoarseUniverseSize = 2000;
         private static readonly int FineUniverseSize = 500;
+        private static readonly int MinYearEstablished = 1992;
+        private static readonly int TechSectorCode = 311;
+        private static readonly string CountryCode = "USA";
+        private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
+        private static readonly int SmaWindowDays = 7;
         private static readonly int NumLong = 15;
         private static readonly int NumShort = 0;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
+        private readonly Dictionary<Symbol, decimal> _momentums = new Dictionary<Symbol, decimal>();
 
         public override void Initialize()
         {
@@ -97,16 +109,16 @@ namespace QuantConnect.Algorithm.CSharp
                             InsightType.Price,
                             InsightDirection.Up)));
 
-                insights.AddRange(ActiveSecurities
-                    .Where(x => x.Value.IsTradable
-                        && slice.ContainsKey(x.Key))
-                    .OrderByDescending(x => x.Key.Value)
-                    .Take(NumShort)
-                    .Select(x => new Insight(
-                            x.Value.Symbol,
-                            RebalancePeriod,
-                            InsightType.Price,
-                            InsightDirection.Down)));
+                //insights.AddRange(ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key))
+                //    .OrderByDescending(x => x.Key.Value)
+                //    .Take(NumShort)
+                //    .Select(x => new Insight(
+                //            x.Value.Symbol,
+                //            RebalancePeriod,
+                //            InsightType.Price,
+                //            InsightDirection.Down)));
 
                 return insights;
             }
@@ -121,7 +133,22 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                // warm indicators
+                foreach(var addition in changes.AddedSecurities)
+                {
+                    var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
+                    var pastSma = history
+                        .Take(SmaWindowDays)
+                        .Average(x => x.Close);
+                    var recentSma = history
+                        .Skip(SmaLookbackDays - SmaWindowDays)
+                        .Take(SmaWindowDays)
+                        .Average(x => x.Close);
+                    _momentums[addition.Symbol] = recentSma / pastSma;
+                }
+                foreach(var removal in changes.RemovedSecurities)
+                {
+                    _momentums.Remove(removal.Symbol);
+                }
             }
             catch (Exception e)
             {
@@ -136,7 +163,7 @@ namespace QuantConnect.Algorithm.CSharp
 
             return candidates
                 .Where(x => x.HasFundamentalData
-                && x.DollarVolume > UniverseMinDollarVolume)
+                    && x.DollarVolume > UniverseMinDollarVolume)
                 .OrderByDescending(x => x.DollarVolume)
                 .Take(CoarseUniverseSize)
                 .Select(x => x.Symbol);
@@ -148,9 +175,18 @@ namespace QuantConnect.Algorithm.CSharp
                 return Universe.Unchanged;
 
             return candidates
-                .Where(x => x.AssetClassification.MorningstarSectorCode == 311)
+                .Where(x => x.AssetClassification.MorningstarSectorCode == TechSectorCode
+                    && StrToInt(x.CompanyReference.YearofEstablishment) >= MinYearEstablished
+                    && x.CompanyReference.CountryId == CountryCode)
                 .Take(FineUniverseSize)
                 .Select(x => x.Symbol);
+        }
+
+        private int StrToInt(string str)
+        {
+            int result;
+            if(!int.TryParse(str, out result)) return int.MinValue;
+            return result;
         }
 
         private void SendEmailNotification(string msg)

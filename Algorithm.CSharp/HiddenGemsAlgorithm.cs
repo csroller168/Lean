@@ -165,46 +165,46 @@ namespace QuantConnect.Algorithm.CSharp
             process.StartInfo = startInfo;
             process.Start();
         }
-    }
 
-    public class SmartImmediateExecutionModel : ImmediateExecutionModel
-    {
-        public override void Execute(QCAlgorithm algorithm, IPortfolioTarget[] targets)
+        private class UpdateMeter
         {
-            var adjustedTargets = targets.ToList();
-            adjustedTargets.RemoveAll(x =>
-                algorithm.Portfolio.ContainsKey(x.Symbol)
-                && algorithm.Portfolio[x.Symbol].Invested);
-            adjustedTargets.AddRange(algorithm.ActiveSecurities
-                .Where(x =>
-                    algorithm.Portfolio.ContainsKey(x.Key)
-                    && algorithm.Portfolio[x.Key].Invested
-                    && !targets.Any(y => y.Symbol.Equals(x.Key)))
-                .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
-            base.Execute(algorithm, adjustedTargets.ToArray());
-        }
-    }
+            private readonly TimeSpan _frequency;
+            private DateTime _lastUpdate = DateTime.MinValue;
+            public bool IsDue(DateTime now) => _lastUpdate.Add(_frequency) <= now;
 
-    public class UpdateMeter
-    {
-        private readonly TimeSpan _frequency;
-        private DateTime _lastUpdate = DateTime.MinValue;
-        public bool IsDue(DateTime now) => _lastUpdate.Add(_frequency) <= now;
+            public UpdateMeter(TimeSpan frequency)
+            {
+                _frequency = frequency;
+            }
 
-        public UpdateMeter(TimeSpan frequency)
-        {
-            _frequency = frequency;
+            public void Update(DateTime now)
+            {
+                _lastUpdate = now;
+            }
         }
 
-        public void Update(DateTime now)
+        private class SignalStatus
         {
-            _lastUpdate = now;
+            public InsightDirection Direction = InsightDirection.Flat;
+            public int DaysPastSignal = -1;
         }
-    }
 
-    public class SignalStatus
-    {
-        public InsightDirection Direction = InsightDirection.Flat;
-        public int DaysPastSignal = -1;
+        private class SmartImmediateExecutionModel : ImmediateExecutionModel
+        {
+            public override void Execute(QCAlgorithm algorithm, IPortfolioTarget[] targets)
+            {
+                var adjustedTargets = targets.ToList();
+                adjustedTargets.RemoveAll(x =>
+                    algorithm.Portfolio.ContainsKey(x.Symbol)
+                    && algorithm.Portfolio[x.Symbol].Invested);
+                adjustedTargets.AddRange(algorithm.ActiveSecurities
+                    .Where(x =>
+                        algorithm.Portfolio.ContainsKey(x.Key)
+                        && algorithm.Portfolio[x.Key].Invested
+                        && !targets.Any(y => y.Symbol.Equals(x.Key)))
+                    .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
+                base.Execute(algorithm, adjustedTargets.ToArray());
+            }
+        }
     }
 }

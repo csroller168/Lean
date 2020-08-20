@@ -26,13 +26,14 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize todos:
         //      risk control
         //          short criteria
-        //              maybe high debt, high p/e, or low momentum
+        //              maybe high debt, high p/e, or low momentum (or different exchange)
         //          trailing stops?
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //      limit to NYSE or NASDAQ exchange (ExchangeId)
         //      adjust MinYearEstablished
         //      cap or floor market cap x.companyProfile.MarketCap
         //      increase NumLong, NumShort
+        //      adjust universe size
         //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);

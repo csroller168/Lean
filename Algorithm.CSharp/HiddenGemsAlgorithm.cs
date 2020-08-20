@@ -24,12 +24,11 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
-        //      risk control
+        //      risk control**
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
-        //          trailing stops?
+        //              first, separate collections of longs/shorts
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
-        //      limit to NYSE or NASDAQ exchange (ExchangeId)
         //      adjust MinYearEstablished
         //      cap or floor market cap x.companyProfile.MarketCap
         //      increase NumLong, NumShort
@@ -54,7 +53,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2006, 1, 1);
-            SetEndDate(2006, 1, 7);
+            SetEndDate(2020, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute

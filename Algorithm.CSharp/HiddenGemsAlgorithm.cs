@@ -24,14 +24,16 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
-        //      try price / sma momentum
-        //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //      risk control
         //          short criteria
         //              maybe high debt, high p/e, or low momentum
         //          trailing stops?
+        //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //      limit to NYSE or NASDAQ exchange (ExchangeId)
         //      replace MinYearEstablished with YearEstablishedLookback
+        //      cap market cap
+        //      increase NumLong, NumShort
+        //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly int CoarseUniverseSize = 2000;
@@ -39,6 +41,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int MinYearEstablished = 1992;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";
+        private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 15;
@@ -50,7 +53,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2006, 1, 1);
-            SetEndDate(2020, 1, 1);
+            SetEndDate(2006, 1, 7);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute
@@ -110,16 +113,18 @@ namespace QuantConnect.Algorithm.CSharp
                             InsightType.Price,
                             InsightDirection.Up)));
 
-                //insights.AddRange(ActiveSecurities
-                //    .Where(x => x.Value.IsTradable
-                //        && slice.ContainsKey(x.Key))
-                //    .OrderByDescending(x => x.Key.Value)
-                //    .Take(NumShort)
-                //    .Select(x => new Insight(
-                //            x.Value.Symbol,
-                //            RebalancePeriod,
-                //            InsightType.Price,
-                //            InsightDirection.Down)));
+                insights.AddRange(ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && _momentums.ContainsKey(x.Key)
+                        && _momentums[x.Key].IsReady)
+                    .OrderBy(x => _momentums[x.Key].Current)
+                    .Take(NumShort)
+                    .Select(x => new Insight(
+                            x.Value.Symbol,
+                            RebalancePeriod,
+                            InsightType.Price,
+                            InsightDirection.Down)));
 
                 return insights;
             }
@@ -179,7 +184,9 @@ namespace QuantConnect.Algorithm.CSharp
             return candidates
                 .Where(x => x.AssetClassification.MorningstarSectorCode == TechSectorCode
                     && StrToInt(x.CompanyReference.YearofEstablishment) >= MinYearEstablished
-                    && x.CompanyReference.CountryId == CountryCode)
+                    && x.CompanyReference.CountryId == CountryCode
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    )
                 .Take(FineUniverseSize)
                 .Select(x => x.Symbol);
         }

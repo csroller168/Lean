@@ -219,10 +219,12 @@ namespace QuantConnect.Algorithm.CSharp
             if (!LiveMode)
                 return;
             System.Diagnostics.Process process = new System.Diagnostics.Process();
-            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
-            startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-            startInfo.FileName = "mono";
-            startInfo.Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com";
+            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                FileName = "mono",
+                Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com"
+            };
             process.StartInfo = startInfo;
             process.Start();
         }

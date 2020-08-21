@@ -49,6 +49,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
+        private List<Symbol> _longCandidates = new List<Symbol>();
 
         public override void Initialize()
         {
@@ -103,6 +104,7 @@ namespace QuantConnect.Algorithm.CSharp
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
+                        && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady)
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -116,6 +118,7 @@ namespace QuantConnect.Algorithm.CSharp
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
+                        && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady)
                     .OrderBy(x => _momentums[x.Key].Current)
@@ -168,12 +171,17 @@ namespace QuantConnect.Algorithm.CSharp
             if (!_rebalanceMeter.IsDue(Time))
                 return Universe.Unchanged;
 
-            return candidates
+            _longCandidates = candidates
                 .Where(x => x.HasFundamentalData
                     && x.DollarVolume > UniverseMinDollarVolume)
                 .OrderByDescending(x => x.DollarVolume)
                 .Take(CoarseUniverseSize)
-                .Select(x => x.Symbol);
+                .Select(x => x.Symbol)
+                .ToList();
+
+            var shorts = Enumerable.Empty<Symbol>();
+
+            return _longCandidates.Union(shorts);
         }
 
         private IEnumerable<Symbol> SelectFine(IEnumerable<FineFundamental> candidates)
@@ -181,14 +189,21 @@ namespace QuantConnect.Algorithm.CSharp
             if (!_rebalanceMeter.IsDue(Time))
                 return Universe.Unchanged;
 
-            return candidates
-                .Where(x => x.AssetClassification.MorningstarSectorCode == TechSectorCode
+            var longs = candidates
+                .Where(
+                	x => _longCandidates.Contains(x.Symbol)
+                	&& x.AssetClassification.MorningstarSectorCode == TechSectorCode
                     && StrToInt(x.CompanyReference.YearofEstablishment) >= MinYearEstablished
                     && x.CompanyReference.CountryId == CountryCode
-                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    )
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId))
                 .Take(FineUniverseSize)
-                .Select(x => x.Symbol);
+                .Select(x => x.Symbol)
+                .ToList();
+            _longCandidates = longs;
+
+            var shorts = Enumerable.Empty<Symbol>();
+
+            return _longCandidates.Union(shorts);
         }
 
         private int StrToInt(string str)

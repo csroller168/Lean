@@ -34,6 +34,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      increase NumLong, NumShort
         //      adjust universe size
         //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
+        //          1yr growth metrics
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly int CoarseUniverseSize = 2000;

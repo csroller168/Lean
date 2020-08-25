@@ -24,6 +24,7 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
+        //      ** retry all prior things now that rebal bug fixed
         //      risk control**
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
@@ -36,9 +37,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
         //          1yr growth metrics
 
-        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly int CoarseUniverseSize = 2000;
-        private static readonly int FineUniverseSize = 500;
+        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromHours(12);
+        private static readonly int CoarseUniverseSize = 700;
+        private static readonly int FineUniverseSize = 100;
         private static readonly int MinYearEstablished = 1992;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";

@@ -23,6 +23,9 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
+        // debug todos:
+        //      go faster!
+
         // optimize todos:
         //      ** retry all prior things now that rebal bug fixed
         //      risk control**
@@ -38,8 +41,8 @@ namespace QuantConnect.Algorithm.CSharp
         //          1yr growth metrics
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromHours(12);
-        private static readonly int CoarseUniverseSize = 700;
-        private static readonly int FineUniverseSize = 100;
+        private static readonly int CoarseUniverseSize = 400;
+        private static readonly int FineUniverseSize = 50;
         private static readonly int MinYearEstablished = 1992;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";
@@ -56,7 +59,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2006, 1, 1);
-            SetEndDate(2020, 1, 1);
+            SetEndDate(2008, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute

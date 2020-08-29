@@ -25,8 +25,10 @@ namespace QuantConnect.Algorithm.CSharp
 
         // debug todos:
         //      go faster!
+        //			examine past commits
 
         // optimize todos:
+        //      make more insights by eliminating coarse and fine universe caps
         //      ** retry all prior things now that rebal bug fixed
         //      risk control**
         //          short criteria

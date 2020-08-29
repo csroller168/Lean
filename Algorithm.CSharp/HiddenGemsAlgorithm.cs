@@ -42,7 +42,8 @@ namespace QuantConnect.Algorithm.CSharp
         //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
         //          1yr growth metrics
 
-        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromHours(12);
+        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
+        private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(20);
         private static readonly int CoarseUniverseSize = 400;
         private static readonly int FineUniverseSize = 50;
         private static readonly int MinYearEstablished = 1992;
@@ -55,6 +56,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 0;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
+        private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private List<Symbol> _longCandidates = new List<Symbol>();
 
@@ -175,7 +177,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)
         {
-            if (!_rebalanceMeter.IsDue(Time))
+            if (!_universeMeter.IsDue(Time))
                 return Universe.Unchanged;
 
             _longCandidates = candidates
@@ -193,7 +195,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private IEnumerable<Symbol> SelectFine(IEnumerable<FineFundamental> candidates)
         {
-            if (!_rebalanceMeter.IsDue(Time))
+            if (!_universeMeter.IsDue(Time))
                 return Universe.Unchanged;
 
             var longs = candidates
@@ -209,6 +211,7 @@ namespace QuantConnect.Algorithm.CSharp
             _longCandidates = longs;
 
             var shorts = Enumerable.Empty<Symbol>();
+            _universeMeter.Update(Time);
 
             return _longCandidates.Union(shorts);
         }

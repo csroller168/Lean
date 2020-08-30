@@ -56,7 +56,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2006, 1, 1);
-            SetEndDate(2008, 1, 1);
+            SetEndDate(2020, 8, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute

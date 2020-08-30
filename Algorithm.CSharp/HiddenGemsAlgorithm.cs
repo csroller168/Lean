@@ -23,12 +23,7 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
-        // debug todos:
-        //      go faster!
-        //			examine past commits
-
         // optimize todos:
-        //      make more insights by eliminating coarse and fine universe caps
         //      ** retry all prior things now that rebal bug fixed
         //      risk control**
         //          short criteria
@@ -43,9 +38,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          1yr growth metrics
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(20);
-        private static readonly int CoarseUniverseSize = 400;
-        private static readonly int FineUniverseSize = 50;
+        private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(120);
         private static readonly int MinYearEstablished = 1992;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";
@@ -184,7 +177,6 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(x => x.HasFundamentalData
                     && x.DollarVolume > UniverseMinDollarVolume)
                 .OrderByDescending(x => x.DollarVolume)
-                .Take(CoarseUniverseSize)
                 .Select(x => x.Symbol)
                 .ToList();
 
@@ -205,7 +197,6 @@ namespace QuantConnect.Algorithm.CSharp
                     && StrToInt(x.CompanyReference.YearofEstablishment) >= MinYearEstablished
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId))
-                .Take(FineUniverseSize)
                 .Select(x => x.Symbol)
                 .ToList();
             _longCandidates = longs;

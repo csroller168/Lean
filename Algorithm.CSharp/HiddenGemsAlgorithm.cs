@@ -29,17 +29,17 @@ namespace QuantConnect.Algorithm.CSharp
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
         //              first, separate collections of longs/shorts
+        //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
+        //          1yr growth metrics
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
-        //      adjust MinYearEstablished
+        //          no/low debt for longs
         //      cap or floor market cap x.companyProfile.MarketCap
         //      increase NumLong, NumShort
         //      adjust universe size
-        //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
-        //          1yr growth metrics
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(120);
-        private static readonly int MinYearEstablished = 1992;
+        private static readonly int YearEstablishedLookback = 10;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
@@ -194,7 +194,7 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(
                 	x => _longCandidates.Contains(x.Symbol)
                 	&& x.AssetClassification.MorningstarSectorCode == TechSectorCode
-                    && StrToInt(x.CompanyReference.YearofEstablishment) >= MinYearEstablished
+                    && IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId))
                 .Select(x => x.Symbol)
@@ -207,11 +207,12 @@ namespace QuantConnect.Algorithm.CSharp
             return _longCandidates.Union(shorts);
         }
 
-        private int StrToInt(string str)
+        private bool IsRecent(string strYearEstablished)
         {
-            int result;
-            if(!int.TryParse(str, out result)) return int.MinValue;
-            return result;
+            int yearEstablished;
+            if (!int.TryParse(strYearEstablished, out yearEstablished))
+                return false;
+            return yearEstablished + YearEstablishedLookback >= Time.Year;
         }
 
         private void SendEmailNotification(string msg)

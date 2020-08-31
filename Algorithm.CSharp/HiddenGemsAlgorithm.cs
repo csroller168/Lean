@@ -26,6 +26,9 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize todos:
         //      ** retry all prior things now that rebal bug fixed
         //      risk control**
+        //          cap % invested per stock (if not enough signals)
+        //          trailing stop losses
+        //              foreach in portfolio, if loss > %, sell and blacklist for SmaWindowDays
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
         //              first, separate collections of longs/shorts
@@ -89,8 +92,14 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void Rebalance(Insight[] insights)
         {
-            var targets = new EqualWeightingPortfolioConstructionModel()
-                .CreateTargets(this, insights);
+            var longTargets = insights
+                .Where(x => x.Direction == InsightDirection.Up)
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, 1.0m / NumLong));
+            var shortTargets = insights
+                .Where(x => x.Direction == InsightDirection.Down)
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / NumShort));
+            var targets = longTargets.Union(shortTargets);
+
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
             Log(targetsStr);
@@ -176,7 +185,6 @@ namespace QuantConnect.Algorithm.CSharp
             _longCandidates = candidates
                 .Where(x => x.HasFundamentalData
                     && x.DollarVolume > UniverseMinDollarVolume)
-                .OrderByDescending(x => x.DollarVolume)
                 .Select(x => x.Symbol)
                 .ToList();
 

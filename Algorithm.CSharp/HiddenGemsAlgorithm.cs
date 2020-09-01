@@ -137,7 +137,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
-                        && _momentums[x.Key].Current > 1
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)

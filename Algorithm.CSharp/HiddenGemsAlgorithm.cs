@@ -24,6 +24,7 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
+        //      risk control
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
         //              first, separate collections of longs/shorts
@@ -45,6 +46,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumLong = 15;
         private static readonly int NumShort = 0;
         private static readonly decimal MaxDrawdown = 0.2m;
+        private static readonly decimal MinOpGrowth = 0m;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
@@ -227,7 +229,9 @@ namespace QuantConnect.Algorithm.CSharp
                 	&& x.AssetClassification.MorningstarSectorCode == TechSectorCode
                     && IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
-                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId))
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth)
                 .Select(x => x.Symbol)
                 .ToList();
             _longCandidates = longs;

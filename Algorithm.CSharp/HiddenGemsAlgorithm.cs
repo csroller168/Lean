@@ -36,7 +36,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      increase NumLong, NumShort
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(120);
+        private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
         private static readonly int YearEstablishedLookback = 10;
         private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";

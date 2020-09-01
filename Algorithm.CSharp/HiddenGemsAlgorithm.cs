@@ -137,7 +137,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
-                        && _momentums[x.Key] > 0
+                        && _momentums[x.Key].Current > 1
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -148,20 +148,20 @@ namespace QuantConnect.Algorithm.CSharp
                             InsightType.Price,
                             InsightDirection.Up)));
 
-                //insights.AddRange(ActiveSecurities
-                //    .Where(x => x.Value.IsTradable
-                //        && slice.ContainsKey(x.Key)
-                //        //&& !_longCandidates.Contains(x.Key)
-                //        && _momentums.ContainsKey(x.Key)
-                //        && _momentums[x.Key].IsReady
-                //        && StopLossTriggered(slice, x.Key))
-                //    .OrderBy(x => _momentums[x.Key].Current)
-                //    .Take(NumShort)
-                //    .Select(x => new Insight(
-                //            x.Value.Symbol,
-                //            RebalancePeriod,
-                //            InsightType.Price,
-                //            InsightDirection.Down)));
+                insights.AddRange(ActiveSecurities
+                    .Where(x => x.Value.IsTradable
+                        && slice.ContainsKey(x.Key)
+                        && !_longCandidates.Contains(x.Key)
+                        && _momentums.ContainsKey(x.Key)
+                        && _momentums[x.Key].IsReady
+                        && _momentums[x.Key].Current < 1)
+                    .OrderBy(x => _momentums[x.Key].Current)
+                    .Take(NumShort)
+                    .Select(x => new Insight(
+                            x.Value.Symbol,
+                            RebalancePeriod,
+                            InsightType.Price,
+                            InsightDirection.Down)));
 
                 return insights;
             }
@@ -237,7 +237,17 @@ namespace QuantConnect.Algorithm.CSharp
                 .ToList();
             _longCandidates = longs;
 
-            var shorts = Enumerable.Empty<Symbol>();
+            var shorts = candidates
+                .Where(
+                    x => !_longCandidates.Contains(x.Symbol)
+                    && x.AssetClassification.MorningstarSectorCode == TechSectorCode
+                    && !IsRecent(x.CompanyReference.YearofEstablishment)
+                    && x.CompanyReference.CountryId == CountryCode
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
+                .Select(x => x.Symbol);
+
             _universeMeter.Update(Time);
 
             return _longCandidates.Union(shorts);

@@ -34,6 +34,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          no/low debt for longs
         //      cap or floor market cap x.companyProfile.MarketCap
         //      increase NumLong, NumShort
+        //      don't limit to USA
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -43,7 +44,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
-        private static readonly int NumLong = 15;
+        private static readonly int NumLong = 20;
         private static readonly int NumShort = 0;
         private static readonly decimal MaxDrawdown = 0.2m;
         private static readonly decimal MinOpGrowth = 0m;

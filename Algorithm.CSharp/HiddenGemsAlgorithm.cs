@@ -29,6 +29,9 @@ namespace QuantConnect.Algorithm.CSharp
         //          cap % invested per stock (if not enough signals)
         //          trailing stop losses
         //              foreach in portfolio, if loss > %, sell and blacklist for SmaWindowDays
+        //              how to do a "blacklist" that'll work with any start date?
+        //                  maybe keep a blacklist collection and modify universe criteria to weed out any with % drop over prior N days
+        //                      that'd work in live, might be off the first 6 months of backtesting, but for the same reasons backtesting will be off anyway
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
         //              first, separate collections of longs/shorts
@@ -49,12 +52,15 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 15;
-        private static readonly int NumShort = 0;
+        private static readonly int NumShort = 5;
+        private static readonly decimal MaxDrawdown = 0.07m;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
+        private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Indicators.Maximum>();
         private List<Symbol> _longCandidates = new List<Symbol>();
+        private Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
 
         public override void Initialize()
         {
@@ -106,6 +112,24 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification(targetsStr);
         }
 
+        private bool StopLossTriggered(Slice slice, Symbol symbol)
+        {
+            if (_stopLosses.ContainsKey(symbol)
+                && (Time - _stopLosses[symbol]).Days < SmaWindowDays)
+                return true;
+
+            var max = _maximums[symbol].Current;
+            var price = (slice[symbol] as BaseData).Price;
+            var drawdown = (max - price) / max;
+
+            if(drawdown >= MaxDrawdown)
+            {
+                _stopLosses[symbol] = Time;
+                return true;
+            }
+            return false;
+        }
+
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
@@ -117,7 +141,10 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
-                        && _momentums[x.Key].IsReady)
+                        && _momentums[x.Key].IsReady
+                        && _momentums[x.Key] > 0
+                        //&& !StopLossTriggered(slice, x.Key)
+                        )
                     .OrderByDescending(x => _momentums[x.Key].Current)
                     .Take(NumLong)
                     .Select(x => new Insight(
@@ -131,7 +158,8 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
-                        && _momentums[x.Key].IsReady)
+                        && _momentums[x.Key].IsReady
+                        && StopLossTriggered(slice, x.Key))
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(NumShort)
                     .Select(x => new Insight(
@@ -159,16 +187,19 @@ namespace QuantConnect.Algorithm.CSharp
                     var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
                     var momentum = currentSma.Over(pastSma);
                     _momentums[addition.Symbol] = momentum;
+                    _maximums[addition.Symbol] = MAX(addition.Symbol, SmaWindowDays, Resolution.Daily);
 
                     var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
                     foreach(var bar in history)
                     {
                         currentSma.Update(bar.EndTime, bar.Close);
+                        _maximums[addition.Symbol].Update(bar.EndTime, bar.Close);
                     }
                 }
                 foreach(var removal in changes.RemovedSecurities)
                 {
                     _momentums.Remove(removal.Symbol);
+                    _maximums.Remove(removal.Symbol);
                 }
             }
             catch (Exception e)

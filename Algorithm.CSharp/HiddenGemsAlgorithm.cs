@@ -49,9 +49,9 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
-        private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Indicators.Maximum>();
+        private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
         private List<Symbol> _longCandidates = new List<Symbol>();
-        private Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
+        private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
 
         public override void Initialize()
         {

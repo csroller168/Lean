@@ -52,8 +52,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 15;
-        private static readonly int NumShort = 5;
-        private static readonly decimal MaxDrawdown = 0.07m;
+        private static readonly int NumShort = 0;
+        private static readonly decimal MaxDrawdown = 0.15m;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
@@ -98,12 +98,13 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void Rebalance(Insight[] insights)
         {
+            var shortCount = insights.Count(x => x.Direction == InsightDirection.Down);
             var longTargets = insights
                 .Where(x => x.Direction == InsightDirection.Up)
-                .Select(x => PortfolioTarget.Percent(this, x.Symbol, 1.0m / NumLong));
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, 1.0m / (NumLong + shortCount)));
             var shortTargets = insights
                 .Where(x => x.Direction == InsightDirection.Down)
-                .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / NumShort));
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / (NumLong + NumShort)));
             var targets = longTargets.Union(shortTargets);
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
@@ -143,7 +144,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key] > 0
-                        //&& !StopLossTriggered(slice, x.Key)
+                        && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
                     .Take(NumLong)
@@ -153,20 +154,20 @@ namespace QuantConnect.Algorithm.CSharp
                             InsightType.Price,
                             InsightDirection.Up)));
 
-                insights.AddRange(ActiveSecurities
-                    .Where(x => x.Value.IsTradable
-                        && slice.ContainsKey(x.Key)
-                        && !_longCandidates.Contains(x.Key)
-                        && _momentums.ContainsKey(x.Key)
-                        && _momentums[x.Key].IsReady
-                        && StopLossTriggered(slice, x.Key))
-                    .OrderBy(x => _momentums[x.Key].Current)
-                    .Take(NumShort)
-                    .Select(x => new Insight(
-                            x.Value.Symbol,
-                            RebalancePeriod,
-                            InsightType.Price,
-                            InsightDirection.Down)));
+                //insights.AddRange(ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        //&& !_longCandidates.Contains(x.Key)
+                //        && _momentums.ContainsKey(x.Key)
+                //        && _momentums[x.Key].IsReady
+                //        && StopLossTriggered(slice, x.Key))
+                //    .OrderBy(x => _momentums[x.Key].Current)
+                //    .Take(NumShort)
+                //    .Select(x => new Insight(
+                //            x.Value.Symbol,
+                //            RebalancePeriod,
+                //            InsightType.Price,
+                //            InsightDirection.Down)));
 
                 return insights;
             }

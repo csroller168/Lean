@@ -24,14 +24,6 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
-        //      ** retry all prior things now that rebal bug fixed
-        //      risk control**
-        //          cap % invested per stock (if not enough signals)
-        //          trailing stop losses
-        //              foreach in portfolio, if loss > %, sell and blacklist for SmaWindowDays
-        //              how to do a "blacklist" that'll work with any start date?
-        //                  maybe keep a blacklist collection and modify universe criteria to weed out any with % drop over prior N days
-        //                      that'd work in live, might be off the first 6 months of backtesting, but for the same reasons backtesting will be off anyway
         //          short criteria
         //              maybe high debt, high p/e, or low momentum (or different exchange)
         //              first, separate collections of longs/shorts

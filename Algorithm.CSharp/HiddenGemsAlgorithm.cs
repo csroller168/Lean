@@ -33,7 +33,6 @@ namespace QuantConnect.Algorithm.CSharp
         //          no/low debt for longs
         //      cap or floor market cap x.companyProfile.MarketCap
         //      increase NumLong, NumShort
-        //      adjust universe size
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(120);
@@ -45,7 +44,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 15;
         private static readonly int NumShort = 0;
-        private static readonly decimal MaxDrawdown = 0.15m;
+        private static readonly decimal MaxDrawdown = 0.2m;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);

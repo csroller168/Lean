@@ -44,9 +44,10 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 20;
-        private static readonly int NumShort = 0;
+        private static readonly int NumShort = 10;
         private static readonly decimal MaxDrawdown = 0.2m;
         private static readonly decimal MinOpGrowth = 0m;
+        private static readonly decimal MaxShortMomentum = 0.8m;
         private static readonly decimal UniverseMinDollarVolume = 5000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
@@ -152,7 +153,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
-                        && _momentums[x.Key].Current < 0.9m)
+                        && _momentums[x.Key].Current < MaxShortMomentum)
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(NumShort)
                     .Select(x => new Insight(
@@ -235,17 +236,16 @@ namespace QuantConnect.Algorithm.CSharp
                 .ToList();
             _longCandidates = longs;
 
-            var shorts = Enumerable.Empty<Symbol>();
-            //var shorts = candidates
-            //    .Where(
-            //        x => !_longCandidates.Contains(x.Symbol)
-            //        && x.AssetClassification.MorningstarSectorCode == TechSectorCode
-            //        && !IsRecent(x.CompanyReference.YearofEstablishment)
-            //        //&& x.CompanyReference.CountryId == CountryCode
-            //        //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-            //        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-            //        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
-            //    .Select(x => x.Symbol);
+            var shorts = candidates
+                .Where(
+                    x => !_longCandidates.Contains(x.Symbol)
+                    && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                    && !IsRecent(x.CompanyReference.YearofEstablishment)
+                    && x.CompanyReference.CountryId == CountryCode
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
+                .Select(x => x.Symbol);
 
             _universeMeter.Update(Time);
 

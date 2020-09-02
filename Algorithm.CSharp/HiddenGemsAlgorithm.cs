@@ -25,9 +25,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         // optimize todos:
         //      increase number of signals
-        //          no exchange constraint
-        //          lower min volume
-        //          add sectors
+        //          any exchange, sector
         //      control risk
         //          10 shorts, momentum < 0.9m
         //          more diversity (above?)

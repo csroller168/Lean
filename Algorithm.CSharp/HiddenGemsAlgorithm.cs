@@ -24,17 +24,18 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
-        //      risk control
-        //          short criteria
-        //              maybe high debt, high p/e, or low momentum (or different exchange)
-        //              first, separate collections of longs/shorts
-        //      some criteria to find early risers... low mkt cap high $volume?  low $volume?
-        //          1yr growth metrics
+        //      increase number of signals
+        //          no exchange constraint
+        //          lower min volume
+        //          add sectors
+        //      control risk
+        //          10 shorts, momentum < 0.9m
+        //          more diversity (above?)
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //          no/low debt for longs
         //      cap or floor market cap x.companyProfile.MarketCap
         //      increase NumLong, NumShort
-        //      don't limit to USA
+
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -153,7 +154,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
-                        && _momentums[x.Key].Current < 1)
+                        && _momentums[x.Key].Current < 0.9m)
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(NumShort)
                     .Select(x => new Insight(
@@ -241,8 +242,8 @@ namespace QuantConnect.Algorithm.CSharp
                     x => !_longCandidates.Contains(x.Symbol)
                     && x.AssetClassification.MorningstarSectorCode == TechSectorCode
                     && !IsRecent(x.CompanyReference.YearofEstablishment)
-                    && x.CompanyReference.CountryId == CountryCode
-                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    //&& x.CompanyReference.CountryId == CountryCode
+                    //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
                     && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
                 .Select(x => x.Symbol);

@@ -38,9 +38,9 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
         private static readonly int YearEstablishedLookback = 10;
-        private static readonly int TechSectorCode = 311;
         private static readonly string CountryCode = "USA";
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
+        private static readonly int[] SectorsAllowed = { 311, 102 };
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 20;
@@ -224,8 +224,8 @@ namespace QuantConnect.Algorithm.CSharp
 
             var longs = candidates
                 .Where(
-                	x => _longCandidates.Contains(x.Symbol)
-                	&& x.AssetClassification.MorningstarSectorCode == TechSectorCode
+                    x => _longCandidates.Contains(x.Symbol)
+                    && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                     && IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
@@ -235,16 +235,17 @@ namespace QuantConnect.Algorithm.CSharp
                 .ToList();
             _longCandidates = longs;
 
-            var shorts = candidates
-                .Where(
-                    x => !_longCandidates.Contains(x.Symbol)
-                    && x.AssetClassification.MorningstarSectorCode == TechSectorCode
-                    && !IsRecent(x.CompanyReference.YearofEstablishment)
-                    //&& x.CompanyReference.CountryId == CountryCode
-                    //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
-                .Select(x => x.Symbol);
+            var shorts = Enumerable.Empty<Symbol>();
+            //var shorts = candidates
+            //    .Where(
+            //        x => !_longCandidates.Contains(x.Symbol)
+            //        && x.AssetClassification.MorningstarSectorCode == TechSectorCode
+            //        && !IsRecent(x.CompanyReference.YearofEstablishment)
+            //        //&& x.CompanyReference.CountryId == CountryCode
+            //        //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+            //        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
+            //        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
+            //    .Select(x => x.Symbol);
 
             _universeMeter.Update(Time);
 

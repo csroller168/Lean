@@ -25,30 +25,28 @@ namespace QuantConnect.Algorithm.CSharp
 
         // optimize todos:
         //      increase number of signals
-        //          any exchange, sector
+        //          more sectors
         //      control risk
-        //          10 shorts, momentum < 0.9m
+        //          alter short and stop-loss criteria
         //          more diversity (above?)
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //          no/low debt for longs
-        //      cap or floor market cap x.companyProfile.MarketCap
-        //      increase NumLong, NumShort
-
+        //      tune NumLong, NumShort, other params
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
         private static readonly int YearEstablishedLookback = 10;
         private static readonly string CountryCode = "USA";
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
-        private static readonly int[] SectorsAllowed = { 311, 102 };
+        private static readonly int[] SectorsAllowed = { 311, 102, 205 };
         private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 20;
-        private static readonly int NumShort = 10;
+        private static readonly int NumShort = 5;
         private static readonly decimal MaxDrawdown = 0.2m;
         private static readonly decimal MinOpGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 0.8m;
-        private static readonly decimal UniverseMinDollarVolume = 5000000m;
+        private static readonly decimal UniverseMinDollarVolume = 20000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();

@@ -39,7 +39,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly string CountryCode = "USA";
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311, 102, 205 };
-        private static readonly int SmaLookbackDays = 126; // ~ 6 mo.
+        private static readonly int SmaLookbackDays = 200; // ~ 6 mo.
         private static readonly int SmaWindowDays = 14;
         private static readonly int NumLong = 20;
         private static readonly int NumShort = 5;

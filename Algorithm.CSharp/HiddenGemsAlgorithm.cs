@@ -40,7 +40,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311, 102, 205 };
         private static readonly int SmaLookbackDays = 126;
-        private static readonly int SmaWindowDays = 14;
+        private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 20;
         private static readonly int NumShort = 5;
         private static readonly decimal MaxDrawdown = 0.2m;

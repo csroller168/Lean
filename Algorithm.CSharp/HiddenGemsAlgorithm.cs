@@ -31,6 +31,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          more diversity (above?)
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //          no/low debt for longs
+        //      cap market cap to reduce beta and get more volatility
         //      tune NumLong, NumShort, other params
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
@@ -43,7 +44,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 20;
         private static readonly int NumShort = 5;
-        private static readonly decimal MaxDrawdown = 0.2m;
+        private static readonly decimal MaxDrawdown = 0.25m;
         private static readonly decimal MinOpGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 0.8m;
         private static readonly decimal UniverseMinDollarVolume = 20000000m;

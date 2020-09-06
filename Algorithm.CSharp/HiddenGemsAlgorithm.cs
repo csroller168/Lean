@@ -29,6 +29,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      control risk
         //          alter short and stop-loss criteria
         //          more diversity (above?)
+        //          react to VIX per movingMomentum
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //          no/low debt for longs
         //      cap market cap to reduce beta and get more volatility

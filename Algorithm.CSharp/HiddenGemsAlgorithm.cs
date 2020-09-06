@@ -32,6 +32,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          alter short and stop-loss criteria
         //          more diversity (above?)
         //          vixMomentum > 2. stop when momentum declines sufficiently
+        //              short nothing when vixMomentum < .5 and dropping
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //          no/low debt for longs
         //      cap market cap to reduce beta and get more volatility
@@ -50,7 +51,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 5;
         private static readonly decimal MaxDrawdown = 0.25m;
         private static readonly decimal MinOpGrowth = 0m;
-        private static readonly decimal MaxShortMomentum = 0.8m;
+        private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal UniverseMinDollarVolume = 20000000m;
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);

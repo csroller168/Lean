@@ -31,11 +31,11 @@ namespace QuantConnect.Algorithm.CSharp
         //      control risk
         //          alter short and stop-loss criteria
         //          more diversity (above?)
-        //          react to VIX per movingMomentum
+        //          vixMomentum > 2. stop when momentum declines sufficiently
         //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
         //          no/low debt for longs
         //      cap market cap to reduce beta and get more volatility
-        //      tune NumLong, NumShort, other params
+        //      tune NumLong, NumShort, etc.
         //      use mutex lock before live integration (see MovingMomentum algo)
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
@@ -95,10 +95,8 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private bool IsTooVolatile()
+        private decimal VixMomentum(IEnumerable<TradeBar> vixHistories)
         {
-            var vixHistories = History<CBOE>(_vixSymbol, 35, Resolution.Daily)
-            .Cast<TradeBar>();
             if (vixHistories.Any())
             {
                 var momentum = vixHistories
@@ -113,7 +111,22 @@ namespace QuantConnect.Algorithm.CSharp
                 .Select(x => x.Price)
                 .Average();
                 Plot("vix", "momentum", momentum);
-                return momentum > 1.7m;
+                return momentum;
+            }
+            return 0m;
+        }
+
+        private bool IsTooVolatile()
+        {
+            var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily)
+                .Cast<TradeBar>();
+            if (vixHistories.Any())
+            {
+                var pastMomentum = VixMomentum(vixHistories.Take(35));
+                var currentMomentum = VixMomentum(vixHistories.Skip(3));
+                Plot("vix", "momentum", currentMomentum);
+                return currentMomentum > 1.7m
+                    && currentMomentum > pastMomentum;
             }
             return false;
         }

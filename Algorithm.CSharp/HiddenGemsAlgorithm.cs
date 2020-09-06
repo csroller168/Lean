@@ -15,6 +15,8 @@ using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
 using QuantConnect.Util;
 using QuantConnect.Data.Fundamental;
+using QuantConnect.Data.Custom.CBOE;
+using QuantConnect.Data.Market;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -54,8 +56,9 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
-        private List<Symbol> _longCandidates = new List<Symbol>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
+        private List<Symbol> _longCandidates = new List<Symbol>();
+        private Symbol _vixSymbol;
 
         public override void Initialize()
         {
@@ -68,6 +71,7 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+            _vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
         }
 
         public override void OnData(Slice slice)
@@ -91,6 +95,29 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        private bool IsTooVolatile()
+        {
+            var vixHistories = History<CBOE>(_vixSymbol, 35, Resolution.Daily)
+            .Cast<TradeBar>();
+            if (vixHistories.Any())
+            {
+                var momentum = vixHistories
+                .OrderByDescending(x => x.Time)
+                .Take(5)
+                .Select(x => x.Price)
+                .Average()
+                /
+                vixHistories
+                .OrderBy(x => x.Time)
+                .Take(5)
+                .Select(x => x.Price)
+                .Average();
+                Plot("vix", "momentum", momentum);
+                return momentum > 2;
+            }
+            return false;
+        }
+
         private void Rebalance(Insight[] insights)
         {
             var shortCount = insights.Count(x => x.Direction == InsightDirection.Down);
@@ -101,6 +128,9 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(x => x.Direction == InsightDirection.Down)
                 .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / (NumLong + NumShort)));
             var targets = longTargets.Union(shortTargets);
+
+            Plot("targetCounts", "longs", longTargets.Count());
+            Plot("targetCounts", "shorts", shortTargets.Count());
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
@@ -131,6 +161,7 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 var insights = new List<Insight>();
+                var isTooVolatile = IsTooVolatile();
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
@@ -141,7 +172,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
-                    .Take(NumLong)
+                    .Take(isTooVolatile ? NumShort : NumLong)
                     .Select(x => new Insight(
                             x.Value.Symbol,
                             RebalancePeriod,
@@ -156,7 +187,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current < MaxShortMomentum)
                     .OrderBy(x => _momentums[x.Key].Current)
-                    .Take(NumShort)
+                    .Take(isTooVolatile ? NumLong : NumShort)
                     .Select(x => new Insight(
                             x.Value.Symbol,
                             RebalancePeriod,

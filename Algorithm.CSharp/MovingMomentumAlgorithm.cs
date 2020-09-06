@@ -85,8 +85,8 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.Resolution = Resolution.Daily;
             UniverseSettings.FillForward = true;
 
-            SetStartDate(2005, 2, 1);
-            SetEndDate(2020, 5, 31);
+            SetStartDate(2006, 1, 1);
+            SetEndDate(2020, 8, 1);
 
             SetCash(100000);
             SetBrokerageModel(BrokerageName.AlphaStreams);

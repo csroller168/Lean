@@ -28,7 +28,7 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize todos:
         //      control risk
         //          short nothing when vixMomentum < 1.25 and dropping
-        //              vary long/short leverage according to vix
+        //              vary long/short counts according to vix
         //      use mutex lock before live integration (see MovingMomentum algo)
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);

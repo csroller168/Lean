@@ -34,6 +34,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          no/low debt for longs
         //      cap market cap to reduce beta and get more volatility
         //      tune NumLong, NumShort, other params
+        //      use mutex lock before live integration (see MovingMomentum algo)
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);

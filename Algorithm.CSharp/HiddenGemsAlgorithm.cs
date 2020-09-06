@@ -113,7 +113,7 @@ namespace QuantConnect.Algorithm.CSharp
                 .Select(x => x.Price)
                 .Average();
                 Plot("vix", "momentum", momentum);
-                return momentum > 2;
+                return momentum > 1.7m;
             }
             return false;
         }

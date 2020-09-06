@@ -125,7 +125,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var pastMomentum = VixMomentum(vixHistories.Take(35));
                 var currentMomentum = VixMomentum(vixHistories.Skip(3));
                 Plot("vix", "momentum", currentMomentum);
-                return currentMomentum > 1.7m
+                return currentMomentum > 1.4m
                     && currentMomentum > pastMomentum;
             }
             return false;

@@ -26,17 +26,9 @@ namespace QuantConnect.Algorithm.CSharp
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
         // optimize todos:
-        //      increase number of signals
-        //          more sectors
         //      control risk
-        //          alter short and stop-loss criteria
-        //          more diversity (above?)
-        //          vixMomentum > 2. stop when momentum declines sufficiently
-        //              short nothing when vixMomentum < .5 and dropping
-        //      screen for debt (https://www.quantconnect.com/docs/data-library/fundamentals)
-        //          no/low debt for longs
-        //      cap market cap to reduce beta and get more volatility
-        //      tune NumLong, NumShort, etc.
+        //          short nothing when vixMomentum < 1.25 and dropping
+        //              vary long/short leverage according to vix
         //      use mutex lock before live integration (see MovingMomentum algo)
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
@@ -114,7 +106,7 @@ namespace QuantConnect.Algorithm.CSharp
                 Plot("vix", "momentum", momentum);
                 return momentum;
             }
-            return 0m;
+            return 1m;
         }
 
         private bool IsTooVolatile()

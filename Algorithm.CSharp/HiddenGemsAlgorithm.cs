@@ -22,9 +22,11 @@ namespace QuantConnect.Algorithm.CSharp
 {
     public class HiddenGemsAlgorithm : QCAlgorithm
     {
+        // fundamentals:  https://www.quantconnect.com/docs/data-library/fundamentals
+        // 
         // long-term TODOS:
-        // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
-
+        //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
+        // 
         // todos:
         //  run one year comparison of 60 day Universe rebal vs. daily rebal
         //      big negative difference.
@@ -48,7 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinAssetGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal UniverseMinDollarVolume = 20000000m;
-        private static object mutexLock = new object();
+        private static readonly object mutexLock = new object();
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
@@ -64,7 +66,7 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SetStartDate(2011, 1, 1);
-            SetEndDate(2011, 12, 31);
+            SetEndDate(2013, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute
@@ -328,7 +330,10 @@ namespace QuantConnect.Algorithm.CSharp
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth)
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth
+                    //&& x.OperationRatios.TotalAssetsGrowth.HasValue
+                    //&& x.OperationRatios.TotalAssetsGrowth > MinAssetGrowth
+                    )
                 .Select(x => x.Symbol)
                 .ToList();
             _longCandidates = longs;
@@ -341,7 +346,10 @@ namespace QuantConnect.Algorithm.CSharp
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0)
+                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0
+                    //&& x.OperationRatios.TotalAssetsGrowth.HasValue
+                    //&& x.OperationRatios.TotalAssetsGrowth < MinAssetGrowth
+                    )
                 .Select(x => x.Symbol);
 
             _universeMeter.Update(Time);

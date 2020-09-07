@@ -30,6 +30,7 @@ namespace QuantConnect.Algorithm.CSharp
         //          short nothing when vixMomentum < 1.25 and dropping
         //              vary long/short counts according to vix
         //      use mutex lock before live integration (see MovingMomentum algo)
+        //  run one year comparison of 60 day Universe rebal vs. daily rebal
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -52,6 +53,8 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
+        private int _targetLongCount;
+        private int _targetShortCount;
 
         public override void Initialize()
         {
@@ -77,6 +80,7 @@ namespace QuantConnect.Algorithm.CSharp
                 if (slice.Count() == 0)
                     return;
 
+                SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
                 Rebalance(insights);
@@ -109,7 +113,7 @@ namespace QuantConnect.Algorithm.CSharp
             return 1m;
         }
 
-        private bool IsTooVolatile()
+        private void SetTargetCounts()
         {
             var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily)
                 .Cast<TradeBar>();
@@ -118,10 +122,26 @@ namespace QuantConnect.Algorithm.CSharp
                 var pastMomentum = VixMomentum(vixHistories.Take(35));
                 var currentMomentum = VixMomentum(vixHistories.Skip(3));
                 Plot("vix", "momentum", currentMomentum);
-                return currentMomentum > 1.4m
-                    && currentMomentum > pastMomentum;
+
+                if(currentMomentum > 1.4m
+                    && currentMomentum > pastMomentum)
+                {
+                    _targetLongCount = NumShort;
+                    _targetShortCount = NumLong;
+                    return;
+                }
+
+                if(currentMomentum < 1.4m
+                    && currentMomentum < pastMomentum)
+                {
+                    _targetLongCount = NumLong;
+                    _targetShortCount = 0;
+                    return;
+                }
             }
-            return false;
+
+            _targetLongCount = NumLong;
+            _targetShortCount = NumShort;
         }
 
         private void Rebalance(Insight[] insights)
@@ -129,7 +149,7 @@ namespace QuantConnect.Algorithm.CSharp
             var shortCount = insights.Count(x => x.Direction == InsightDirection.Down);
             var longTargets = insights
                 .Where(x => x.Direction == InsightDirection.Up)
-                .Select(x => PortfolioTarget.Percent(this, x.Symbol, 1.0m / (NumLong + shortCount)));
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, 1.0m / (_targetLongCount + shortCount)));
             var shortTargets = insights
                 .Where(x => x.Direction == InsightDirection.Down)
                 .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / (NumLong + NumShort)));
@@ -167,7 +187,6 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 var insights = new List<Insight>();
-                var isTooVolatile = IsTooVolatile();
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
@@ -178,7 +197,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
-                    .Take(isTooVolatile ? NumShort : NumLong)
+                    .Take(_targetLongCount)
                     .Select(x => new Insight(
                             x.Value.Symbol,
                             RebalancePeriod,
@@ -193,7 +212,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current < MaxShortMomentum)
                     .OrderBy(x => _momentums[x.Key].Current)
-                    .Take(isTooVolatile ? NumLong : NumShort)
+                    .Take(_targetShortCount)
                     .Select(x => new Insight(
                             x.Value.Symbol,
                             RebalancePeriod,

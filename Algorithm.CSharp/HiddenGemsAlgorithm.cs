@@ -45,6 +45,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 5;
         private static readonly decimal MaxDrawdown = 0.25m;
         private static readonly decimal MinOpGrowth = 0m;
+        private static readonly decimal MinAssetGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal UniverseMinDollarVolume = 20000000m;
         private static object mutexLock = new object();
@@ -62,8 +63,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            SetStartDate(2006, 1, 1);
-            SetEndDate(2020, 8, 1);
+            SetStartDate(2011, 1, 1);
+            SetEndDate(2011, 12, 31);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute

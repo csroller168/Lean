@@ -25,14 +25,13 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         // submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
 
-        // optimize todos:
-        //      control risk
-        //         redo some of the short parameters more aggressively.
-        //              more longs
-        //              ... and/or more shorts
-        //          I can afford lower return now for better drawdown/sharpe
-        //      use mutex lock before live integration (see MovingMomentum algo)
+        // todos:
         //  run one year comparison of 60 day Universe rebal vs. daily rebal
+        //      big negative difference.
+        //          replace daily vol with market cap
+        // limit longs to price > $5
+        // factor today's value into indicator
+        // restrict universe with more fundamental metrics - target ActiveSecurities <= 200
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -53,6 +52,7 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
+        private readonly Dictionary<Symbol, SimpleMovingAverage> _dollarVolumes = new Dictionary<Symbol, SimpleMovingAverage>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
@@ -185,6 +185,7 @@ namespace QuantConnect.Algorithm.CSharp
 
             Plot("targetCounts", "longs", longTargets.Count());
             Plot("targetCounts", "shorts", shortTargets.Count());
+            Plot("targetCounts", "active", ActiveSecurities.Count());
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
@@ -221,7 +222,9 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
+                        && _dollarVolumes.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
+                        && _dollarVolumes[x.Key].Current.Value > UniverseMinDollarVolume
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -237,7 +240,9 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
+                        && _dollarVolumes.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
+                        && _dollarVolumes[x.Key].Current.Value > UniverseMinDollarVolume
                         && _momentums[x.Key].Current < MaxShortMomentum)
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(_targetShortCount)
@@ -246,6 +251,8 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Down)));
+
+                
 
                 return insights;
             }
@@ -266,12 +273,14 @@ namespace QuantConnect.Algorithm.CSharp
                     var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
                     var momentum = currentSma.Over(pastSma);
                     _momentums[addition.Symbol] = momentum;
+                    _dollarVolumes[addition.Symbol] = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
                     _maximums[addition.Symbol] = MAX(addition.Symbol, SmaWindowDays, Resolution.Daily);
 
                     var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
                     foreach(var bar in history)
                     {
                         currentSma.Update(bar.EndTime, bar.Close);
+                        _dollarVolumes[addition.Symbol].Update(bar.EndTime, bar.Close * bar.Volume);
                         _maximums[addition.Symbol].Update(bar.EndTime, bar.Close);
                     }
                 }
@@ -279,6 +288,7 @@ namespace QuantConnect.Algorithm.CSharp
                 {
                     _momentums.Remove(removal.Symbol);
                     _maximums.Remove(removal.Symbol);
+                    _dollarVolumes.Remove(removal.Symbol);
                 }
             }
             catch (Exception e)
@@ -294,7 +304,8 @@ namespace QuantConnect.Algorithm.CSharp
 
             _longCandidates = candidates
                 .Where(x => x.HasFundamentalData
-                    && x.DollarVolume > UniverseMinDollarVolume)
+                    //&& x.DollarVolume > UniverseMinDollarVolume)
+                    )
                 .Select(x => x.Symbol)
                 .ToList();
 

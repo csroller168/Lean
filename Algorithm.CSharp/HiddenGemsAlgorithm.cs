@@ -28,6 +28,8 @@ namespace QuantConnect.Algorithm.CSharp
         // optimize todos:
         //      control risk
         //         redo some of the short parameters more aggressively.
+        //              more longs
+        //              ... and/or more shorts
         //          I can afford lower return now for better drawdown/sharpe
         //      use mutex lock before live integration (see MovingMomentum algo)
         //  run one year comparison of 60 day Universe rebal vs. daily rebal
@@ -46,6 +48,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinOpGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal UniverseMinDollarVolume = 20000000m;
+        private static object mutexLock = new object();
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
@@ -55,6 +58,7 @@ namespace QuantConnect.Algorithm.CSharp
         private Symbol _vixSymbol;
         private int _targetLongCount;
         private int _targetShortCount;
+        private int numAttemptsToTrade = 0;
 
         public override void Initialize()
         {
@@ -80,6 +84,11 @@ namespace QuantConnect.Algorithm.CSharp
                 if (slice.Count() == 0)
                     return;
 
+                if (!IsAllowedToTrade(slice))
+                {
+                    return;
+                }
+
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
@@ -89,6 +98,25 @@ namespace QuantConnect.Algorithm.CSharp
             catch(Exception e)
             {
                 SendEmailNotification(e.Message);
+            }
+        }
+
+        private bool IsAllowedToTrade(Slice slice)
+        {
+            if (!LiveMode)
+            {
+                return true;
+            }
+
+            lock (mutexLock)
+            {
+                if (slice.Count < ActiveSecurities.Count
+                    && numAttemptsToTrade < NumLong)
+                {
+                    numAttemptsToTrade++;
+                    return false;
+                }
+                return true;
             }
         }
 

@@ -27,8 +27,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         // optimize todos:
         //      control risk
-        //          short nothing when vixMomentum < 1.25 and dropping
-        //              vary long/short counts according to vix
+        //         redo some of the short parameters more aggressively.
+        //          I can afford lower return now for better drawdown/sharpe
         //      use mutex lock before live integration (see MovingMomentum algo)
         //  run one year comparison of 60 day Universe rebal vs. daily rebal
 

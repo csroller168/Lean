@@ -30,18 +30,13 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOs:
         //  limit longs to price > $5
         //  factor today's value into indicator
-        //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
-        //      CapExGrowth (no)
-        //      CurrentRatioGrowth (ok, maybe short negative?)
-        //      CFOGrowth
-        //      FCFGrowth
-        //      EBITDAGrowth
-        //      debt to equity
-        //      ** try to use quarterly data
+        //  performance
+        //      restrict universe with more fundamental metrics - target ActiveSecurities <= 200
+        //      pick two periods to backtest:  biggest drawdown and best gain
+        //          2010-2012 + 2014-2016
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
-        private static readonly int YearEstablishedLookback = 10;
         private static readonly string CountryCode = "USA";
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311, 102, 205 };
@@ -50,16 +45,16 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumLong = 20;
         private static readonly int NumShort = 5;
         private static readonly decimal MaxDrawdown = 0.25m;
-        private static readonly decimal MinOpGrowth = 0m;
-        private static readonly decimal MinAssetGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 1m;
-        private static readonly decimal UniverseMinDollarVolume = 1m;
+        private static readonly decimal MinLongRevenueGrowth = 0.1m;
+        private static readonly decimal MaxShortRevenueGrowth = 0m;
+        private static readonly decimal MinLongAssetGrowth = 0.1m;
+        private static readonly decimal MaxShortAssetGrowth = 0m;
         private static readonly object mutexLock = new object();
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
-        private readonly Dictionary<Symbol, SimpleMovingAverage> _dollarVolumes = new Dictionary<Symbol, SimpleMovingAverage>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
@@ -69,8 +64,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            SetStartDate(2011, 1, 1);
-            SetEndDate(2013, 1, 1);
+            SetStartDate(2014, 1, 1);
+            SetEndDate(2016, 1, 1);
             SetCash(100000);
             UniverseSettings.Resolution = LiveMode
                 ? Resolution.Minute
@@ -190,9 +185,9 @@ namespace QuantConnect.Algorithm.CSharp
                 .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / (NumLong + NumShort)));
             var targets = longTargets.Union(shortTargets);
 
-            Plot("targetCounts", "longs", longTargets.Count());
-            Plot("targetCounts", "shorts", shortTargets.Count());
-            Plot("targetCounts", "active", ActiveSecurities.Count());
+            //Plot("targetCounts", "longs", longTargets.Count());
+            //Plot("targetCounts", "shorts", shortTargets.Count());
+            //Plot("targetCounts", "active", ActiveSecurities.Count());
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
@@ -229,9 +224,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
-                        && _dollarVolumes.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
-                        && _dollarVolumes[x.Key].Current.Value > UniverseMinDollarVolume
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -247,9 +240,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && slice.ContainsKey(x.Key)
                         && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
-                        && _dollarVolumes.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
-                        && _dollarVolumes[x.Key].Current.Value > UniverseMinDollarVolume
                         && _momentums[x.Key].Current < MaxShortMomentum)
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(_targetShortCount)
@@ -258,8 +249,6 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Down)));
-
-                
 
                 return insights;
             }
@@ -280,14 +269,12 @@ namespace QuantConnect.Algorithm.CSharp
                     var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
                     var momentum = currentSma.Over(pastSma);
                     _momentums[addition.Symbol] = momentum;
-                    _dollarVolumes[addition.Symbol] = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
                     _maximums[addition.Symbol] = MAX(addition.Symbol, SmaWindowDays, Resolution.Daily);
 
                     var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
                     foreach(var bar in history)
                     {
                         currentSma.Update(bar.EndTime, bar.Close);
-                        _dollarVolumes[addition.Symbol].Update(bar.EndTime, bar.Close * bar.Volume);
                         _maximums[addition.Symbol].Update(bar.EndTime, bar.Close);
                     }
                 }
@@ -295,7 +282,6 @@ namespace QuantConnect.Algorithm.CSharp
                 {
                     _momentums.Remove(removal.Symbol);
                     _maximums.Remove(removal.Symbol);
-                    _dollarVolumes.Remove(removal.Symbol);
                 }
             }
             catch (Exception e)
@@ -311,7 +297,6 @@ namespace QuantConnect.Algorithm.CSharp
 
             _longCandidates = candidates
                 .Where(x => x.HasFundamentalData
-                    //&& x.DollarVolume > UniverseMinDollarVolume)
                     )
                 .Select(x => x.Symbol)
                 .ToList();
@@ -330,15 +315,12 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(
                     x => _longCandidates.Contains(x.Symbol)
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                    //&& IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth
                     && x.OperationRatios.RevenueGrowth.HasValue
-                    && x.OperationRatios.RevenueGrowth.Value > 0m
+                    && x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
                     && x.OperationRatios.TotalAssetsGrowth.HasValue
-                    && x.OperationRatios.TotalAssetsGrowth.Value > 0m
+                    && x.OperationRatios.TotalAssetsGrowth.Value > MinLongAssetGrowth
                     )
                 .Select(x => x.Symbol)
                 .ToList();
@@ -348,39 +330,17 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(
                     x => !_longCandidates.Contains(x.Symbol)
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                    //&& !IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0
                     && x.OperationRatios.RevenueGrowth.HasValue
-                    && x.OperationRatios.RevenueGrowth.Value < 0m
+                    && x.OperationRatios.RevenueGrowth.Value < MaxShortRevenueGrowth
                     && x.OperationRatios.TotalAssetsGrowth.HasValue
-                    && x.OperationRatios.TotalAssetsGrowth.Value < 0m
+                    && x.OperationRatios.TotalAssetsGrowth.Value < MaxShortAssetGrowth
                     )
                 .Select(x => x.Symbol);
-
-            var revs = candidates
-                .Where(x => longs.Contains(x.Symbol))
-                .Select(x => x.OperationRatios.RevenueGrowth.Value);
-            var ass = candidates
-                .Where(x => longs.Contains(x.Symbol))
-                .Select(x => x.OperationRatios.TotalAssetsGrowth.Value);
-
-            Log($"revGrowth min={revs.Min()}, max={revs.Max()}, median={revs.Median()}");
-            Log($"assetGrowth min={ass.Min()}, max={ass.Max()}, median={ass.Median()}");
-
             _universeMeter.Update(Time);
 
             return _longCandidates.Union(shorts);
-        }
-
-        private bool IsRecent(string strYearEstablished)
-        {
-            int yearEstablished;
-            if (!int.TryParse(strYearEstablished, out yearEstablished))
-                return false;
-            return yearEstablished + YearEstablishedLookback >= Time.Year;
         }
 
         private void SendEmailNotification(string msg)

@@ -26,14 +26,18 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
-        // 
-        // todos:
-        //  run one year comparison of 60 day Universe rebal vs. daily rebal
-        //      big negative difference.
-        //          replace daily vol with market cap
-        // limit longs to price > $5
-        // factor today's value into indicator
-        // restrict universe with more fundamental metrics - target ActiveSecurities <= 200
+        //
+        // TODOs:
+        //  limit longs to price > $5
+        //  factor today's value into indicator
+        //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
+        //      CapExGrowth (no)
+        //      CurrentRatioGrowth (ok, maybe short negative?)
+        //      CFOGrowth
+        //      FCFGrowth
+        //      EBITDAGrowth
+        //      debt to equity
+        //      ** try to use quarterly data
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -329,10 +333,11 @@ namespace QuantConnect.Algorithm.CSharp
                     && IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth
-                    //&& x.OperationRatios.TotalAssetsGrowth.HasValue
-                    //&& x.OperationRatios.TotalAssetsGrowth > MinAssetGrowth
+                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
+                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth
+                    && x.OperationRatios.LongTermDebtEquityRatio.HasPeriodValue(Data.Fundamental.Period.OneMonth)
+                    && x.OperationRatios.LongTermDebtEquityRatio.ThreeMonths < 99m
+                    && x.OperationRatios.RevenueGrowth.Value > MinAssetGrowth
                     )
                 .Select(x => x.Symbol)
                 .ToList();
@@ -345,10 +350,10 @@ namespace QuantConnect.Algorithm.CSharp
                     && !IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
-                    && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0
-                    //&& x.OperationRatios.TotalAssetsGrowth.HasValue
-                    //&& x.OperationRatios.TotalAssetsGrowth < MinAssetGrowth
+                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
+                    //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0
+                    && x.OperationRatios.LongTermDebtEquityRatio.HasPeriodValue(Data.Fundamental.Period.OneMonth)
+                    && x.OperationRatios.LongTermDebtEquityRatio.ThreeMonths < 99m
                     )
                 .Select(x => x.Symbol);
 

@@ -80,16 +80,10 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                if (!_rebalanceMeter.IsDue(Time))
+                if (!_rebalanceMeter.IsDue(Time)
+                    || slice.Count() == 0
+                    || !IsAllowedToTrade(slice))
                     return;
-
-                if (slice.Count() == 0)
-                    return;
-
-                if (!IsAllowedToTrade(slice))
-                {
-                    return;
-                }
 
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
@@ -106,9 +100,7 @@ namespace QuantConnect.Algorithm.CSharp
         private bool IsAllowedToTrade(Slice slice)
         {
             if (!LiveMode)
-            {
                 return true;
-            }
 
             lock (mutexLock)
             {

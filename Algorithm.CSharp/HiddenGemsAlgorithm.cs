@@ -53,7 +53,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinOpGrowth = 0m;
         private static readonly decimal MinAssetGrowth = 0m;
         private static readonly decimal MaxShortMomentum = 1m;
-        private static readonly decimal UniverseMinDollarVolume = 20000000m;
+        private static readonly decimal UniverseMinDollarVolume = 1m;
         private static readonly object mutexLock = new object();
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
@@ -330,14 +330,15 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(
                     x => _longCandidates.Contains(x.Symbol)
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                    && IsRecent(x.CompanyReference.YearofEstablishment)
+                    //&& IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
                     //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpGrowth
-                    && x.OperationRatios.LongTermDebtEquityRatio.HasPeriodValue(Data.Fundamental.Period.OneMonth)
-                    && x.OperationRatios.LongTermDebtEquityRatio.ThreeMonths < 99m
-                    && x.OperationRatios.RevenueGrowth.Value > MinAssetGrowth
+                    && x.OperationRatios.RevenueGrowth.HasValue
+                    && x.OperationRatios.RevenueGrowth.Value > 0m
+                    && x.OperationRatios.TotalAssetsGrowth.HasValue
+                    && x.OperationRatios.TotalAssetsGrowth.Value > 0m
                     )
                 .Select(x => x.Symbol)
                 .ToList();
@@ -347,15 +348,27 @@ namespace QuantConnect.Algorithm.CSharp
                 .Where(
                     x => !_longCandidates.Contains(x.Symbol)
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                    && !IsRecent(x.CompanyReference.YearofEstablishment)
+                    //&& !IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.HasValue
                     //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < 0
-                    && x.OperationRatios.LongTermDebtEquityRatio.HasPeriodValue(Data.Fundamental.Period.OneMonth)
-                    && x.OperationRatios.LongTermDebtEquityRatio.ThreeMonths < 99m
+                    && x.OperationRatios.RevenueGrowth.HasValue
+                    && x.OperationRatios.RevenueGrowth.Value < 0m
+                    && x.OperationRatios.TotalAssetsGrowth.HasValue
+                    && x.OperationRatios.TotalAssetsGrowth.Value < 0m
                     )
                 .Select(x => x.Symbol);
+
+            var revs = candidates
+                .Where(x => longs.Contains(x.Symbol))
+                .Select(x => x.OperationRatios.RevenueGrowth.Value);
+            var ass = candidates
+                .Where(x => longs.Contains(x.Symbol))
+                .Select(x => x.OperationRatios.TotalAssetsGrowth.Value);
+
+            Log($"revGrowth min={revs.Min()}, max={revs.Max()}, median={revs.Median()}");
+            Log($"assetGrowth min={ass.Min()}, max={ass.Max()}, median={ass.Median()}");
 
             _universeMeter.Update(Time);
 

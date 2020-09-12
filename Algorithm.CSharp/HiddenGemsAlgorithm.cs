@@ -34,6 +34,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //      pick two periods to backtest:  biggest drawdown and best gain
         //          2010-2012 + 2014-2016
+        //      don't hold stock within 10 days of earnings report
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -46,7 +47,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 5;
         private static readonly decimal MaxDrawdown = 0.25m;
         private static readonly decimal MaxShortMomentum = 1m;
-        private static readonly decimal MinLongRevenueGrowth = 0.1m;
+        private static readonly decimal MinLongRevenueGrowth = 0m;
         private static readonly decimal MaxShortRevenueGrowth = 0m;
         private static readonly decimal MinLongAssetGrowth = 0.1m;
         private static readonly decimal MaxShortAssetGrowth = 0m;
@@ -177,9 +178,9 @@ namespace QuantConnect.Algorithm.CSharp
                 .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / (NumLong + NumShort)));
             var targets = longTargets.Union(shortTargets);
 
-            //Plot("targetCounts", "longs", longTargets.Count());
-            //Plot("targetCounts", "shorts", shortTargets.Count());
-            //Plot("targetCounts", "active", ActiveSecurities.Count());
+            Plot("targetCounts", "longs", longTargets.Count());
+            Plot("targetCounts", "shorts", shortTargets.Count());
+            Plot("targetCounts", "active", ActiveSecurities.Count());
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
@@ -309,8 +310,8 @@ namespace QuantConnect.Algorithm.CSharp
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    && x.OperationRatios.RevenueGrowth.HasValue
-                    && x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
+                    //&& x.OperationRatios.RevenueGrowth.HasValue
+                    //&& x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
                     && x.OperationRatios.TotalAssetsGrowth.HasValue
                     && x.OperationRatios.TotalAssetsGrowth.Value > MinLongAssetGrowth
                     )

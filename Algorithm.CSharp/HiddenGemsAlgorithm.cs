@@ -33,10 +33,12 @@ namespace QuantConnect.Algorithm.CSharp
         //      pick one volatile period for backtesting(large gain and loss)
         //      Benchmark buy/hold market for comparison
         //      tune momentum indicators for long only
+        //      bug fix: remove MaxDaysFromLastEarnings for now
         //      repeat for short only
         //      combine
         //      keep todos in code for future experiments
-        //      if speed OK, broaden backtest period
+        //  restore MaxDaysFromLastEarnings
+        //      bugs: 1) it screens > 80 days from earnings every 60 days - wrong. 2) it churns the universe, requiring time-consuming re-initialization of indicators
         //  don't hold stock within 10 days of earnings report
         //  increase numLongs and numShorts
         //  tune other existing params for better performance
@@ -62,6 +64,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int MaxDaysFromLastEarnings = 80;
         private static readonly decimal MaxDrawdown = 0.25m;
         private static readonly decimal MaxShortMomentum = 1m;
+        private static readonly decimal MinPrice = 5m;
+        private static readonly decimal MinDollarVolume = 10000000m;
         //private static readonly decimal MinLongRevenueGrowth = 0.1m;
         //private static readonly decimal MaxShortRevenueGrowth = 0m;
         //private static readonly decimal MinLongAssetGrowth = 0.1m;
@@ -78,7 +82,6 @@ namespace QuantConnect.Algorithm.CSharp
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
-        private bool traded = false;
 
         public override void Initialize()
         {
@@ -223,6 +226,11 @@ namespace QuantConnect.Algorithm.CSharp
             return false;
         }
 
+        private decimal DollarVolume(TradeBar bar)
+        {
+            return bar.Price * bar.Volume;
+        }
+
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
@@ -235,6 +243,8 @@ namespace QuantConnect.Algorithm.CSharp
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
+                        && (slice[x.Key] as BaseData).Price >= MinPrice
+                        && DollarVolume(slice[x.Key] as TradeBar) >= MinDollarVolume
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -332,7 +342,7 @@ namespace QuantConnect.Algorithm.CSharp
                     //&& x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
                     //&& x.OperationRatios.TotalAssetsGrowth.HasValue
                     //&& x.OperationRatios.TotalAssetsGrowth.Value > MinLongAssetGrowth
-                    && (Time - x.FinancialStatements.FileDate).Days < MaxDaysFromLastEarnings
+                    //&& (Time - x.FinancialStatements.FileDate).Days < MaxDaysFromLastEarnings
                     )
                 .Select(x => x.Symbol)
                 .ToList();

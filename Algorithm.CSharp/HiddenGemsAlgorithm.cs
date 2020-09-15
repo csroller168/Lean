@@ -28,26 +28,31 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // TODOs:
+        //  don't hold stock within 10 days of earnings report
+        //  increase numLongs and numShorts
+        //  tune other existing params for better performance
         //  limit longs to price > $5
         //  factor today's value into indicator
         //  performance
         //      restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //      pick two periods to backtest:  biggest drawdown and best gain
         //          2010-2012 + 2014-2016
-        //      don't hold stock within 10 days of earnings report
+
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
+        private static readonly int YearEstablishedLookback = 10;
         private static readonly string CountryCode = "USA";
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
-        private static readonly int[] SectorsAllowed = { 311, 102, 205 };
+        //private static readonly int[] SectorsAllowed = { 311, 102, 205 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaWindowDays = 25;
-        private static readonly int NumLong = 20;
-        private static readonly int NumShort = 5;
+        private static readonly int NumLong = 30;
+        private static readonly int NumShort = 0;
+        private static readonly int MaxDaysFromLastEarnings = 80;
         private static readonly decimal MaxDrawdown = 0.25m;
         private static readonly decimal MaxShortMomentum = 1m;
-        private static readonly decimal MinLongRevenueGrowth = 0m;
+        private static readonly decimal MinLongRevenueGrowth = 0.1m;
         private static readonly decimal MaxShortRevenueGrowth = 0m;
         private static readonly decimal MinLongAssetGrowth = 0.1m;
         private static readonly decimal MaxShortAssetGrowth = 0m;
@@ -307,22 +312,32 @@ namespace QuantConnect.Algorithm.CSharp
             var longs = candidates
                 .Where(
                     x => _longCandidates.Contains(x.Symbol)
-                    && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                    //&& SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                    && IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    //&& x.OperationRatios.RevenueGrowth.HasValue
-                    //&& x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
+                    && x.OperationRatios.RevenueGrowth.HasValue
+                    && x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
                     && x.OperationRatios.TotalAssetsGrowth.HasValue
                     && x.OperationRatios.TotalAssetsGrowth.Value > MinLongAssetGrowth
+                    && (Time - x.FinancialStatements.FileDate).Days < MaxDaysFromLastEarnings
                     )
                 .Select(x => x.Symbol)
                 .ToList();
             _longCandidates = longs;
 
+            //candidates
+            //    .GroupBy(x => (Time - x.FinancialStatements.FileDate).Days)
+            //    .Select(x => new { Key = x.Key, Num = x.Count() })
+            //    .OrderBy(x => x.Key)
+            //    .ToList()
+            //    .ForEach(x => Log($"{x.Key} count = {x.Num}"));
+
             var shorts = candidates
                 .Where(
                     x => !_longCandidates.Contains(x.Symbol)
-                    && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                    //&& SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                    && IsRecent(x.CompanyReference.YearofEstablishment)
                     && x.CompanyReference.CountryId == CountryCode
                     && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     && x.OperationRatios.RevenueGrowth.HasValue
@@ -334,6 +349,14 @@ namespace QuantConnect.Algorithm.CSharp
             _universeMeter.Update(Time);
 
             return _longCandidates.Union(shorts);
+        }
+
+        private bool IsRecent(string strYearEstablished)
+        {
+            int yearEstablished;
+            if (!int.TryParse(strYearEstablished, out yearEstablished))
+                return false;
+            return yearEstablished + YearEstablishedLookback >= Time.Year;
         }
 
         private void SendEmailNotification(string msg)

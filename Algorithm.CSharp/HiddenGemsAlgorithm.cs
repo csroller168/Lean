@@ -55,7 +55,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
         //private static readonly int YearEstablishedLookback = 10;
         //private static readonly string CountryCode = "USA";
-        //private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
+        private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaWindowDays = 25;
@@ -244,7 +244,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        && DollarVolume(slice[x.Key] as TradeBar) >= MinDollarVolume
+                        //&& DollarVolume(slice[x.Key] as TradeBar) >= MinDollarVolume
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -337,7 +337,7 @@ namespace QuantConnect.Algorithm.CSharp
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                     //&& IsRecent(x.CompanyReference.YearofEstablishment)
                     //&& x.CompanyReference.CountryId == CountryCode
-                    //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     //&& x.OperationRatios.RevenueGrowth.HasValue
                     //&& x.OperationRatios.RevenueGrowth.Value > MinLongRevenueGrowth
                     //&& x.OperationRatios.TotalAssetsGrowth.HasValue
@@ -361,7 +361,7 @@ namespace QuantConnect.Algorithm.CSharp
                     && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                     //&& IsRecent(x.CompanyReference.YearofEstablishment)
                     //&& x.CompanyReference.CountryId == CountryCode
-                    //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                     //&& x.OperationRatios.RevenueGrowth.HasValue
                     //&& x.OperationRatios.RevenueGrowth.Value < MaxShortRevenueGrowth
                     //&& x.OperationRatios.TotalAssetsGrowth.HasValue

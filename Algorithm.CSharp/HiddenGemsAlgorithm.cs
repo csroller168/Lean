@@ -47,8 +47,9 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 5;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
-        private static readonly decimal MaxDrawdown = 0.9m;
+        private static readonly decimal MaxDrawdown = 0.4m;
         private static readonly decimal MaxShortMomentum = 1m;
+        private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
@@ -220,6 +221,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
+                        && _momentums[x.Key].Current > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         && _dollarVolumes.ContainsKey(x.Key)
                         && _dollarVolumes[x.Key] > MinDollarVolume

@@ -37,7 +37,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      repeat for short only
         //      combine
         //      keep todos in code for future experiments
-        //  I *could* cache daily changes in fundamentals by by allowing selectors to run daily but only pushing universe changes on schedule
+        //  cap market cap
         //  restore MaxDaysFromLastEarnings
         //      bugs: 1) it screens > 80 days from earnings every 60 days - wrong. 2) it churns the universe, requiring time-consuming re-initialization of indicators
         //  don't hold stock within 10 days of earnings report
@@ -63,6 +63,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 0;
         private static readonly int MaxDaysFromLastEarnings = 80;
+        private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MaxDrawdown = 0.9m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
@@ -82,6 +83,7 @@ namespace QuantConnect.Algorithm.CSharp
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
+        private Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
 
         public override void Initialize()
         {
@@ -231,6 +233,10 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 var insights = new List<Insight>();
+                //var vols = _dollarVolumes
+                //    .Where(x => _longCandidates.Contains(x.Key))
+                //    .Select(x => x.Value);
+                //Log($"min={vols.Min()}, max={vols.Max()}, median={vols.Median()}");
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
@@ -239,6 +245,8 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
                         && (slice[x.Key] as BaseData).Price >= MinPrice
+                        && _dollarVolumes.ContainsKey(x.Key)
+                        && _dollarVolumes[x.Key] > MinDollarVolume
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -306,6 +314,12 @@ namespace QuantConnect.Algorithm.CSharp
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)
         {
+            _dollarVolumes.Clear();
+            foreach(var candidate in candidates)
+            {
+                _dollarVolumes[candidate.Symbol] = candidate.DollarVolume;
+            }
+
             if (!_universeMeter.IsDue(Time))
                 return Universe.Unchanged;
 
@@ -366,14 +380,6 @@ namespace QuantConnect.Algorithm.CSharp
 
             return _longCandidates.Union(shorts);
         }
-
-        //private bool IsRecent(string strYearEstablished)
-        //{
-        //    int yearEstablished;
-        //    if (!int.TryParse(strYearEstablished, out yearEstablished))
-        //        return false;
-        //    return yearEstablished + YearEstablishedLookback >= Time.Year;
-        //}
 
         private void SendEmailNotification(string msg)
         {

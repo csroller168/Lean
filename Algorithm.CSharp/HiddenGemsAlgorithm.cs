@@ -28,13 +28,6 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // TODOs:
-        //  clean slate
-        //      tune momentum indicators for long only
-        //      repeat for short only
-        //      combine
-        //      keep todos in code for future experiments
-        //  increase numLongs and numShorts
-        //  tune maxDrawdown
         //  tune other existing params for better performance
         //  factor today's value into indicator
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
@@ -52,7 +45,6 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 5;
-        private static readonly int MaxDaysFromLastEarnings = 80;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
         private static readonly decimal MaxDrawdown = 0.9m;
@@ -64,7 +56,7 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
-        private readonly decimal VixMomentumThreshold = 1.4m; // 1.4m;
+        private readonly decimal VixMomentumThreshold = 1.4m;
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
         private int _targetLongCount;

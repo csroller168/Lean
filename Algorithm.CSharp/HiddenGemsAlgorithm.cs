@@ -47,7 +47,6 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 5;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
-        private static readonly decimal MaxDrawdown = 0.9m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
@@ -55,15 +54,14 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
-        private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private readonly decimal VixMomentumThreshold = 1.4m;
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
-        private Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
-        private Dictionary<Symbol, decimal> _marketCaps = new Dictionary<Symbol, decimal>();
+        private readonly Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
+        private readonly Dictionary<Symbol, decimal> _marketCaps = new Dictionary<Symbol, decimal>();
 
         public override void Initialize()
         {
@@ -190,24 +188,6 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification(targetsStr);
         }
 
-        private bool StopLossTriggered(Slice slice, Symbol symbol)
-        {
-            if (_stopLosses.ContainsKey(symbol)
-                && (Time - _stopLosses[symbol]).Days < SmaWindowDays)
-                return true;
-
-            var max = _maximums[symbol].Current;
-            var price = (slice[symbol] as BaseData).Price;
-            var drawdown = (max - price) / max;
-
-            if(drawdown >= MaxDrawdown)
-            {
-                _stopLosses[symbol] = Time;
-                return true;
-            }
-            return false;
-        }
-
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
@@ -225,7 +205,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && _dollarVolumes[x.Key] > MinDollarVolume
                         && _marketCaps.ContainsKey(x.Key)
                         && _marketCaps[x.Key] > MinMarketCap
-                        && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
                     .Take(_targetLongCount)

@@ -62,10 +62,9 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 0;
         private static readonly int MaxDaysFromLastEarnings = 80;
-        private static readonly decimal MaxDrawdown = 0.25m;
+        private static readonly decimal MaxDrawdown = 0.9m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
-        private static readonly decimal MinDollarVolume = 10000000m;
         //private static readonly decimal MinLongRevenueGrowth = 0.1m;
         //private static readonly decimal MaxShortRevenueGrowth = 0m;
         //private static readonly decimal MinLongAssetGrowth = 0.1m;
@@ -226,11 +225,6 @@ namespace QuantConnect.Algorithm.CSharp
             return false;
         }
 
-        private decimal DollarVolume(TradeBar bar)
-        {
-            return bar.Price * bar.Volume;
-        }
-
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
@@ -244,7 +238,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        //&& DollarVolume(slice[x.Key] as TradeBar) >= MinDollarVolume
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)

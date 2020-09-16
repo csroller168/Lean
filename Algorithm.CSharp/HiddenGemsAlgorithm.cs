@@ -37,6 +37,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      repeat for short only
         //      combine
         //      keep todos in code for future experiments
+        //  I *could* cache daily changes in fundamentals by by allowing selectors to run daily but only pushing universe changes on schedule
         //  restore MaxDaysFromLastEarnings
         //      bugs: 1) it screens > 80 days from earnings every 60 days - wrong. 2) it churns the universe, requiring time-consuming re-initialization of indicators
         //  don't hold stock within 10 days of earnings report

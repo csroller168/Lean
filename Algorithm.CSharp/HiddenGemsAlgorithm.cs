@@ -28,13 +28,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // TODOs:
-        //  tune other existing params for better performance
         //  factor today's value into indicator
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
-        //  performance
-        //      restrict universe with more fundamental metrics - target ActiveSecurities <= 200
-        //      pick two periods to backtest:  biggest drawdown and best gain
-        //          2010-2012 + 2014-2016
+        //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
 
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);

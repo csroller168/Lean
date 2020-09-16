@@ -55,7 +55,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int MaxDaysFromLastEarnings = 80;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
-        private static readonly decimal MaxDrawdown = 0.25m;
+        private static readonly decimal MaxDrawdown = 0.9m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
@@ -64,7 +64,7 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
-        private readonly decimal VixMomentumThreshold = 10m; // 1.4m;
+        private readonly decimal VixMomentumThreshold = 1.4m; // 1.4m;
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
         private int _targetLongCount;
@@ -246,7 +246,7 @@ namespace QuantConnect.Algorithm.CSharp
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
-                        && !_longCandidates.Contains(x.Key)
+                        //&& !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current < MaxShortMomentum

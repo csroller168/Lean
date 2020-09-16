@@ -29,8 +29,13 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //  factor today's value into indicator
+        //      IndicatorWrapper<T<I>> which wraps a T: IndicatorBase<I>
+        //      Update() passes through
+        //      UpdateOpen() clones wrapped object and updates clone
+        //      Current gives current of Clone
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
+        //  set min company age for shorts and max age for longs
 
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);

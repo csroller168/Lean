@@ -380,7 +380,6 @@
     <Compile Include="HiddenGemsAlgorithm.cs" />
     <Compile Include="BigULongShortTrendAlgorithm.cs" />
     <Compile Include="MovingMomentumAlgorithm.cs" />
-    <Compile Include="HiddenGemsAlgorithm2.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Algorithm.Framework\QuantConnect.Algorithm.Framework.csproj">

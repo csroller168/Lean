@@ -29,21 +29,15 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //  clean slate
-        //      pick sector(s), market caps, min daily volume
-        //      pick one volatile period for backtesting(large gain and loss)
-        //      Benchmark buy/hold market for comparison
         //      tune momentum indicators for long only
-        //      bug fix: remove MaxDaysFromLastEarnings for now
         //      repeat for short only
         //      combine
         //      keep todos in code for future experiments
-        //  cap market cap
         //  restore MaxDaysFromLastEarnings
         //      bugs: 1) it screens > 80 days from earnings every 60 days - wrong. 2) it churns the universe, requiring time-consuming re-initialization of indicators
         //  don't hold stock within 10 days of earnings report
         //  increase numLongs and numShorts
         //  tune other existing params for better performance
-        //  limit longs to price > $5
         //  factor today's value into indicator
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  performance
@@ -64,6 +58,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int NumShort = 0;
         private static readonly int MaxDaysFromLastEarnings = 80;
         private static readonly decimal MinDollarVolume = 1000000m;
+        private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
         private static readonly decimal MaxDrawdown = 0.9m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
@@ -84,6 +79,8 @@ namespace QuantConnect.Algorithm.CSharp
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
         private Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
+        private Dictionary<Symbol, decimal> _marketCaps = new Dictionary<Symbol, decimal>();
+        private Dictionary<Symbol, int> _daysFromEarnings = new Dictionary<Symbol, int>();
 
         public override void Initialize()
         {
@@ -247,6 +244,8 @@ namespace QuantConnect.Algorithm.CSharp
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         && _dollarVolumes.ContainsKey(x.Key)
                         && _dollarVolumes[x.Key] > MinDollarVolume
+                        && _marketCaps.ContainsKey(x.Key)
+                        && _marketCaps[x.Key] > MinMarketCap
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -336,6 +335,12 @@ namespace QuantConnect.Algorithm.CSharp
 
         private IEnumerable<Symbol> SelectFine(IEnumerable<FineFundamental> candidates)
         {
+            _marketCaps.Clear();
+            foreach (var candidate in candidates)
+            {
+                _marketCaps[candidate.Symbol] = candidate.MarketCap;
+            }
+
             if (!_universeMeter.IsDue(Time))
                 return Universe.Unchanged;
 

@@ -26,8 +26,11 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
+        //      consider submit one for each sector
         //
         // TODOs:
+        //  resolve the slump late 2015-mid 2017
+        //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs

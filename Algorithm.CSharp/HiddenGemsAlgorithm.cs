@@ -28,15 +28,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // TODOs:
-        //  factor today's value into indicator
-        //      IndicatorWrapper<T<I>> which wraps a T: IndicatorBase<I>
-        //      Update() passes through
-        //      UpdateOpen() clones wrapped object and updates clone
-        //      Current gives current of Clone
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs
-
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
         private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
@@ -65,9 +59,9 @@ namespace QuantConnect.Algorithm.CSharp
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
-        private Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
-        private Dictionary<Symbol, long> _marketCaps = new Dictionary<Symbol, long>();
-        private Dictionary<Symbol, decimal> _opRevenueGrowth = new Dictionary<Symbol, decimal>();
+        private readonly Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
+        private readonly Dictionary<Symbol, long> _marketCaps = new Dictionary<Symbol, long>();
+        private readonly Dictionary<Symbol, decimal> _opRevenueGrowth = new Dictionary<Symbol, decimal>();
 
         public override void Initialize()
         {

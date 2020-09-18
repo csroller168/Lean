@@ -20,7 +20,7 @@ using QuantConnect.Data.Market;
 
 namespace QuantConnect.Algorithm.CSharp
 {
-    public class HiddenGemsAlgorithm2 : QCAlgorithm
+    public class HiddenGemsAlgorithm : QCAlgorithm
     {
         // fundamentals:  https://www.quantconnect.com/docs/data-library/fundamentals
         // 

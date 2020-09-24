@@ -26,13 +26,24 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // live issues:
         //      need fundamental data
+        //          we'll only subscribe for price data if it's in ActiveSecurities, and that won't happen until selectors called
+        //          per https://www.quantconnect.com/docs/live-trading/universe-selection
+        //              Universe selection doesn't happen until 4 am. (live-reconciliation doc says midnight, which matches backtesting)
+        //              per "Data Library - Fundamentals" doc, morningstar data is delivered at 6 am
+        //              "Universe selection is only supported by the QuantConnect Data Feed. If you select a brokerage data feed on deploying your algorithm, it will not receive universe data at this time.
+        //          option:  use quantconnect's goLive for $8/month
+        //              ... quick and easy, and might solve all of these live integration problems (assuming they have them solved)...
+        //              ... i'll have to use their notification thing instead of mine
+        //              yeah, i'll try it for a month
         //      not getting vix history (maybe just need to wait until it's in the slice, or get externally)
+        // 
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector
         //
         // TODOs:
         //  resolve the slump late 2015-mid 2017
+        //  from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
         //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
@@ -80,18 +91,7 @@ namespace QuantConnect.Algorithm.CSharp
                 : Resolution.Hour;
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
-
-            if(LiveMode)
-            {
-                LiveSymbols.ForEach(x =>
-                {
-                    AddEquity(x, Resolution.Minute, null, true);
-                });
-            }
-            else
-            {
-                AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-            }
+            AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
             _vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
         }
 
@@ -377,15 +377,11 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (!LiveMode)
                 return;
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
-            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-                FileName = "mono",
-                Arguments = $"/home/ubuntu/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com"
-            };
-            process.StartInfo = startInfo;
-            process.Start();
+
+            Notify.Email(
+                "chrisshort168@gmail.com",
+                "Trading app notification",
+                $"App is long {msg}");
         }
 
         private class UpdateMeter

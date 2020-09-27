@@ -50,7 +50,7 @@ namespace QuantConnect.Algorithm.CSharp
         //  set min company age for shorts and max age for longs
 
         private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        private static readonly TimeSpan RebuildUniversePeriod = TimeSpan.FromDays(60);
+        
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 };
         private static readonly int SmaLookbackDays = 126;
@@ -65,12 +65,13 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
         private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
-        private readonly UpdateMeter _universeMeter = new UpdateMeter(RebuildUniversePeriod);
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private readonly decimal VixMomentumThreshold = 1.4m;
         private readonly decimal MinOpRevenueGrowth = 0m;
+        private static TimeSpan RebuildUniversePeriod;
+        private UpdateMeter _universeMeter;
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
         private int _targetLongCount;
@@ -79,16 +80,17 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
         private readonly Dictionary<Symbol, long> _marketCaps = new Dictionary<Symbol, long>();
         private readonly Dictionary<Symbol, decimal> _opRevenueGrowth = new Dictionary<Symbol, decimal>();
-        private readonly List<string> LiveSymbols = new List<string> { "PLAB", "FICO", "MIND", "ZUO", "AIRG", "WDAY", "SNE", "CAMT", "NTNX", "CSGS", "GIB", "WATT", "AVCT", "RST", "FOUR", "RMNI", "AUDC", "SITM", "PBTS", "MPWR", "SABR", "BHE", "TDC", "SNX", "EXTR", "VMW", "ITRI", "QTWO", "PRFT", "EBIX", "JNPR", "SCKT", "QUMU", "SQ", "ST", "IMTE", "MYSZ", "QMCO", "ATEN", "CGNX", "CLSK", "HBB", "PRTH", "SANM", "ADSK", "WSTG", "OSS", "IMMR", "KOSS", "WIX", "JCOM", "VIAV", "AGMH", "LYTS", "SWKS", "HPQ", "DT", "VVPR", "UTSI", "AVLR", "FORM", "VSAT", "MVIS", "VRTU", "AMBA", "PLXS", "MICT", "RXT", "TYL", "ZIXI", "EPAY", "LSCC", "VPG", "YEXT", "PXLW", "AEHR", "SEDG", "SSNT", "NEWR", "UCTT", "EEFT", "CRWD", "MXL", "WDC", "MNDO", "APPS", "DAKT", "GNSS", "RP", "NSYS", "LEDS", "RMBS", "RPD", "TAIT", "NET", "LYFT", "ENPH", "PAR", "JCS", "MWK", "DSWL", "MTC", "IIIV", "CTG", "TTEC", "SWIR", "MAXR", "STNE", "STMP", "BLIN", "ZEN", "EVSI", "SMTC", "IMXI", "FEYE", "EVBG", "RDVT", "NLOK", "ANSS", "OLED", "PWFL", "FTNT", "DUOT", "APH", "ALOT", "NSIT", "INTU", "VRNT", "ICHR", "MITK", "TNAV", "ALYA", "FN", "UEIC", "NATI", "REFR", "BLKB", "KVHI", "FLIR", "PAGS", "USIO", "LFUS", "TDY", "AKAM", "ALLT", "FIS", "PLAN", "IRBT", "MTSI", "ADBE", "AVT", "QRVO", "MFGP", "PFPT", "SILC", "LPL", "SMAR", "AEY", "SPLK", "OSPN", "ISNS", "NETE", "WORK", "PTC", "ITRN", "TSM", "MKSI", "NTGR", "SCSC", "CMBM", "WISA", "BRQS", "ERIC", "DMRC", "ZI", "DSPG", "APPN", "ELTK", "WKEY", "TTD", "PRO", "GDDY", "SFET", "PING", "OLB", "KLIC", "ASX", "CRNT", "SVMK", "PDFS", "PRGS", "NTAP", "POWI", "RDWR", "CALX", "NVEC", "CEVA", "INOD", "AVNW", "SMTX", "SCON", "ASYS", "XLNX", "DOCU", "BOX", "ACLS", "TCCO", "IBM", "RPAY", "RNG", "SHOP", "NOVT", "TEL", "NICE", "CDW", "MIXT", "BCOV", "CHKP", "CACI", "CLFD", "LTRX", "SGH", "CYBR", "EVTC", "VECO", "MANH", "HPE", "BELFA", "SWCH", "COHU", "HEAR", "BKI", "UBER", "SUNW", "NPTN", "DNB", "COHR", "CASA", "IDEX", "AWRE", "CREE", "FSLY", "CTSH", "INSG", "CLS", "MDLA", "PAYC", "CETXP", "ZS", "TENB", "AZPN", "MSTR", "QLYS", "RSSS", "ON", "PCTI", "GLW", "RIOT", "CLRO", "CPAH", "WTRH", "CSCO", "EXFO", "MIME", "AMKR", "MOGO", "CCMP", "EPAM", "ANY", "MINDP", "TXN", "SEAC", "JKHY", "IPHI", "IDN", "MOSY", "PEGA", "PSTG", "PRSP", "ORCL", "PHUN", "CDNS", "PCTY", "UPLD", "EVOP", "NTCT", "STM", "SMCI", "IIVIP", "NXPI", "AOSL", "NOVA", "SWI", "CSIQ", "PLT", "CAJ", "RELL", "IMOS", "SGMA", "SONM", "PLUS", "SPSC", "NVMI", "SPRT", "PRCP", "TTMI", "TACT", "ENTG", "SSNC", "FLEX", "SSTI", "MDB", "GSKY", "COMM", "QUIK", "SMSI", "KTCC", "LPTH", "IIVI", "SGLB", "LPSN", "DIOD", "SPNS", "GILT", "ZBRA", "TCX", "LLNW", "SPT", "DBX", "BIGC", "CCRC", "KBNT", "SAP", "XELA", "VICR", "MLAB", "INPX", "BNFT", "AAPL", "EBON", "PECK", "FFIV", "DOX", "FARO", "SONO", "SPWR", "DDD", "ASML", "TESS", "CIEN", "ESTC", "AYX", "CTXS", "AXTI", "GSIT", "OTEX", "LITE", "WIT", "VSLR", "UIS", "QADA", "SPI", "KEYS", "DTSS", "FORTY", "BTBT", "SNPS", "EB", "CLDR", "ADI", "DZSI", "GLOB", "IEC", "INFY", "MOBL", "DAIO", "ITI", "ACIW", "GTYH", "ARW", "CRNC", "TEAM", "PD", "MTSC", "GVP", "TRMB", "MSFT", "SATS", "KOPN", "AVGO", "UI", "FTFT", "LASR", "XPER", "SAIL", "MANT", "CDK", "MEI", "VISL", "GDYN", "MRAM", "CREX", "MSI", "VUZI", "LDOS", "MODN", "CYBE", "BOSC", "MGIC", "CPSH", "JAMF", "CETX", "ANET", "GB", "AGYS", "ATOM", "WSTL", "RBCN", "KLAC", "FTV", "NCNO", "NVDA", "BOXL", "NOK", "ALTR", "ELSE", "MJCO", "ACMR", "MAXN", "CSPI", "ALRM", "AMOT", "TSRI", "SHSP", "EIGI", "JBL", "DGII", "GWRE", "DDOG", "OSIS", "HUBS", "VERB", "REKR", "PANW", "MCHP", "BSQR", "CYRN", "ROG", "CSOD", "TSEM", "WEX", "WRTC", "DELL", "CCC", "ESE", "EXLS", "INFN", "CDAY", "NUAN", "SCWX", "AAOI", "WK", "SLAB", "MRVL", "FLT", "SYNA", "UMC", "SAIC", "NOW", "IT", "RESN", "TUFN", "PCYG", "DOMO", "G", "CVLT", "BNSO", "EGAN", "ASUR", "III", "BL", "IPGP", "INTC", "TAOP", "PS", "STX", "HLIT", "FISV", "MU", "FEIM", "CMTL", "LOGI", "AKTS", "LRCX", "COUP", "ECOM", "UEPS", "EGHT", "AMD", "BILL", "RUN", "VRSN", "NTWK", "SYNC", "CLGX", "DBD", "BR", "INVE", "NCR", "CLPS", "AVGOP", "SREV", "LUNA", "ADTN", "BRKS", "VRNS", "BELFB", "FIT", "CNDT", "EVOL", "NEON", "CRM", "CAMP", "BAND", "TER", "OCC", "VSH", "HCKT", "MXIM", "GPRO", "EGOV", "SSYS", "MRIN", "FIVN", "ENV", "ONTO", "LINX", "CRUS", "VOXX", "ACIA", "RAMP", "BB", "AMAT", "ACN", "DCT", "GRMN", "SYKE", "OKTA", "APPF", "KN", "FSLR", "DSGX", "QCOM", "AVYA", "AEYE", "VERX", "VERI", "VCRA", "CNXN", "AMSWA", "QADB", "AMRH", "XRX", "SMIT", "DXC", "PI", "EMKR", "CXDO", "CTS", "MX" };
 
         public override void Initialize()
         {
+            UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
+            RebuildUniversePeriod = LiveMode ? TimeSpan.FromDays(1) : TimeSpan.FromDays(60);
+            _universeMeter = new UpdateMeter(RebuildUniversePeriod);
+
             SetStartDate(2006, 1, 1);
             SetEndDate(2010, 1, 1);
             SetCash(100000);
-            UniverseSettings.Resolution = LiveMode
-                ? Resolution.Minute
-                : Resolution.Hour;
+            
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));

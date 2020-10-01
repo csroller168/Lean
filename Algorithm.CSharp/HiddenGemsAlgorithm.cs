@@ -116,6 +116,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch(Exception e)
             {
+                Log(e.Message);
                 SendEmailNotification(e.Message);
             }
         }
@@ -124,6 +125,9 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (!LiveMode)
                 return true;
+
+            if (Time.Hour < 10)
+                return false;
 
             lock (mutexLock)
             {
@@ -346,6 +350,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch(Exception e)
             {
+                Log(e.Message);
                 SendEmailNotification(e.Message);
                 return Universe.Unchanged;
             }
@@ -355,8 +360,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-
-
                 _marketCaps.Clear();
                 _opRevenueGrowth.Clear();
                 foreach (var candidate in candidates)
@@ -391,6 +394,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch (Exception e)
             {
+                Log(e.Message);
                 SendEmailNotification(e.Message);
                 return Universe.Unchanged;
             }

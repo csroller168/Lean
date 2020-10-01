@@ -25,6 +25,8 @@ namespace QuantConnect.Algorithm.CSharp
         // fundamentals:  https://www.quantconnect.com/docs/data-library/fundamentals
         //
         // live issues:
+        //      out of memory...
+        //          In live, i can filter universe properly, unlike in backtests.  Optimize smaller universe for live.
         //      need fundamental data
         //          we'll only subscribe for price data if it's in ActiveSecurities, and that won't happen until selectors called
         //          per https://www.quantconnect.com/docs/live-trading/universe-selection
@@ -315,64 +317,83 @@ namespace QuantConnect.Algorithm.CSharp
             catch (Exception e)
             {
                 Log($"Exception: OnSecuritiesChanged: {e.Message}");
+                SendEmailNotification(e.Message);
             }
         }
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)
         {
-            _dollarVolumes.Clear();
-            foreach(var candidate in candidates)
+            try
             {
-                _dollarVolumes[candidate.Symbol] = candidate.DollarVolume;
+                _dollarVolumes.Clear();
+                foreach (var candidate in candidates)
+                {
+                    _dollarVolumes[candidate.Symbol] = candidate.DollarVolume;
+                }
+
+                if (!_universeMeter.IsDue(Time))
+                    return Universe.Unchanged;
+
+                _longCandidates = candidates
+                    .Where(x => x.HasFundamentalData
+                        )
+                    .Select(x => x.Symbol)
+                    .ToList();
+
+                var shorts = Enumerable.Empty<Symbol>();
+
+                return _longCandidates.Union(shorts);
             }
-
-            if (!_universeMeter.IsDue(Time))
+            catch(Exception e)
+            {
+                SendEmailNotification(e.Message);
                 return Universe.Unchanged;
-
-            _longCandidates = candidates
-                .Where(x => x.HasFundamentalData
-                    )
-                .Select(x => x.Symbol)
-                .ToList();
-
-            var shorts = Enumerable.Empty<Symbol>();
-
-            return _longCandidates.Union(shorts);
+            }
         }
 
         private IEnumerable<Symbol> SelectFine(IEnumerable<FineFundamental> candidates)
         {
-            _marketCaps.Clear();
-            _opRevenueGrowth.Clear();
-            foreach (var candidate in candidates)
+            try
             {
-                _marketCaps[candidate.Symbol] = candidate.MarketCap;
-                _opRevenueGrowth[candidate.Symbol] = candidate.OperationRatios.OperationRevenueGrowth3MonthAvg.Value;
+
+
+                _marketCaps.Clear();
+                _opRevenueGrowth.Clear();
+                foreach (var candidate in candidates)
+                {
+                    _marketCaps[candidate.Symbol] = candidate.MarketCap;
+                    _opRevenueGrowth[candidate.Symbol] = candidate.OperationRatios.OperationRevenueGrowth3MonthAvg.Value;
+                }
+
+                if (!_universeMeter.IsDue(Time))
+                    return Universe.Unchanged;
+
+                var longs = candidates
+                    .Where(
+                        x => _longCandidates.Contains(x.Symbol)
+                        && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                        && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                        )
+                    .Select(x => x.Symbol)
+                    .ToList();
+                _longCandidates = longs;
+
+                var shorts = candidates
+                    .Where(
+                        x => !_longCandidates.Contains(x.Symbol)
+                        && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                        && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                        )
+                    .Select(x => x.Symbol);
+                _universeMeter.Update(Time);
+
+                return _longCandidates.Union(shorts);
             }
-
-            if (!_universeMeter.IsDue(Time))
+            catch (Exception e)
+            {
+                SendEmailNotification(e.Message);
                 return Universe.Unchanged;
-
-            var longs = candidates
-                .Where(
-                    x => _longCandidates.Contains(x.Symbol)
-                    && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    )
-                .Select(x => x.Symbol)
-                .ToList();
-            _longCandidates = longs;
-
-            var shorts = candidates
-                .Where(
-                    x => !_longCandidates.Contains(x.Symbol)
-                    && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                    && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                    )
-                .Select(x => x.Symbol);
-            _universeMeter.Update(Time);
-
-            return _longCandidates.Union(shorts);
+            }
         }
 
         private void SendEmailNotification(string msg)

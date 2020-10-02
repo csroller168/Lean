@@ -24,21 +24,6 @@ namespace QuantConnect.Algorithm.CSharp
     {
         // fundamentals:  https://www.quantconnect.com/docs/data-library/fundamentals
         //
-        // live issues:
-        //      out of memory...
-        //          In live, i can filter universe properly, unlike in backtests.  Optimize smaller universe for live.
-        //      need fundamental data
-        //          we'll only subscribe for price data if it's in ActiveSecurities, and that won't happen until selectors called
-        //          per https://www.quantconnect.com/docs/live-trading/universe-selection
-        //              Universe selection doesn't happen until 4 am. (live-reconciliation doc says midnight, which matches backtesting)
-        //              per "Data Library - Fundamentals" doc, morningstar data is delivered at 6 am
-        //              "Universe selection is only supported by the QuantConnect Data Feed. If you select a brokerage data feed on deploying your algorithm, it will not receive universe data at this time.
-        //          option:  use quantconnect's goLive for $8/month
-        //              ... quick and easy, and might solve all of these live integration problems (assuming they have them solved)...
-        //              ... i'll have to use their notification thing instead of mine
-        //              yeah, i'll try it for a month
-        //      not getting vix history (maybe just need to wait until it's in the slice, or get externally)
-        // 
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector

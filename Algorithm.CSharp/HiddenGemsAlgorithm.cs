@@ -390,10 +390,15 @@ namespace QuantConnect.Algorithm.CSharp
             if (!LiveMode)
                 return;
 
-            Notify.Email(
-                "chrisshort168@gmail.com",
-                "Trading app notification",
-                $"App is long {msg}");
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                FileName = "mono",
+                Arguments = $"/home/dennis/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com"
+            };
+            process.StartInfo = startInfo;
+            process.Start();
         }
 
         private class UpdateMeter

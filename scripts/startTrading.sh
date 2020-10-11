@@ -1,3 +1,3 @@
 #!/bin/bash
-cd /home/ubuntu/git/Lean/Launcher/bin/Debug
-mono QuantConnect.Lean.Launcher.exe &> /home/ubuntu/logs/tradeLog.txt
+cd /home/dennis/git/Lean/Launcher/bin/Debug
+mono QuantConnect.Lean.Launcher.exe &> /home/dennis/logs/tradeLog.txt

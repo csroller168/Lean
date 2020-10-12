@@ -29,6 +29,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider submit one for each sector
         //
         // TODOs:
+        //  cronjob to backup/delete output
+        //      or... make the app stop between 5 pm and 11 PM
+        //  make a better trading hours guard fix
         //  resolve the slump late 2015-mid 2017
         //  from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
         //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric

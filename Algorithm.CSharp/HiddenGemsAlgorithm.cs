@@ -29,6 +29,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider submit one for each sector
         //
         // TODOs:
+        //  temporary:  send debug output in emails
         //  cronjob to backup/delete output
         //      or... make the app stop between 5 pm and 11 PM
         //  make a better trading hours guard fix
@@ -73,6 +74,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
+            SendEmailNotification("CMS DEBUG: start Initialize()");
             UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromDays(1) : TimeSpan.FromDays(60);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
@@ -85,6 +87,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
             _vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
+            SendEmailNotification("CMS DEBUG: end Initialize()");
         }
 
         public override void OnData(Slice slice)
@@ -95,12 +98,13 @@ namespace QuantConnect.Algorithm.CSharp
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
                     return;
-
+                SendEmailNotification("CMS DEBUG: start OnData()");
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
                 Rebalance(insights);
                 _rebalanceMeter.Update(Time);
+                SendEmailNotification("CMS DEBUG: end OnData()");
             }
             catch(Exception e)
             {
@@ -285,7 +289,8 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                foreach(var addition in changes.AddedSecurities)
+                SendEmailNotification("CMS DEBUG: start OnSecuritiesChanged()");
+                foreach (var addition in changes.AddedSecurities)
                 {
                     var currentSma = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
                     var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
@@ -305,6 +310,7 @@ namespace QuantConnect.Algorithm.CSharp
                     _momentums.Remove(removal.Symbol);
                     _maximums.Remove(removal.Symbol);
                 }
+                SendEmailNotification("CMS DEBUG: end OnSecuritiesChanged()");
             }
             catch (Exception e)
             {
@@ -317,6 +323,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
+                SendEmailNotification("CMS DEBUG: start SelectCoarse()");
                 _dollarVolumes.Clear();
                 foreach (var candidate in candidates)
                 {
@@ -333,8 +340,9 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToList();
 
                 var shorts = Enumerable.Empty<Symbol>();
-
+                SendEmailNotification("CMS DEBUG: end SelectCoarse()");
                 return _longCandidates.Union(shorts);
+                
             }
             catch(Exception e)
             {
@@ -348,6 +356,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
+                SendEmailNotification("CMS DEBUG: start SelectFine()");
                 _marketCaps.Clear();
                 _opRevenueGrowth.Clear();
                 foreach (var candidate in candidates)
@@ -377,8 +386,8 @@ namespace QuantConnect.Algorithm.CSharp
                         )
                     .Select(x => x.Symbol);
                 _universeMeter.Update(Time);
-
-                return _longCandidates.Union(shorts);
+                SendEmailNotification("CMS DEBUG: end SelectFine()");
+                return _longCandidates.Union(shorts);                
             }
             catch (Exception e)
             {

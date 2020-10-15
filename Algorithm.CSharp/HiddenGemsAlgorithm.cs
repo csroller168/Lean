@@ -28,6 +28,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector
         //
+        // live integration
+        //  merge from master?  MovingMomentum not working locally now.
+        //
         // TODOs:
         //  temporary:  send debug output in emails
         //  cronjob to backup/delete output
@@ -86,7 +89,7 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-            _vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
+            //_vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
 
@@ -117,9 +120,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (!LiveMode)
                 return true;
-
-            if (Time.Hour < 10)
-                return false;
 
             lock (mutexLock)
             {
@@ -156,30 +156,30 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
-            var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily)
-                .Cast<TradeBar>();
-            if (vixHistories.Any())
-            {
-                var pastMomentum = VixMomentum(vixHistories.Take(35));
-                var currentMomentum = VixMomentum(vixHistories.Skip(3));
-                Plot("vix", "momentum", currentMomentum);
+            //var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily)
+            //    .Cast<TradeBar>();
+            //if (vixHistories.Any())
+            //{
+            //    var pastMomentum = VixMomentum(vixHistories.Take(35));
+            //    var currentMomentum = VixMomentum(vixHistories.Skip(3));
+            //    Plot("vix", "momentum", currentMomentum);
 
-                if(currentMomentum > VixMomentumThreshold
-                    && currentMomentum > pastMomentum)
-                {
-                    _targetLongCount = NumShort;
-                    _targetShortCount = NumLong;
-                    return;
-                }
+            //    if(currentMomentum > VixMomentumThreshold
+            //        && currentMomentum > pastMomentum)
+            //    {
+            //        _targetLongCount = NumShort;
+            //        _targetShortCount = NumLong;
+            //        return;
+            //    }
 
-                if(currentMomentum < VixMomentumThreshold
-                    && currentMomentum < pastMomentum)
-                {
-                    _targetLongCount = NumLong;
-                    _targetShortCount = 0;
-                    return;
-                }
-            }
+            //    if(currentMomentum < VixMomentumThreshold
+            //        && currentMomentum < pastMomentum)
+            //    {
+            //        _targetLongCount = NumLong;
+            //        _targetShortCount = 0;
+            //        return;
+            //    }
+            //}
 
             _targetLongCount = NumLong;
             _targetShortCount = NumShort;
@@ -417,7 +417,13 @@ namespace QuantConnect.Algorithm.CSharp
         private class UpdateMeter
         {
             private readonly TimeSpan _frequency;
-            private DateTime _lastUpdate = DateTime.MinValue;
+            private DateTime _lastUpdate = new DateTime(
+                DateTime.Now.Year,
+                DateTime.Now.Month,
+                DateTime.Now.Day,
+                9,
+                30,
+                0);
             public bool IsDue(DateTime now) => _lastUpdate.Add(_frequency) <= now;
 
             public UpdateMeter(TimeSpan frequency)

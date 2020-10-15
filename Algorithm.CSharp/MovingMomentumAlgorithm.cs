@@ -97,7 +97,7 @@ namespace QuantConnect.Algorithm.CSharp
                 var equity = AddEquity(x, resolution, null, true);
                 equity.SetSlippageModel(SlippageModel);
             });
-            _cboeVix = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
+            //_cboeVix = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
 
             AddEquity("SPY");
             SetBenchmark("SPY");
@@ -105,7 +105,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void OnData(Slice slice)
         {
-            HandleVixData(slice);
+            //HandleVixData(slice);
             if (!IsAllowedToTrade(slice))
             {
                 return;

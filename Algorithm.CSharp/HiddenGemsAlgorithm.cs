@@ -58,7 +58,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
-        private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod);
+        private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod, new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 9, 30, 0));
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
@@ -79,8 +79,8 @@ namespace QuantConnect.Algorithm.CSharp
         {
             SendEmailNotification("CMS_DEBUG_start_Initialize");
             UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
-            RebuildUniversePeriod = LiveMode ? TimeSpan.FromDays(1) : TimeSpan.FromDays(60);
-            _universeMeter = new UpdateMeter(RebuildUniversePeriod);
+            RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(60);
+            _universeMeter = new UpdateMeter(RebuildUniversePeriod, DateTime.MinValue);
 
             SetStartDate(2006, 1, 1);
             SetEndDate(2010, 1, 1);
@@ -426,9 +426,12 @@ namespace QuantConnect.Algorithm.CSharp
                 0);
             public bool IsDue(DateTime now) => _lastUpdate.Add(_frequency) <= now;
 
-            public UpdateMeter(TimeSpan frequency)
+            public UpdateMeter(
+                TimeSpan frequency,
+                DateTime firstUpdateSeed)
             {
                 _frequency = frequency;
+                _lastUpdate = firstUpdateSeed;
             }
 
             public void Update(DateTime now)

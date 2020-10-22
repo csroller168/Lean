@@ -172,7 +172,7 @@ namespace QuantConnect.Brokerages
         /// </summary>
         protected virtual void OnOpen()
         {
-            Log.Trace($"WebSocketClientWrapper.OnOpen(): Connection opened (IsOpen:{IsOpen}, State:{_client.State}): {_url}");
+            //Log.Trace($"WebSocketClientWrapper.OnOpen(): Connection opened (IsOpen:{IsOpen}, State:{_client.State}): {_url}");
             Open?.Invoke(this, EventArgs.Empty);
         }
 
@@ -181,7 +181,7 @@ namespace QuantConnect.Brokerages
         /// </summary>
         protected virtual void OnClose(WebSocketCloseData e)
         {
-            Log.Trace($"WebSocketClientWrapper.OnClose(): Connection closed (IsOpen:{IsOpen}, State:{_client.State}): {_url}");
+            //Log.Trace($"WebSocketClientWrapper.OnClose(): Connection closed (IsOpen:{IsOpen}, State:{_client.State}): {_url}");
             Closed?.Invoke(this, e);
         }
 
@@ -189,7 +189,7 @@ namespace QuantConnect.Brokerages
         {
             using (_client = new ClientWebSocket())
             {
-                Log.Trace($"WebSocketClientWrapper.HandleConnection({_url}): Connecting...");
+                //Log.Trace($"WebSocketClientWrapper.HandleConnection({_url}): Connecting...");
 
                 try
                 {
@@ -203,7 +203,7 @@ namespace QuantConnect.Brokerages
 
                         if (messageData.MessageType == WebSocketMessageType.Close)
                         {
-                            Log.Trace($"WebSocketClientWrapper.HandleConnection({_url}): WebSocketMessageType.Close");
+                            //Log.Trace($"WebSocketClientWrapper.HandleConnection({_url}): WebSocketMessageType.Close");
                             return;
                         }
 

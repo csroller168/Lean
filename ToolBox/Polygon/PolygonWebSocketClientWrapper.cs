@@ -106,12 +106,12 @@ namespace QuantConnect.ToolBox.Polygon
 
         private void OnClosed(object sender, WebSocketCloseData e)
         {
-            Log.Trace($"PolygonDataQueueHandler.OnClosed({_securityType}): {e.Reason}");
+            //Log.Trace($"PolygonDataQueueHandler.OnClosed({_securityType}): {e.Reason}");
         }
 
         private void OnOpen(object sender, EventArgs e)
         {
-            Log.Trace($"PolygonDataQueueHandler.OnOpen({_securityType}): connection open");
+            //Log.Trace($"PolygonDataQueueHandler.OnOpen({_securityType}): connection open");
 
             var json = JsonConvert.SerializeObject(
                 new

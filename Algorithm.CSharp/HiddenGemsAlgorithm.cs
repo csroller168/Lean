@@ -74,6 +74,7 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
         private readonly Dictionary<Symbol, long> _marketCaps = new Dictionary<Symbol, long>();
         private readonly Dictionary<Symbol, decimal> _opRevenueGrowth = new Dictionary<Symbol, decimal>();
+        private readonly string[] _staticSymbols = { "APPS", "RUN", "SQ", "STNE", "SAIL", "SEDG", "NOVA", "ZS", "TTD", "CRWD", "DOCU", "NET", "BAND", "ENPH", "DDOG", "FSLR", "LPSN", "TSM", "HUBS", "INFY", "GLW", "DELL", "QCOM", "ESTC", "AMD", "WIX", "BILL", "EPAM", "LOGI", "SNX" };
 
         public override void Initialize()
         {
@@ -88,7 +89,9 @@ namespace QuantConnect.Algorithm.CSharp
             
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
-            AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+            //AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+            AddUniverseSelection(new ManualUniverseSelectionModel(_staticSymbols
+                .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))));
             //_vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }

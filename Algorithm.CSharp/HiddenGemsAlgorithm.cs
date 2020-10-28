@@ -43,8 +43,6 @@ namespace QuantConnect.Algorithm.CSharp
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs
 
-        private static readonly TimeSpan RebalancePeriod = TimeSpan.FromDays(1);
-        
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 };
         private static readonly int SmaLookbackDays = 126;
@@ -58,14 +56,15 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
-        private readonly UpdateMeter _rebalanceMeter = new UpdateMeter(RebalancePeriod, new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 9, 30, 0));
         private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private readonly decimal VixMomentumThreshold = 1.4m;
         private readonly decimal MinOpRevenueGrowth = 0m;
         private static TimeSpan RebuildUniversePeriod;
+        private static TimeSpan RebalancePeriod;
         private UpdateMeter _universeMeter;
+        private UpdateMeter _rebalanceMeter;
         private List<Symbol> _longCandidates = new List<Symbol>();
         private Symbol _vixSymbol;
         private int _targetLongCount;
@@ -81,7 +80,9 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification("CMS_DEBUG_start_Initialize");
             UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(60);
-            _universeMeter = new UpdateMeter(RebuildUniversePeriod, DateTime.MinValue);
+            RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(60);
+            _universeMeter = new UpdateMeter(RebuildUniversePeriod);
+            _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
             SetStartDate(2006, 1, 1);
             SetEndDate(2010, 1, 1);
@@ -127,7 +128,7 @@ namespace QuantConnect.Algorithm.CSharp
             lock (mutexLock)
             {
                 if (slice.Count < ActiveSecurities.Count
-                    && numAttemptsToTrade < NumLong)
+                    && numAttemptsToTrade < NumLong / 3)
                 {
                     numAttemptsToTrade++;
                     return false;
@@ -420,21 +421,12 @@ namespace QuantConnect.Algorithm.CSharp
         private class UpdateMeter
         {
             private readonly TimeSpan _frequency;
-            private DateTime _lastUpdate = new DateTime(
-                DateTime.Now.Year,
-                DateTime.Now.Month,
-                DateTime.Now.Day,
-                9,
-                30,
-                0);
+            private DateTime _lastUpdate = DateTime.MinValue;
             public bool IsDue(DateTime now) => _lastUpdate.Add(_frequency) <= now;
 
-            public UpdateMeter(
-                TimeSpan frequency,
-                DateTime firstUpdateSeed)
+            public UpdateMeter(TimeSpan frequency)
             {
                 _frequency = frequency;
-                _lastUpdate = firstUpdateSeed;
             }
 
             public void Update(DateTime now)

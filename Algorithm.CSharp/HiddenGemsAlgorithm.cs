@@ -91,8 +91,10 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             //AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-            AddUniverseSelection(new ManualUniverseSelectionModel(_staticSymbols
-                .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))));
+            _longCandidates = _staticSymbols
+                .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
+                .ToList();
+            AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
             //_vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
@@ -242,12 +244,12 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        && _dollarVolumes.ContainsKey(x.Key)
-                        && _dollarVolumes[x.Key] > MinDollarVolume
-                        && _marketCaps.ContainsKey(x.Key)
-                        && _marketCaps[x.Key] > MinMarketCap
-                        && _opRevenueGrowth.ContainsKey(x.Key)
-                        && _opRevenueGrowth[x.Key] > MinOpRevenueGrowth
+                        //&& _dollarVolumes.ContainsKey(x.Key)
+                        //&& _dollarVolumes[x.Key] > MinDollarVolume
+                        //&& _marketCaps.ContainsKey(x.Key)
+                        //&& _marketCaps[x.Key] > MinMarketCap
+                        //&& _opRevenueGrowth.ContainsKey(x.Key)
+                        //&& _opRevenueGrowth[x.Key] > MinOpRevenueGrowth
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -265,12 +267,12 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current < MaxShortMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        && _dollarVolumes.ContainsKey(x.Key)
-                        && _dollarVolumes[x.Key] > MinDollarVolume
-                        && _marketCaps.ContainsKey(x.Key)
-                        && _marketCaps[x.Key] > MinMarketCap
-                        && _opRevenueGrowth.ContainsKey(x.Key)
-                        && _opRevenueGrowth[x.Key] < MinOpRevenueGrowth
+                        //&& _dollarVolumes.ContainsKey(x.Key)
+                        //&& _dollarVolumes[x.Key] > MinDollarVolume
+                        //&& _marketCaps.ContainsKey(x.Key)
+                        //&& _marketCaps[x.Key] > MinMarketCap
+                        //&& _opRevenueGrowth.ContainsKey(x.Key)
+                        //&& _opRevenueGrowth[x.Key] < MinOpRevenueGrowth
                         )
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(_targetShortCount)

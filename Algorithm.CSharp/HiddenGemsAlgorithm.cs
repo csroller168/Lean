@@ -73,7 +73,7 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
         private readonly Dictionary<Symbol, long> _marketCaps = new Dictionary<Symbol, long>();
         private readonly Dictionary<Symbol, decimal> _opRevenueGrowth = new Dictionary<Symbol, decimal>();
-        private readonly string[] _staticSymbols = { "APPS", "RUN", "SQ", "STNE", "SAIL", "SEDG", "NOVA", "ZS", "TTD", "CRWD", "DOCU", "NET", "BAND", "ENPH", "DDOG", "FSLR", "LPSN", "TSM", "HUBS", "INFY", "GLW", "DELL", "QCOM", "ESTC", "AMD", "WIX", "BILL", "EPAM", "LOGI", "SNX" };
+        
 
         public override void Initialize()
         {
@@ -88,10 +88,32 @@ namespace QuantConnect.Algorithm.CSharp
             SetEndDate(2010, 1, 1);
             SetCash(100000);
 
+            UniverseSettings.FillForward = true;
+            SetBrokerageModel(BrokerageName.AlphaStreams);
             InitializeUniverse();
             //_vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
+
+        private void InitializeUniverse()
+        {
+            // rpi workaround
+            var path = "/Users/warren/git/Lean/candidates.txt";
+            //var path = "/home/dennis/git/Lean/candidates.txt";
+
+            _longCandidates = System.IO.File.ReadAllText(path)
+                .Trim()
+                .Split(',')
+                .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
+                .ToList();
+            AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
+        }
+
+        //private void InitializeUniverse()
+        //{
+        //    // desired solution
+        //    AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+        //}
 
         public override void OnData(Slice slice)
         {
@@ -453,20 +475,6 @@ namespace QuantConnect.Algorithm.CSharp
                     .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
                 base.Execute(algorithm, adjustedTargets.ToArray());
             }
-        }
-    }
-
-    public partial class HiddenGemsAlgorithm : QCAlgorithm
-    {
-        private void InitializeUniverse()
-        {
-            UniverseSettings.FillForward = true;
-            SetBrokerageModel(BrokerageName.AlphaStreams);
-            //AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-            _longCandidates = _staticSymbols
-                .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
-                .ToList();
-            AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
         }
     }
 }

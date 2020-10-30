@@ -182,6 +182,7 @@ namespace QuantConnect.Algorithm.CSharp
                 .Cast<TradeBar>();
             if (vixHistories.Any())
             {
+                SendEmailNotification("we_got_vix_histories");
                 var pastMomentum = VixMomentum(vixHistories.Take(35));
                 var currentMomentum = VixMomentum(vixHistories.Skip(3));
                 Plot("vix", "momentum", currentMomentum);

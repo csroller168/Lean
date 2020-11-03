@@ -17,6 +17,8 @@ using QuantConnect.Util;
 using QuantConnect.Data.Fundamental;
 using QuantConnect.Data.Custom.CBOE;
 using QuantConnect.Data.Market;
+using System.IO;
+using System.Globalization;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -91,15 +93,15 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             InitializeUniverse();
-            _vixSymbol = AddData<CBOE>("VIX", Resolution.Daily).Symbol;
+            _vixSymbol = AddData<CBOE>("VIX").Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
 
         private void InitializeUniverse()
         {
             // rpi workaround
-            //var path = "/Users/warren/git/Lean/candidates.txt";
-            var path = "/home/dennis/git/Lean/candidates.txt";
+            var path = "/Users/warren/git/Lean/candidates.txt";
+            //var path = "/home/dennis/git/Lean/candidates.txt";
 
             _longCandidates = System.IO.File.ReadAllText(path)
                 .Trim()
@@ -107,6 +109,7 @@ namespace QuantConnect.Algorithm.CSharp
                 .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
                 .ToList();
             AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
+            SetTargetCounts();
         }
 
         //private void InitializeUniverse()
@@ -119,6 +122,16 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
+                //var a = History<CBOE>(_vixSymbol, 38, Resolution.Daily);
+
+                // todo: try to download alt data locally
+                // http://cache.quantconnect.com/alternative/cboe/vix.csv
+                var a = History<CBOE>(_vixSymbol, 38, Resolution.Daily);
+                var b = a.Cast<TradeBar>();
+
+
+
+
                 if (!_rebalanceMeter.IsDue(Time)
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
@@ -176,10 +189,44 @@ namespace QuantConnect.Algorithm.CSharp
             return 1m;
         }
 
+        //private IEnumerable<TradeBar> GetVixHistories()
+        //{
+        //    return History<CBOE>(_vixSymbol, 38, Resolution.Daily)
+        //        //.Cast<TradeBar>()
+        //        ;
+        //}
+
+        private IEnumerable<TradeBar> GetVixHistories()
+        {
+            var filePath = Path.Combine(
+                Globals.DataFolder,
+                "alternative",
+                "cboe",
+                $"vix.csv"
+            );
+
+            var data = File.ReadAllLines(filePath)
+                .Where(x => char.IsNumber(x.FirstOrDefault()))
+                .Select(x => x.Trim().Split(','));
+            var recentData = data
+                .Skip(data.Count() - 38);
+
+            foreach(var fields in recentData)
+            {
+                var culture = CultureInfo.CreateSpecificCulture("en-US");
+                var date = DateTime.Parse(fields[0], culture);
+                var close = decimal.Parse(fields[4], culture);
+                yield return new TradeBar
+                {
+                    Time = date,
+                    Close = close
+                };
+            }
+        }
+
         private void SetTargetCounts()
         {
-            var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily)
-                .Cast<TradeBar>();
+            var vixHistories = GetVixHistories();
             if (vixHistories.Any())
             {
                 SendEmailNotification("we_got_vix_histories");

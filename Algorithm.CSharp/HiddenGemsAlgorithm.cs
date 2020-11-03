@@ -100,8 +100,8 @@ namespace QuantConnect.Algorithm.CSharp
         private void InitializeUniverse()
         {
             // rpi workaround
-            var path = "/Users/warren/git/Lean/candidates.txt";
-            //var path = "/home/dennis/git/Lean/candidates.txt";
+            //var path = "/Users/warren/git/Lean/candidates.txt";
+            var path = "/home/dennis/git/Lean/candidates.txt";
 
             _longCandidates = System.IO.File.ReadAllText(path)
                 .Trim()

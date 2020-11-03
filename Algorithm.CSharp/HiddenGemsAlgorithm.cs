@@ -97,26 +97,26 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
 
-        private void InitializeUniverse()
-        {
-            // rpi workaround
-            //var path = "/Users/warren/git/Lean/candidates.txt";
-            var path = "/home/dennis/git/Lean/candidates.txt";
-
-            _longCandidates = System.IO.File.ReadAllText(path)
-                .Trim()
-                .Split(',')
-                .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
-                .ToList();
-            AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
-            SetTargetCounts();
-        }
-
         //private void InitializeUniverse()
         //{
-        //    // desired solution
-        //    AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+        //    // rpi workaround
+        //    //var path = "/Users/warren/git/Lean/candidates.txt";
+        //    var path = "/home/dennis/git/Lean/candidates.txt";
+
+        //    _longCandidates = System.IO.File.ReadAllText(path)
+        //        .Trim()
+        //        .Split(',')
+        //        .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
+        //        .ToList();
+        //    AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
+        //    SetTargetCounts();
         //}
+
+        private void InitializeUniverse()
+        {
+            // desired solution
+            AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+        }
 
         public override void OnData(Slice slice)
         {

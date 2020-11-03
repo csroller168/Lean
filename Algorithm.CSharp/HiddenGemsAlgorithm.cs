@@ -93,7 +93,7 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             InitializeUniverse();
-            _vixSymbol = AddData<CBOE>("VIX").Symbol;
+            //_vixSymbol = AddData<CBOE>("VIX").Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
 
@@ -122,16 +122,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                //var a = History<CBOE>(_vixSymbol, 38, Resolution.Daily);
-
-                // todo: try to download alt data locally
-                // http://cache.quantconnect.com/alternative/cboe/vix.csv
-                var a = History<CBOE>(_vixSymbol, 38, Resolution.Daily);
-                var b = a.Cast<TradeBar>();
-
-
-
-
                 if (!_rebalanceMeter.IsDue(Time)
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))

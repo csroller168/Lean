@@ -126,6 +126,9 @@ namespace QuantConnect.Algorithm.CSharp
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
                     return;
+                if (!_longCandidates.Any())
+                    return;
+
                 SendEmailNotification("CMS_DEBUG_start_onData");
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();

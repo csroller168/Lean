@@ -44,7 +44,8 @@ namespace QuantConnect.Algorithm.CSharp
         //  set min company age for shorts and max age for longs
         //
         // bugs:
-        //   reset numAttemptsToTrade each day
+        //   commit 377f41b made too few longs, but I want to see if doesn't crash live
+
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 };

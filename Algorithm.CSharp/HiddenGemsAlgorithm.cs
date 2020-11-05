@@ -93,7 +93,7 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             InitializeUniverse();
-            //_vixSymbol = AddData<CBOE>("VIX").Symbol;
+            _vixSymbol = AddData<CBOE>("VIX").Symbol;
             SendEmailNotification("CMS_DEBUG_end_Initialize");
         }
 
@@ -182,40 +182,40 @@ namespace QuantConnect.Algorithm.CSharp
             return 1m;
         }
 
-        //private IEnumerable<TradeBar> GetVixHistories()
-        //{
-        //    return History<CBOE>(_vixSymbol, 38, Resolution.Daily)
-        //        //.Cast<TradeBar>()
-        //        ;
-        //}
-
         private IEnumerable<TradeBar> GetVixHistories()
         {
-            var filePath = Path.Combine(
-                Globals.DataFolder,
-                "alternative",
-                "cboe",
-                $"vix.csv"
-            );
-
-            var data = File.ReadAllLines(filePath)
-                .Where(x => char.IsNumber(x.FirstOrDefault()))
-                .Select(x => x.Trim().Split(','));
-            var recentData = data
-                .Skip(data.Count() - 38);
-
-            foreach(var fields in recentData)
-            {
-                var culture = CultureInfo.CreateSpecificCulture("en-US");
-                var date = DateTime.Parse(fields[0], culture);
-                var close = decimal.Parse(fields[4], culture);
-                yield return new TradeBar
-                {
-                    Time = date,
-                    Close = close
-                };
-            }
+            return History<CBOE>(_vixSymbol, 38, Resolution.Daily)
+                .Cast<TradeBar>()
+                ;
         }
+
+        //private IEnumerable<TradeBar> GetVixHistories()
+        //{
+        //    var filePath = Path.Combine(
+        //        Globals.DataFolder,
+        //        "alternative",
+        //        "cboe",
+        //        $"vix.csv"
+        //    );
+
+        //    var data = File.ReadAllLines(filePath)
+        //        .Where(x => char.IsNumber(x.FirstOrDefault()))
+        //        .Select(x => x.Trim().Split(','));
+        //    var recentData = data
+        //        .Skip(data.Count() - 38);
+
+        //    foreach(var fields in recentData)
+        //    {
+        //        var culture = CultureInfo.CreateSpecificCulture("en-US");
+        //        var date = DateTime.Parse(fields[0], culture);
+        //        var close = decimal.Parse(fields[4], culture);
+        //        yield return new TradeBar
+        //        {
+        //            Time = date,
+        //            Close = close
+        //        };
+        //    }
+        //}
 
         private void SetTargetCounts()
         {

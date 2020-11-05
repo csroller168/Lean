@@ -17,8 +17,6 @@ using QuantConnect.Util;
 using QuantConnect.Data.Fundamental;
 using QuantConnect.Data.Custom.CBOE;
 using QuantConnect.Data.Market;
-using System.IO;
-using System.Globalization;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -79,43 +77,23 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            SendEmailNotification("CMS_DEBUG_start_Initialize");
+            SendEmailNotification("Starting initialization");
             UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(60);
-            RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(60);
+            RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
-            SetStartDate(2006, 1, 1);
-            SetEndDate(2010, 1, 1);
+            SetStartDate(2010, 1, 1);
+            SetEndDate(2010, 2, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
-            InitializeUniverse();
-            _vixSymbol = AddData<CBOE>("VIX").Symbol;
-            SendEmailNotification("CMS_DEBUG_end_Initialize");
-        }
-
-        //private void InitializeUniverse()
-        //{
-        //    // rpi workaround
-        //    //var path = "/Users/warren/git/Lean/candidates.txt";
-        //    var path = "/home/dennis/git/Lean/candidates.txt";
-
-        //    _longCandidates = System.IO.File.ReadAllText(path)
-        //        .Trim()
-        //        .Split(',')
-        //        .Select(x => QuantConnect.Symbol.Create(x, SecurityType.Equity, Market.USA))
-        //        .ToList();
-        //    AddUniverseSelection(new ManualUniverseSelectionModel(_longCandidates));
-        //    SetTargetCounts();
-        //}
-
-        private void InitializeUniverse()
-        {
-            // desired solution
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+
+            _vixSymbol = AddData<CBOE>("VIX").Symbol;
+            SendEmailNotification("Initialization complete");
         }
 
         public override void OnData(Slice slice)
@@ -129,13 +107,13 @@ namespace QuantConnect.Algorithm.CSharp
                 if (!_longCandidates.Any())
                     return;
 
-                SendEmailNotification("CMS_DEBUG_start_onData");
+                SendEmailNotification("Begin OnData()");
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
                 Rebalance(insights);
                 _rebalanceMeter.Update(Time);
-                SendEmailNotification("CMS_DEBUG_end_onData");
+                SendEmailNotification("End OnData()");
             }
             catch(Exception e)
             {
@@ -163,66 +141,27 @@ namespace QuantConnect.Algorithm.CSharp
 
         private decimal VixMomentum(IEnumerable<TradeBar> vixHistories)
         {
-            if (vixHistories.Any())
-            {
-                var momentum = vixHistories
-                .OrderByDescending(x => x.Time)
-                .Take(5)
-                .Select(x => x.Price)
-                .Average()
-                /
-                vixHistories
-                .OrderBy(x => x.Time)
-                .Take(5)
-                .Select(x => x.Price)
-                .Average();
-                Plot("vix", "momentum", momentum);
-                return momentum;
-            }
-            return 1m;
+            var momentum = vixHistories
+            .OrderByDescending(x => x.Time)
+            .Take(5)
+            .Select(x => x.Price)
+            .Average()
+            /
+            vixHistories
+            .OrderBy(x => x.Time)
+            .Take(5)
+            .Select(x => x.Price)
+            .Average();
+            Plot("vix", "momentum", momentum);
+            return momentum;
         }
-
-        private IEnumerable<TradeBar> GetVixHistories()
-        {
-            return History<CBOE>(_vixSymbol, 38, Resolution.Daily)
-                .Cast<TradeBar>()
-                ;
-        }
-
-        //private IEnumerable<TradeBar> GetVixHistories()
-        //{
-        //    var filePath = Path.Combine(
-        //        Globals.DataFolder,
-        //        "alternative",
-        //        "cboe",
-        //        $"vix.csv"
-        //    );
-
-        //    var data = File.ReadAllLines(filePath)
-        //        .Where(x => char.IsNumber(x.FirstOrDefault()))
-        //        .Select(x => x.Trim().Split(','));
-        //    var recentData = data
-        //        .Skip(data.Count() - 38);
-
-        //    foreach(var fields in recentData)
-        //    {
-        //        var culture = CultureInfo.CreateSpecificCulture("en-US");
-        //        var date = DateTime.Parse(fields[0], culture);
-        //        var close = decimal.Parse(fields[4], culture);
-        //        yield return new TradeBar
-        //        {
-        //            Time = date,
-        //            Close = close
-        //        };
-        //    }
-        //}
 
         private void SetTargetCounts()
         {
-            var vixHistories = GetVixHistories();
+            var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily).Cast<TradeBar>();
             if (vixHistories.Any())
             {
-                SendEmailNotification("we_got_vix_histories");
+                SendEmailNotification("We got vix histories!");
                 var pastMomentum = VixMomentum(vixHistories.Take(35));
                 var currentMomentum = VixMomentum(vixHistories.Skip(3));
                 Plot("vix", "momentum", currentMomentum);
@@ -266,7 +205,7 @@ namespace QuantConnect.Algorithm.CSharp
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
             Log(targetsStr);
-            SendEmailNotification(targetsStr);
+            SendEmailNotification($"We have positions in: {targetsStr}");
         }
 
         private bool StopLossTriggered(Slice slice, Symbol symbol)
@@ -343,7 +282,9 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch (Exception e)
             {
-                Log($"Exception: GetInsights: {e.Message}");
+                var msg = $"Exception: GetInsights: {e.Message}";
+                Log(msg);
+                SendEmailNotification(msg);
                 throw;
             }
         }
@@ -352,7 +293,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                SendEmailNotification("CMS_DEBUG_start_OnSecuritiesChanged");
+                SendEmailNotification("Start OnSecuritiesChanged()");
                 foreach (var addition in changes.AddedSecurities)
                 {
                     var currentSma = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
@@ -373,12 +314,14 @@ namespace QuantConnect.Algorithm.CSharp
                     _momentums.Remove(removal.Symbol);
                     _maximums.Remove(removal.Symbol);
                 }
-                SendEmailNotification("CMS_DEBUG_end_OnSecuritiesChanged");
+
+                SendEmailNotification("End OnSecuritiesChanged()");
             }
             catch (Exception e)
             {
-                Log($"Exception: OnSecuritiesChanged: {e.Message}");
-                SendEmailNotification("CMS_DEBUG_exception_OnSecuritiesChanged");
+                var msg = $"Exception: OnSecuritiesChanged: {e.Message}";
+                Log(msg);
+                SendEmailNotification(msg);
             }
         }
 
@@ -386,7 +329,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                SendEmailNotification("CMS_DEBUG_start_SelectCoarse");
+                SendEmailNotification("Start SelectCoarse()");
                 _dollarVolumes.Clear();
                 foreach (var candidate in candidates)
                 {
@@ -403,14 +346,16 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToList();
 
                 var shorts = Enumerable.Empty<Symbol>();
-                SendEmailNotification("CMS_DEBUG_end_SelectCoarse");
+                SendEmailNotification("End SelectCoarse()");
+
                 return _longCandidates.Union(shorts);
                 
             }
             catch(Exception e)
             {
-                Log(e.Message);
-                SendEmailNotification("CMS_DEBUG_exception_SelectCoarse");
+                var msg = $"Exception: SelectCoarse: {e.Message}";
+                Log(msg);
+                SendEmailNotification(msg);
                 return Universe.Unchanged;
             }
         }
@@ -419,7 +364,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                SendEmailNotification("CMS_DEBUG_start_SelectFine");
+                SendEmailNotification("Start SelectFine()");
                 _marketCaps.Clear();
                 _opRevenueGrowth.Clear();
                 foreach (var candidate in candidates)
@@ -449,13 +394,15 @@ namespace QuantConnect.Algorithm.CSharp
                         )
                     .Select(x => x.Symbol);
                 _universeMeter.Update(Time);
-                SendEmailNotification("CMS_DEBUG_end_SelectFine");
+                SendEmailNotification("End SelectFine()");
+
                 return _longCandidates.Union(shorts);                
             }
             catch (Exception e)
             {
-                Log(e.Message);
-                SendEmailNotification("CMS_DEBUG_exception_SelectFine");
+                var msg = $"Exception: SelectFine: {e.Message}";
+                Log(msg);
+                SendEmailNotification(msg);
                 return Universe.Unchanged;
             }
         }
@@ -465,16 +412,7 @@ namespace QuantConnect.Algorithm.CSharp
             if (!LiveMode)
                 return;
 
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
-            System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-                FileName = "mono",
-                Arguments = $"/home/dennis/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com"
-                //Arguments = $"/Users/Warren/git/GmailSender/GmailSender/bin/Debug/GmailSender.exe {msg} chrisshort168@gmail.com"
-            };
-            process.StartInfo = startInfo;
-            process.Start();
+            Notify.Email("chrisshort168@gmail.com", "Trading app notification", msg);
         }
 
         private class UpdateMeter

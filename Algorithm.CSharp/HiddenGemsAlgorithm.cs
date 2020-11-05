@@ -74,11 +74,7 @@ namespace QuantConnect.Algorithm.CSharp
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
-        private readonly Dictionary<Symbol, decimal> _dollarVolumes = new Dictionary<Symbol, decimal>();
-        private readonly Dictionary<Symbol, long> _marketCaps = new Dictionary<Symbol, long>();
-        private readonly Dictionary<Symbol, decimal> _opRevenueGrowth = new Dictionary<Symbol, decimal>();
         
-
         public override void Initialize()
         {
             SendEmailNotification("Starting initialization");
@@ -240,7 +236,6 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 var insights = new List<Insight>();
-
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
@@ -249,12 +244,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        //&& _dollarVolumes.ContainsKey(x.Key)
-                        //&& _dollarVolumes[x.Key] > MinDollarVolume
-                        //&& _marketCaps.ContainsKey(x.Key)
-                        //&& _marketCaps[x.Key] > MinMarketCap
-                        //&& _opRevenueGrowth.ContainsKey(x.Key)
-                        //&& _opRevenueGrowth[x.Key] > MinOpRevenueGrowth
                         && !StopLossTriggered(slice, x.Key)
                         )
                     .OrderByDescending(x => _momentums[x.Key].Current)
@@ -272,12 +261,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current < MaxShortMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        //&& _dollarVolumes.ContainsKey(x.Key)
-                        //&& _dollarVolumes[x.Key] > MinDollarVolume
-                        //&& _marketCaps.ContainsKey(x.Key)
-                        //&& _marketCaps[x.Key] > MinMarketCap
-                        //&& _opRevenueGrowth.ContainsKey(x.Key)
-                        //&& _opRevenueGrowth[x.Key] < MinOpRevenueGrowth
                         )
                     .OrderBy(x => _momentums[x.Key].Current)
                     .Take(_targetShortCount)
@@ -340,11 +323,6 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 SendEmailNotification("Start SelectCoarse()");
-                //_dollarVolumes.Clear();
-                //foreach (var candidate in candidates)
-                //{
-                //    _dollarVolumes[candidate.Symbol] = candidate.DollarVolume;
-                //}
 
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
@@ -374,18 +352,11 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 SendEmailNotification("Start SelectFine()");
-                //_marketCaps.Clear();
-                //_opRevenueGrowth.Clear();
-                //foreach (var candidate in candidates)
-                //{
-                //    _marketCaps[candidate.Symbol] = candidate.MarketCap;
-                //    _opRevenueGrowth[candidate.Symbol] = candidate.OperationRatios.OperationRevenueGrowth3MonthAvg.Value;
-                //}
 
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
 
-                var _longCandidates = candidates
+                _longCandidates = candidates
                     .Where(
                         x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)

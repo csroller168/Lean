@@ -339,25 +339,24 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 SendEmailNotification("Start SelectCoarse()");
-                _dollarVolumes.Clear();
-                foreach (var candidate in candidates)
-                {
-                    _dollarVolumes[candidate.Symbol] = candidate.DollarVolume;
-                }
+                //_dollarVolumes.Clear();
+                //foreach (var candidate in candidates)
+                //{
+                //    _dollarVolumes[candidate.Symbol] = candidate.DollarVolume;
+                //}
 
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
 
-                _longCandidates = candidates
+                var eligibleCandidates = candidates
                     .Where(x => x.HasFundamentalData
+                        && x.DollarVolume > MinDollarVolume
                         )
                     .Select(x => x.Symbol)
                     .ToList();
-
-                var shorts = Enumerable.Empty<Symbol>();
                 SendEmailNotification("End SelectCoarse()");
 
-                return _longCandidates.Union(shorts);
+                return eligibleCandidates;
                 
             }
             catch(Exception e)
@@ -374,32 +373,34 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 SendEmailNotification("Start SelectFine()");
-                _marketCaps.Clear();
-                _opRevenueGrowth.Clear();
-                foreach (var candidate in candidates)
-                {
-                    _marketCaps[candidate.Symbol] = candidate.MarketCap;
-                    _opRevenueGrowth[candidate.Symbol] = candidate.OperationRatios.OperationRevenueGrowth3MonthAvg.Value;
-                }
+                //_marketCaps.Clear();
+                //_opRevenueGrowth.Clear();
+                //foreach (var candidate in candidates)
+                //{
+                //    _marketCaps[candidate.Symbol] = candidate.MarketCap;
+                //    _opRevenueGrowth[candidate.Symbol] = candidate.OperationRatios.OperationRevenueGrowth3MonthAvg.Value;
+                //}
 
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
 
-                var longs = candidates
+                var _longCandidates = candidates
                     .Where(
-                        x => _longCandidates.Contains(x.Symbol)
-                        && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                        x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                        && x.MarketCap > MinMarketCap
+                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)
                     .ToList();
-                _longCandidates = longs;
 
                 var shorts = candidates
                     .Where(
                         x => !_longCandidates.Contains(x.Symbol)
                         && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                        && x.MarketCap > MinMarketCap
+                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol);
                 _universeMeter.Update(Time);

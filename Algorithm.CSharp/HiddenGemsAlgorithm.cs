@@ -42,6 +42,9 @@ namespace QuantConnect.Algorithm.CSharp
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs
+        //
+        // bugs:
+        //   reset numAttemptsToTrade each day
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 };
@@ -104,7 +107,7 @@ namespace QuantConnect.Algorithm.CSharp
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
                     return;
-                if (!_longCandidates.Any())
+                if (!ActiveSecurities.Any())
                     return;
 
                 SendEmailNotification("Begin OnData()");
@@ -126,6 +129,11 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (!LiveMode)
                 return true;
+
+            if(numAttemptsToTrade == 0)
+            {
+                SendEmailNotification("IsAllowedToTrade...");
+            }
 
             lock (mutexLock)
             {
@@ -294,6 +302,7 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 SendEmailNotification("Start OnSecuritiesChanged()");
+                numAttemptsToTrade = 0;
                 foreach (var addition in changes.AddedSecurities)
                 {
                     var currentSma = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);

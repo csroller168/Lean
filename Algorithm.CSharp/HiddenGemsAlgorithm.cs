@@ -28,18 +28,12 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector
         //
-        // live integration
-        //  merge from master?  MovingMomentum not working locally now.
-        //
         // TODOs:
-        //  temporary:  send debug output in emails
-        //  cronjob to backup/delete output
-        //      or... make the app stop between 5 pm and 11 PM
-        //  make a better trading hours guard fix
-        //  resolve the slump late 2015-mid 2017
-        //  from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
-        //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
-        //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
+        //  handle VIX live with alt. data provider
+        //  handle splits
+        //      from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
+        //      to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
+        //      consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs
         //
@@ -53,6 +47,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 5;
+        private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
         private static readonly decimal MaxDrawdown = 0.4m;
@@ -87,12 +82,18 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(2010, 1, 1);
             SetEndDate(2010, 2, 1);
             SetCash(100000);
+            this.
 
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
-            AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
 
-            _vixSymbol = AddData<CBOE>("VIX").Symbol;
+            //AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
+            AddUniverseSelection(new ManualUniverseSelectionModel(new[] {
+                QuantConnect.Symbol.Create("AAPL", SecurityType.Equity, Market.USA)
+            }));
+
+            _vixSymbol = AddData<MyCboe>("VIX").Symbol;
+
             SendEmailNotification("Initialization complete");
         }
 
@@ -100,6 +101,11 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
+                var vixHistories = History<MyCboe>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>().ToList();
+                var a = History<TradeBar>(_vixSymbol, VixLookbackDays, Resolution.Daily).ToList();
+                var b = History<TradeBar>(_vixSymbol, TimeSpan.FromDays(VixLookbackDays)).ToList();
+                var momentum = VixMomentum(vixHistories);
+
                 if (!_rebalanceMeter.IsDue(Time)
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
@@ -163,7 +169,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
-            var vixHistories = History<CBOE>(_vixSymbol, 38, Resolution.Daily).Cast<TradeBar>();
+            var vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>();
             if (vixHistories.Any())
             {
                 SendEmailNotification("We got vix histories!");
@@ -435,6 +441,35 @@ namespace QuantConnect.Algorithm.CSharp
                         && !targets.Any(y => y.Symbol.Equals(x.Key)))
                     .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
                 base.Execute(algorithm, adjustedTargets.ToArray());
+            }
+        }
+
+        public class MyCboe : CBOE
+        {
+            private List<BaseData> _data = new List<BaseData>();
+
+            public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
+            {
+                //if (isLiveMode)
+                //{
+                //    return new SubscriptionDataSource($"http://www.cboe.com/publish/scheduledtask/mktdata/datahouse/vixcurrent.csv", SubscriptionTransportMedium.RemoteFile);
+                //}
+
+                //return base.GetSource(config, date, isLiveMode);
+                return new SubscriptionDataSource(
+                    $"{Globals.DataFolder}/alternative/cboe/vix.csv",
+                    SubscriptionTransportMedium.LocalFile
+                );
+            }
+
+            public override BaseData Reader(SubscriptionDataConfig config, string line, DateTime date, bool isLiveMode)
+            {
+                var data = base.Reader(config, line, date, isLiveMode);
+                if (_data.Count > VixLookbackDays)
+                    _data.Remove(_data.Single(x => x.Time == _data.Max(y => y.Time)));
+                _data.Add(data);
+
+                return data;
             }
         }
     }

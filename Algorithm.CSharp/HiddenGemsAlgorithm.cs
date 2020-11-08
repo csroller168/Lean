@@ -36,9 +36,6 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs
-        //
-        // bugs:
-        //   commit 377f41b made too few longs, but I want to see if doesn't crash live
 
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
@@ -65,6 +62,9 @@ namespace QuantConnect.Algorithm.CSharp
         private UpdateMeter _universeMeter;
         private UpdateMeter _rebalanceMeter;
         private List<Symbol> _longCandidates = new List<Symbol>();
+
+        //http://cache.quantconnect.com/alternative/cboe/vix.csv
+        private List<TradeBar> _vixHistories = new List<TradeBar>();
         private Symbol _vixSymbol;
         private int _targetLongCount;
         private int _targetShortCount;
@@ -79,33 +79,76 @@ namespace QuantConnect.Algorithm.CSharp
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
-            SetStartDate(2010, 1, 1);
-            SetEndDate(2010, 2, 1);
+            SetStartDate(2006, 4, 1);
+            SetEndDate(2020, 1, 1);
             SetCash(100000);
-            this.
 
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
+            AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
 
-            //AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-            AddUniverseSelection(new ManualUniverseSelectionModel(new[] {
-                QuantConnect.Symbol.Create("AAPL", SecurityType.Equity, Market.USA)
-            }));
-
-            _vixSymbol = AddData<MyCboe>("VIX").Symbol;
-
+            _vixSymbol = AddData<CBOE>("VIX").Symbol;
+            InitializeVixHistories();
             SendEmailNotification("Initialization complete");
+        }
+
+        private void InitializeVixHistories()
+        {
+            if (!LiveMode)
+                return;
+
+            var rawHistories = @"09/16/2020, 25.31, 26.59, 24.84, 26.04
+                09/17/2020, 28.22, 28.92, 26.26, 26.46
+                09/18/2020, 26.65, 28.10, 25.28, 25.83
+                09/21/2020, 28.04, 31.18, 27.39, 27.78
+                09/22/2020, 28.61, 28.78, 26.48, 26.86
+                09/23/2020, 27.02, 29.73, 25.19, 28.58
+                09/24/2020, 29.54, 30.49, 27.94, 28.51
+                09/25/2020, 28.17, 30.43, 26.02, 26.38
+                09/28/2020, 27.15, 27.19, 24.90, 26.19
+                09/29/2020, 26.81, 27.43, 25.98, 26.27
+                09/30/2020, 26.69, 27.12, 25.06, 26.37
+                10/01/2020, 25.78, 27.11, 25.33, 26.70
+                10/02/2020, 28.87, 29.90, 26.93, 27.63
+                10/05/2020, 29.52, 29.69, 27.27, 27.96
+                10/06/2020, 28.05, 30.00, 26.01, 29.48
+                10/07/2020, 29.26, 29.76, 27.94, 28.06
+                10/08/2020, 27.65, 27.99, 24.88, 26.36
+                10/09/2020, 26.20, 26.22, 24.03, 25.00
+                10/12/2020, 25.65, 25.65, 24.14, 25.07
+                10/13/2020, 25.67, 26.93, 25.16, 26.07
+                10/14/2020, 25.72, 27.23, 25.53, 26.40
+                10/15/2020, 27.10, 29.06, 26.82, 26.97
+                10/16/2020, 27.16, 27.46, 26.19, 27.41
+                10/19/2020, 27.36, 29.69, 27.04, 29.18
+                10/20/2020, 28.81, 29.60, 28.29, 29.35
+                10/21/2020, 29.12, 30.55, 28.37, 28.65
+                10/22/2020, 30.10, 30.12, 27.68, 28.11
+                10/23/2020, 28.47, 28.67, 27.26, 27.55
+                10/26/2020, 29.38, 33.68, 29.22, 32.46
+                10/27/2020, 32.04, 33.77, 31.85, 33.35
+                10/28/2020, 34.69, 40.77, 34.68, 40.28
+                10/29/2020, 38.80, 41.16, 35.63, 37.59
+                10/30/2020, 40.81, 41.09, 36.50, 38.02
+                11/02/2020, 38.57, 38.78, 36.13, 37.13
+                11/03/2020, 36.44, 36.44, 34.19, 35.55
+                11/04/2020, 36.79, 36.85, 28.03, 29.57
+                11/05/2020, 27.56, 28.14, 26.04, 27.58
+                11/06/2020, 27.87, 29.44, 24.56, 24.86";
+            var cboe = new CBOE();
+            var config = SubscriptionManager.SubscriptionDataConfigService.GetSubscriptionDataConfigs(_vixSymbol).First();
+            rawHistories
+                .Split(new[] {'\n'})
+                .Select(x => cboe.Reader(config, x.Trim(), DateTime.MinValue, LiveMode))
+                .ToList()
+                .ForEach(x => _vixHistories.Add(x as TradeBar));
         }
 
         public override void OnData(Slice slice)
         {
             try
             {
-                var vixHistories = History<MyCboe>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>().ToList();
-                var a = History<TradeBar>(_vixSymbol, VixLookbackDays, Resolution.Daily).ToList();
-                var b = History<TradeBar>(_vixSymbol, TimeSpan.FromDays(VixLookbackDays)).ToList();
-                var momentum = VixMomentum(vixHistories);
-
+                HandleVixData(slice);
                 if (!_rebalanceMeter.IsDue(Time)
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
@@ -123,6 +166,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch(Exception e)
             {
+                var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
                 Log(e.Message);
                 SendEmailNotification(e.Message);
             }
@@ -150,6 +194,21 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
+        private void HandleVixData(Slice slice)
+        {
+            if (!slice.ContainsKey(_vixSymbol))
+                return;
+
+            var vix = slice.Get<CBOE>(_vixSymbol);
+            if (vix == null)
+                return;
+
+            if (_vixHistories.Count > VixLookbackDays)
+                _vixHistories.Remove(_vixHistories.Single(x => x.Time == _vixHistories.Max(y => y.Time)));
+
+            _vixHistories.Add(vix);
+        }
+
         private decimal VixMomentum(IEnumerable<TradeBar> vixHistories)
         {
             var momentum = vixHistories
@@ -170,11 +229,11 @@ namespace QuantConnect.Algorithm.CSharp
         private void SetTargetCounts()
         {
             var vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>();
-            if (vixHistories.Any())
+            if (vixHistories.Count() >= 8)
             {
                 SendEmailNotification("We got vix histories!");
-                var pastMomentum = VixMomentum(vixHistories.Take(35));
-                var currentMomentum = VixMomentum(vixHistories.Skip(3));
+                var pastMomentum = VixMomentum(_vixHistories.Take(35));
+                var currentMomentum = VixMomentum(_vixHistories.Skip(3));
                 Plot("vix", "momentum", currentMomentum);
 
                 if (currentMomentum > VixMomentumThreshold
@@ -280,7 +339,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch (Exception e)
             {
-                var msg = $"Exception: GetInsights: {e.Message}";
+                var msg = $"Exception: GetInsights: {e.Message}, {e.StackTrace}";
                 Log(msg);
                 SendEmailNotification(msg);
                 throw;
@@ -318,7 +377,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch (Exception e)
             {
-                var msg = $"Exception: OnSecuritiesChanged: {e.Message}";
+                var msg = $"Exception: OnSecuritiesChanged: {e.Message}, {e.StackTrace}";
                 Log(msg);
                 SendEmailNotification(msg);
             }
@@ -340,13 +399,12 @@ namespace QuantConnect.Algorithm.CSharp
                     .Select(x => x.Symbol)
                     .ToList();
                 SendEmailNotification("End SelectCoarse()");
-
                 return eligibleCandidates;
                 
             }
             catch(Exception e)
             {
-                var msg = $"Exception: SelectCoarse: {e.Message}";
+                var msg = $"Exception: SelectCoarse: {e.Message}, {e.StackTrace}";
                 Log(msg);
                 SendEmailNotification(msg);
                 return Universe.Unchanged;
@@ -388,7 +446,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
             catch (Exception e)
             {
-                var msg = $"Exception: SelectFine: {e.Message}";
+                var msg = $"Exception: SelectFine: {e.Message}, {e.StackTrace}";
                 Log(msg);
                 SendEmailNotification(msg);
                 return Universe.Unchanged;
@@ -441,35 +499,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && !targets.Any(y => y.Symbol.Equals(x.Key)))
                     .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
                 base.Execute(algorithm, adjustedTargets.ToArray());
-            }
-        }
-
-        public class MyCboe : CBOE
-        {
-            private List<BaseData> _data = new List<BaseData>();
-
-            public override SubscriptionDataSource GetSource(SubscriptionDataConfig config, DateTime date, bool isLiveMode)
-            {
-                //if (isLiveMode)
-                //{
-                //    return new SubscriptionDataSource($"http://www.cboe.com/publish/scheduledtask/mktdata/datahouse/vixcurrent.csv", SubscriptionTransportMedium.RemoteFile);
-                //}
-
-                //return base.GetSource(config, date, isLiveMode);
-                return new SubscriptionDataSource(
-                    $"{Globals.DataFolder}/alternative/cboe/vix.csv",
-                    SubscriptionTransportMedium.LocalFile
-                );
-            }
-
-            public override BaseData Reader(SubscriptionDataConfig config, string line, DateTime date, bool isLiveMode)
-            {
-                var data = base.Reader(config, line, date, isLiveMode);
-                if (_data.Count > VixLookbackDays)
-                    _data.Remove(_data.Single(x => x.Time == _data.Max(y => y.Time)));
-                _data.Add(data);
-
-                return data;
             }
         }
     }

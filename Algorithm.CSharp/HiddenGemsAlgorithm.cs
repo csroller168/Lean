@@ -29,7 +29,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider submit one for each sector
         //
         // TODOs:
-        //  handle VIX live with alt. data provider
+        //  vix work
+        //      compare momentum values calculated old way and new way
+        //  can I parallelize onSecurities change to speed up?
         //  handle splits
         //      from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
         //      to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
@@ -200,11 +202,9 @@ namespace QuantConnect.Algorithm.CSharp
                 return;
 
             var vix = slice.Get<CBOE>(_vixSymbol);
-            if (vix == null)
-                return;
 
             if (_vixHistories.Count > VixLookbackDays)
-                _vixHistories.Remove(_vixHistories.Single(x => x.Time == _vixHistories.Max(y => y.Time)));
+                _vixHistories.Remove(_vixHistories.Single(x => x.Time == _vixHistories.Min(y => y.Time)));
 
             _vixHistories.Add(vix);
         }
@@ -228,8 +228,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
-            var vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>();
-            if (vixHistories.Count() >= 8)
+            //var vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>();
+            if (_vixHistories.Count() >= 8)
             {
                 SendEmailNotification("We got vix histories!");
                 var pastMomentum = VixMomentum(_vixHistories.Take(35));

@@ -17,6 +17,9 @@ using QuantConnect.Util;
 using QuantConnect.Data.Fundamental;
 using QuantConnect.Data.Custom.CBOE;
 using QuantConnect.Data.Market;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -54,8 +57,8 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
-        private readonly Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new Dictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
-        private readonly Dictionary<Symbol, Maximum> _maximums = new Dictionary<Symbol, Maximum>();
+        private readonly ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
+        private readonly ConcurrentDictionary<Symbol, Maximum> _maximums = new ConcurrentDictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private readonly decimal VixMomentumThreshold = 1.4m;
         private readonly decimal MinOpRevenueGrowth = 0m;
@@ -228,7 +231,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
-            //var vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily).Cast<TradeBar>();
             if (_vixHistories.Count() >= 8)
             {
                 SendEmailNotification("We got vix histories!");
@@ -350,9 +352,11 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
                 SendEmailNotification("Start OnSecuritiesChanged()");
                 numAttemptsToTrade = 0;
-                foreach (var addition in changes.AddedSecurities)
+                Parallel.ForEach(changes.AddedSecurities, (addition) =>
                 {
                     var currentSma = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
                     var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
@@ -361,19 +365,24 @@ namespace QuantConnect.Algorithm.CSharp
                     _maximums[addition.Symbol] = MAX(addition.Symbol, SmaWindowDays, Resolution.Daily);
 
                     var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
-                    foreach(var bar in history)
+                    foreach (var bar in history)
                     {
                         currentSma.Update(bar.EndTime, bar.Close);
                         _maximums[addition.Symbol].Update(bar.EndTime, bar.Close);
                     }
-                }
-                foreach(var removal in changes.RemovedSecurities)
+                });
+                Parallel.ForEach(changes.RemovedSecurities, (removal) =>
                 {
-                    _momentums.Remove(removal.Symbol);
-                    _maximums.Remove(removal.Symbol);
-                }
+                    CompositeIndicator<IndicatorDataPoint> unused = null;
+                    Maximum unused2;
+                    _momentums.TryRemove(removal.Symbol, out unused);
+                    _maximums.TryRemove(removal.Symbol, out unused2);
+                });
 
                 SendEmailNotification("End OnSecuritiesChanged()");
+
+                stopwatch.Stop();
+                Log($"Onsecuritieschanged took {stopwatch.ElapsedMilliseconds} ms");
             }
             catch (Exception e)
             {

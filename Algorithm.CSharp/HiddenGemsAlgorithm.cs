@@ -23,7 +23,7 @@ using System.Diagnostics;
 
 namespace QuantConnect.Algorithm.CSharp
 {
-    public partial class HiddenGemsAlgorithm : QCAlgorithm
+    public class HiddenGemsAlgorithm : QCAlgorithm
     {
         // fundamentals:  https://www.quantconnect.com/docs/data-library/fundamentals
         //
@@ -79,13 +79,14 @@ namespace QuantConnect.Algorithm.CSharp
         {
             SendEmailNotification("Starting initialization");
             UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
-            RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(60);
+            RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
             SetStartDate(2006, 4, 1);
-            SetEndDate(2020, 1, 1);
+            //SetEndDate(2020, 1, 1);
+            SetEndDate(2007, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;

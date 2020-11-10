@@ -98,10 +98,77 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification("Initialization complete");
         }
 
+        public override void OnData(Slice slice)
+        {
+            try
+            {
+                HandleVixData(slice);
+                HandleSplits(slice);
+
+                if (!_rebalanceMeter.IsDue(Time)
+                    || slice.Count() == 0
+                    || !IsAllowedToTrade(slice))
+                    return;
+
+                if (!ActiveSecurities.Any())
+                    return;
+
+                SendEmailNotification("Begin OnData()");
+                SetTargetCounts();
+                var insights = GetInsights(slice).ToArray();
+                EmitInsights(insights);
+                Rebalance(insights);
+                _rebalanceMeter.Update(Time);
+                SendEmailNotification("End OnData()");
+            }
+            catch(Exception e)
+            {
+                var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
+                Log(e.Message);
+                SendEmailNotification(e.Message);
+            }
+        }
+
+        public override void OnSecuritiesChanged(SecurityChanges changes)
+        {
+            try
+            {
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
+                SendEmailNotification("Start OnSecuritiesChanged()");
+                numAttemptsToTrade = 0;
+                Parallel.ForEach(changes.AddedSecurities, (addition) =>
+                {
+                    InitIndicators(addition.Symbol);
+                });
+                Parallel.ForEach(changes.RemovedSecurities, (removal) =>
+                {
+                    ClearIndicators(removal.Symbol);
+                });
+
+                SendEmailNotification("End OnSecuritiesChanged()");
+
+                stopwatch.Stop();
+                Log($"Onsecuritieschanged took {stopwatch.ElapsedMilliseconds} ms");
+            }
+            catch (Exception e)
+            {
+                var msg = $"Exception: OnSecuritiesChanged: {e.Message}, {e.StackTrace}";
+                Log(msg);
+                SendEmailNotification(msg);
+            }
+        }
+
         private void InitializeVixHistories()
         {
             if (!LiveMode)
+            {
+                _vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily)
+                    .Cast<TradeBar>()
+                    .ToList();
+
                 return;
+            }
 
             var rawHistories = @"09/16/2020, 25.31, 26.59, 24.84, 26.04
                 09/17/2020, 28.22, 28.92, 26.26, 26.46
@@ -144,37 +211,18 @@ namespace QuantConnect.Algorithm.CSharp
             var cboe = new CBOE();
             var config = SubscriptionManager.SubscriptionDataConfigService.GetSubscriptionDataConfigs(_vixSymbol).First();
             rawHistories
-                .Split(new[] {'\n'})
+                .Split(new[] { '\n' })
                 .Select(x => cboe.Reader(config, x.Trim(), DateTime.MinValue, LiveMode))
                 .ToList()
                 .ForEach(x => _vixHistories.Add(x as TradeBar));
         }
 
-        public override void OnData(Slice slice)
+        private void HandleSplits(Slice slice)
         {
-            try
+            foreach(var split in slice.Splits)
             {
-                HandleVixData(slice);
-                if (!_rebalanceMeter.IsDue(Time)
-                    || slice.Count() == 0
-                    || !IsAllowedToTrade(slice))
-                    return;
-                if (!ActiveSecurities.Any())
-                    return;
-
-                SendEmailNotification("Begin OnData()");
-                SetTargetCounts();
-                var insights = GetInsights(slice).ToArray();
-                EmitInsights(insights);
-                Rebalance(insights);
-                _rebalanceMeter.Update(Time);
-                SendEmailNotification("End OnData()");
-            }
-            catch(Exception e)
-            {
-                var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
-                Log(e.Message);
-                SendEmailNotification(e.Message);
+                ClearIndicators(split.Key);
+                InitIndicators(split.Key);
             }
         }
 
@@ -207,10 +255,11 @@ namespace QuantConnect.Algorithm.CSharp
 
             var vix = slice.Get<CBOE>(_vixSymbol);
 
+            _vixHistories.Add(vix);
             if (_vixHistories.Count > VixLookbackDays)
                 _vixHistories.Remove(_vixHistories.Single(x => x.Time == _vixHistories.Min(y => y.Time)));
 
-            _vixHistories.Add(vix);
+            Plot("vix", "value", vix.Close);
         }
 
         private decimal VixMomentum(IEnumerable<TradeBar> vixHistories)
@@ -349,48 +398,28 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        public override void OnSecuritiesChanged(SecurityChanges changes)
+        private void InitIndicators(Symbol symbol)
         {
-            try
+            var currentSma = SMA(symbol, SmaWindowDays, Resolution.Daily);
+            var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
+            var momentum = currentSma.Over(pastSma);
+            _momentums[symbol] = momentum;
+            _maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
+
+            var history = History(symbol, SmaLookbackDays, Resolution.Daily);
+            foreach (var bar in history)
             {
-                var stopwatch = new Stopwatch();
-                stopwatch.Start();
-                SendEmailNotification("Start OnSecuritiesChanged()");
-                numAttemptsToTrade = 0;
-                Parallel.ForEach(changes.AddedSecurities, (addition) =>
-                {
-                    var currentSma = SMA(addition.Symbol, SmaWindowDays, Resolution.Daily);
-                    var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
-                    var momentum = currentSma.Over(pastSma);
-                    _momentums[addition.Symbol] = momentum;
-                    _maximums[addition.Symbol] = MAX(addition.Symbol, SmaWindowDays, Resolution.Daily);
-
-                    var history = History(addition.Symbol, SmaLookbackDays, Resolution.Daily);
-                    foreach (var bar in history)
-                    {
-                        currentSma.Update(bar.EndTime, bar.Close);
-                        _maximums[addition.Symbol].Update(bar.EndTime, bar.Close);
-                    }
-                });
-                Parallel.ForEach(changes.RemovedSecurities, (removal) =>
-                {
-                    CompositeIndicator<IndicatorDataPoint> unused = null;
-                    Maximum unused2;
-                    _momentums.TryRemove(removal.Symbol, out unused);
-                    _maximums.TryRemove(removal.Symbol, out unused2);
-                });
-
-                SendEmailNotification("End OnSecuritiesChanged()");
-
-                stopwatch.Stop();
-                Log($"Onsecuritieschanged took {stopwatch.ElapsedMilliseconds} ms");
+                currentSma.Update(bar.EndTime, bar.Close);
+                _maximums[symbol].Update(bar.EndTime, bar.Close);
             }
-            catch (Exception e)
-            {
-                var msg = $"Exception: OnSecuritiesChanged: {e.Message}, {e.StackTrace}";
-                Log(msg);
-                SendEmailNotification(msg);
-            }
+        }
+
+        private void ClearIndicators(Symbol symbol)
+        {
+            CompositeIndicator<IndicatorDataPoint> unused;
+            Maximum unused2;
+            _momentums.TryRemove(symbol, out unused);
+            _maximums.TryRemove(symbol, out unused2);
         }
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)

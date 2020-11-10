@@ -30,17 +30,17 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector
+        // 
         //
         // TODOs:
-        //  vix work
-        //      compare momentum values calculated old way and new way
-        //  can I parallelize onSecurities change to speed up?
         //  handle splits
         //      from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
-        //      to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
-        //      consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
+        //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
+        //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
         //  set min company age for shorts and max age for longs
+        //  tune vix params, etc. to reduce drawdown
+        //  put more criteria in coarse/fine select now that it's more frequent
 
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };

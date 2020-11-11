@@ -33,14 +33,15 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
-        //  handle splits
-        //      from docs: If an algorithm is indicator-heavy and a split occurs, the algorithm will have to reset and refresh the indicators using historical data. We can monitor for split events in the slice.Splits[] collection.
         //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
         //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
         //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
-        //  set min company age for shorts and max age for longs
         //  tune vix params, etc. to reduce drawdown
         //  put more criteria in coarse/fine select now that it's more frequent
+        //  reduce drawdown:
+        //      test using a weighted average of current price and momentum values instead of just momentum
+        //  live:  why no trades?  on next deploy, revise email output
+        //  redo comprehensive analysis of features - remove them to get baseline, then put back and tune
 
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
@@ -52,7 +53,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
-        private static readonly decimal MaxDrawdown = 0.4m;
+        private static readonly decimal MaxDrawdown = -0.07m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
@@ -85,8 +86,7 @@ namespace QuantConnect.Algorithm.CSharp
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
             SetStartDate(2006, 4, 1);
-            //SetEndDate(2020, 1, 1);
-            SetEndDate(2007, 1, 1);
+            SetEndDate(2020, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -338,9 +338,9 @@ namespace QuantConnect.Algorithm.CSharp
 
             var max = _maximums[symbol].Current;
             var price = (slice[symbol] as BaseData).Price;
-            var drawdown = (max - price) / max;
+            var drawdown = (price - max) / max;
 
-            if(drawdown >= MaxDrawdown)
+            if(drawdown < MaxDrawdown) // e.g. -0.3 < -0.1
             {
                 _stopLosses[symbol] = Time;
                 return true;

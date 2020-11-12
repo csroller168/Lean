@@ -49,7 +49,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 30;
-        private static readonly int NumShort = 5;
+        private static readonly int NumShort = 0; //5;
         private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 1000000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
@@ -102,7 +102,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                HandleVixData(slice);
+                //HandleVixData(slice);
                 HandleSplits(slice);
 
                 if (!_rebalanceMeter.IsDue(Time)
@@ -281,29 +281,29 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
-            if (_vixHistories.Count() >= 8)
-            {
-                SendEmailNotification("We got vix histories!");
-                var pastMomentum = VixMomentum(_vixHistories.Take(35));
-                var currentMomentum = VixMomentum(_vixHistories.Skip(3));
-                Plot("vix", "momentum", currentMomentum);
+            //if (_vixHistories.Count() >= 8)
+            //{
+            //    SendEmailNotification("We got vix histories!");
+            //    var pastMomentum = VixMomentum(_vixHistories.Take(35));
+            //    var currentMomentum = VixMomentum(_vixHistories.Skip(3));
+            //    Plot("vix", "momentum", currentMomentum);
 
-                if (currentMomentum > VixMomentumThreshold
-                    && currentMomentum > pastMomentum)
-                {
-                    _targetLongCount = NumShort;
-                    _targetShortCount = NumLong;
-                    return;
-                }
+            //    if (currentMomentum > VixMomentumThreshold
+            //        && currentMomentum > pastMomentum)
+            //    {
+            //        _targetLongCount = NumShort;
+            //        _targetShortCount = NumLong;
+            //        return;
+            //    }
 
-                if (currentMomentum < VixMomentumThreshold
-                    && currentMomentum < pastMomentum)
-                {
-                    _targetLongCount = NumLong;
-                    _targetShortCount = 0;
-                    return;
-                }
-            }
+            //    if (currentMomentum < VixMomentumThreshold
+            //        && currentMomentum < pastMomentum)
+            //    {
+            //        _targetLongCount = NumLong;
+            //        _targetShortCount = 0;
+            //        return;
+            //    }
+            //}
 
             _targetLongCount = NumLong;
             _targetShortCount = NumShort;
@@ -332,6 +332,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool StopLossTriggered(Slice slice, Symbol symbol)
         {
+            return false;
             if (_stopLosses.ContainsKey(symbol)
                 && (Time - _stopLosses[symbol]).Days < SmaWindowDays)
                 return true;
@@ -404,13 +405,13 @@ namespace QuantConnect.Algorithm.CSharp
             var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
             var momentum = currentSma.Over(pastSma);
             _momentums[symbol] = momentum;
-            _maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
+            //_maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
 
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
             foreach (var bar in history)
             {
                 currentSma.Update(bar.EndTime, bar.Close);
-                _maximums[symbol].Update(bar.EndTime, bar.Close);
+                //_maximums[symbol].Update(bar.EndTime, bar.Close);
             }
         }
 

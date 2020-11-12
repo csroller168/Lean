@@ -464,8 +464,8 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(
                         x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        && x.MarketCap > MinMarketCap
-                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
+                        //&& x.MarketCap > MinMarketCap
+                        //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)
                     .ToList();
@@ -475,8 +475,8 @@ namespace QuantConnect.Algorithm.CSharp
                         x => !_longCandidates.Contains(x.Symbol)
                         && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        && x.MarketCap > MinMarketCap
-                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
+                        //&& x.MarketCap > MinMarketCap
+                        //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol);
                 _universeMeter.Update(Time);

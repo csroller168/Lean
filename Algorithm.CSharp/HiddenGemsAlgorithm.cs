@@ -40,7 +40,7 @@ namespace QuantConnect.Algorithm.CSharp
         //  put more criteria in coarse/fine select now that it's more frequent
         //  reduce drawdown:
         //      test using a weighted average of current price and momentum values instead of just momentum
-        //  live:  why no trades?  on next deploy, revise email output
+        //  live:  make sure we trade during trading hours
         //  redo comprehensive analysis of features - remove them to get baseline, then put back and tune
 
 
@@ -464,7 +464,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(
                         x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        //&& x.MarketCap > MinMarketCap
+                        && x.MarketCap > MinMarketCap
                         //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)
@@ -475,7 +475,7 @@ namespace QuantConnect.Algorithm.CSharp
                         x => !_longCandidates.Contains(x.Symbol)
                         && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        //&& x.MarketCap > MinMarketCap
+                        && x.MarketCap > MinMarketCap
                         //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol);

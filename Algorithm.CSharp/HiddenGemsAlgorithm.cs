@@ -45,13 +45,13 @@ namespace QuantConnect.Algorithm.CSharp
 
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
-        private static readonly int[] SectorsAllowed = { 311 };
+        private static readonly int[] SectorsAllowed = { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 0; //5;
         private static readonly int VixLookbackDays = 38;
-        private static readonly decimal MinDollarVolume = 1000000m;
+        private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
         private static readonly decimal MaxDrawdown = -0.07m;
         private static readonly decimal MaxShortMomentum = 1m;

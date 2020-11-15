@@ -48,7 +48,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaWindowDays = 25;
         private static readonly int NumLong = 30;
-        private static readonly int NumShort = 0; //5;
+        private static readonly int NumShort = 5; //5;
         private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
@@ -465,7 +465,7 @@ namespace QuantConnect.Algorithm.CSharp
                         x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                         && x.MarketCap > MinMarketCap
-                        //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
+                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)
                     .ToList();
@@ -475,8 +475,8 @@ namespace QuantConnect.Algorithm.CSharp
                         x => !_longCandidates.Contains(x.Symbol)
                         && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        && x.MarketCap > MinMarketCap
-                        //&& x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
+                        && x.MarketCap < MinMarketCap
+                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol);
                 _universeMeter.Update(Time);

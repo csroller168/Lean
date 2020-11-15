@@ -86,6 +86,8 @@ namespace QuantConnect.Algorithm.CSharp
 
             SetStartDate(2009, 11, 1);
             SetEndDate(2012, 11, 1);
+            //SetStartDate(2006, 4, 1);
+            //SetEndDate(2020, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -283,8 +285,8 @@ namespace QuantConnect.Algorithm.CSharp
             //if (_vixHistories.Count() >= 8)
             //{
             //    SendEmailNotification("We got vix histories!");
-            //    var pastMomentum = VixMomentum(_vixHistories.Take(35));
-            //    var currentMomentum = VixMomentum(_vixHistories.Skip(3));
+            //    var pastMomentum = VixMomentum(_vixHistories.OrderBy(x=> x.Time).Take(35));
+            //    var currentMomentum = VixMomentum(_vixHistories.OrderBy(x => x.Time).Skip(3));
             //    Plot("vix", "momentum", currentMomentum);
 
             //    if (currentMomentum > VixMomentumThreshold

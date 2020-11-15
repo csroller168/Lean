@@ -34,12 +34,11 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
-        //  consider add consumer defensive sector (205), not consumer cyclical (except maybe for shorts)
-        //  restrict universe with more fundamental metrics - target ActiveSecurities <= 200
-        //  tune vix params, etc. to reduce drawdown
-        //  put more criteria in coarse/fine select now that it's more frequent
         //  reduce drawdown:
+        //      fix shorts - adding shorts shouldn't alter long bucket
+        //      tune vix
         //      test using a weighted average of current price and momentum values instead of just momentum
+        //      test hedge with fixed bond fund/gld blend at varying %
         //  live:  make sure we trade during trading hours
         //  redo comprehensive analysis of features - remove them to get baseline, then put back and tune
 
@@ -370,11 +369,12 @@ namespace QuantConnect.Algorithm.CSharp
                             x.Value.Symbol,
                             RebalancePeriod,
                             InsightType.Price,
-                            InsightDirection.Up))); ;
+                            InsightDirection.Up)));
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
+                        && !_longCandidates.Contains(x.Key)
                         && _momentums.ContainsKey(x.Key)
                         && _momentums[x.Key].IsReady
                         && _momentums[x.Key].Current < MaxShortMomentum

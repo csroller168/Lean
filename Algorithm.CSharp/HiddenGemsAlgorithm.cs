@@ -35,6 +35,7 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOs:
         //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
         //  reduce drawdown:
+        //      tune to the 1/17/08 (late) sell of aapl
         //      test using a weighted average of current price and momentum values instead of just momentum
         //      tune vix
         //      tune short blend
@@ -131,8 +132,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                var stopwatch = new Stopwatch();
-                stopwatch.Start();
                 SendEmailNotification("Start OnSecuritiesChanged()");
                 numAttemptsToTrade = 0;
                 Parallel.ForEach(changes.AddedSecurities, (addition) =>
@@ -145,9 +144,6 @@ namespace QuantConnect.Algorithm.CSharp
                 });
 
                 SendEmailNotification("End OnSecuritiesChanged()");
-
-                stopwatch.Stop();
-                Log($"Onsecuritieschanged took {stopwatch.ElapsedMilliseconds} ms");
             }
             catch (Exception e)
             {

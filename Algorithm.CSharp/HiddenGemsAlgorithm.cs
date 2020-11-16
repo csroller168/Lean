@@ -35,12 +35,11 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOs:
         //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
         //  reduce drawdown:
-        //      fix shorts - adding shorts shouldn't alter long bucket
-        //      tune vix
         //      test using a weighted average of current price and momentum values instead of just momentum
+        //      tune vix
+        //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
         //  live:  make sure we trade during trading hours
-        //  redo comprehensive analysis of features - remove them to get baseline, then put back and tune
 
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
@@ -78,16 +77,14 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SendEmailNotification("Starting initialization");
-            UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
+            UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
-            SetStartDate(2009, 11, 1);
-            SetEndDate(2012, 11, 1);
-            //SetStartDate(2006, 4, 1);
-            //SetEndDate(2020, 1, 1);
+            SetStartDate(2007, 10, 1);
+            SetEndDate(2010, 10, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;

@@ -19,7 +19,6 @@ using QuantConnect.Data.Custom.CBOE;
 using QuantConnect.Data.Market;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 
 namespace QuantConnect.Algorithm.CSharp
 {
@@ -46,15 +45,14 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
-        private static readonly int SmaWindowDays = 25;
         private static readonly int SmaRecentWindowDays = 5;
-        private static readonly int SmaDistantWindowDays = 25;
+        private static readonly int SmaDistantWindowDays = 50;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 5; //5;
         private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
-        private static readonly decimal MaxDrawdown = -0.15m;
+        private static readonly decimal MaxDrawdown = -0.07m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
@@ -409,14 +407,14 @@ namespace QuantConnect.Algorithm.CSharp
             var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
             var momentum = currentSma.Over(pastSma);
             _momentums[symbol] = momentum;
-            _maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
+            //_maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
 
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
             foreach (var bar in history)
             {
                 currentSma.Update(bar.EndTime, bar.Close);
                 distantSma.Update(bar.EndTime, bar.Close);
-                _maximums[symbol].Update(bar.EndTime, bar.High);
+                //_maximums[symbol].Update(bar.EndTime, bar.High);
             }
         }
 
@@ -425,7 +423,7 @@ namespace QuantConnect.Algorithm.CSharp
             CompositeIndicator<IndicatorDataPoint> unused;
             Maximum unused2;
             _momentums.TryRemove(symbol, out unused);
-            _maximums.TryRemove(symbol, out unused2);
+            //_maximums.TryRemove(symbol, out unused2);
         }
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)
@@ -521,12 +519,6 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 _lastUpdate = now;
             }
-        }
-
-        private class SignalStatus
-        {
-            public InsightDirection Direction = InsightDirection.Flat;
-            public int DaysPastSignal = -1;
         }
 
         private class SmartImmediateExecutionModel : ImmediateExecutionModel

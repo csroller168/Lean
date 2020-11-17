@@ -47,12 +47,14 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int[] SectorsAllowed = { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaWindowDays = 25;
+        private static readonly int SmaRecentWindowDays = 5;
+        private static readonly int SmaDistantWindowDays = 25;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 5; //5;
         private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
-        private static readonly decimal MaxDrawdown = -0.07m;
+        private static readonly decimal MaxDrawdown = -0.15m;
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
@@ -328,7 +330,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             return false;
             if (_stopLosses.ContainsKey(symbol)
-                && (Time - _stopLosses[symbol]).Days < SmaWindowDays)
+                && (Time - _stopLosses[symbol]).Days < SmaRecentWindowDays)
                 return true;
 
             var max = _maximums[symbol].Current;
@@ -340,6 +342,12 @@ namespace QuantConnect.Algorithm.CSharp
                 _stopLosses[symbol] = Time;
                 return true;
             }
+
+            var toDelete = _stopLosses
+                .Where(x => (Time - x.Value).Days > SmaRecentWindowDays)
+                .Select(x => x.Key)
+                .ToList();
+            toDelete.ForEach(x => _stopLosses.Remove(x));
             return false;
         }
 
@@ -396,17 +404,19 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void InitIndicators(Symbol symbol)
         {
-            var currentSma = SMA(symbol, SmaWindowDays, Resolution.Daily);
-            var pastSma = new Delay(SmaLookbackDays - SmaWindowDays).Of(currentSma);
+            var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
+            var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
+            var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
             var momentum = currentSma.Over(pastSma);
             _momentums[symbol] = momentum;
-            //_maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
+            _maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
 
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
             foreach (var bar in history)
             {
                 currentSma.Update(bar.EndTime, bar.Close);
-                //_maximums[symbol].Update(bar.EndTime, bar.Close);
+                distantSma.Update(bar.EndTime, bar.Close);
+                _maximums[symbol].Update(bar.EndTime, bar.High);
             }
         }
 

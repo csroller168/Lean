@@ -101,7 +101,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                //HandleVixData(slice);
+                HandleVixData(slice);
                 HandleSplits(slice);
 
                 if (!_rebalanceMeter.IsDue(Time)
@@ -275,29 +275,29 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
-            //if (_vixHistories.Count() >= 8)
-            //{
-            //    SendEmailNotification("We got vix histories!");
-            //    var pastMomentum = VixMomentum(_vixHistories.OrderBy(x=> x.Time).Take(35));
-            //    var currentMomentum = VixMomentum(_vixHistories.OrderBy(x => x.Time).Skip(3));
-            //    Plot("vix", "momentum", currentMomentum);
+            if (_vixHistories.Count() >= 8)
+            {
+                SendEmailNotification("We got vix histories!");
+                var pastMomentum = VixMomentum(_vixHistories.OrderBy(x => x.Time).Take(35));
+                var currentMomentum = VixMomentum(_vixHistories.OrderBy(x => x.Time).Skip(3));
+                Plot("vix", "momentum", currentMomentum);
 
-            //    if (currentMomentum > VixMomentumThreshold
-            //        && currentMomentum > pastMomentum)
-            //    {
-            //        _targetLongCount = NumShort;
-            //        _targetShortCount = NumLong;
-            //        return;
-            //    }
+                if (currentMomentum > VixMomentumThreshold
+                    && currentMomentum > pastMomentum)
+                {
+                    _targetLongCount = NumShort;
+                    _targetShortCount = NumLong;
+                    return;
+                }
 
-            //    if (currentMomentum < VixMomentumThreshold
-            //        && currentMomentum < pastMomentum)
-            //    {
-            //        _targetLongCount = NumLong;
-            //        _targetShortCount = 0;
-            //        return;
-            //    }
-            //}
+                if (currentMomentum > VixMomentumThreshold
+                    && currentMomentum < pastMomentum)
+                {
+                    _targetLongCount = NumLong;
+                    _targetShortCount = 0;
+                    return;
+                }
+            }
 
             _targetLongCount = NumLong;
             _targetShortCount = NumShort;

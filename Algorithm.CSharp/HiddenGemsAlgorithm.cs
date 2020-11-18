@@ -48,7 +48,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;
         private static readonly int NumLong = 30;
-        private static readonly int NumShort = 5; //5;
+        private static readonly int NumShort = 5;
         private static readonly int VixLookbackDays = 38;
         private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
@@ -84,8 +84,8 @@ namespace QuantConnect.Algorithm.CSharp
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
-            SetStartDate(2007, 10, 1);
-            SetEndDate(2010, 10, 1);
+            SetStartDate(2015, 1, 1);
+            SetEndDate(2018, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;

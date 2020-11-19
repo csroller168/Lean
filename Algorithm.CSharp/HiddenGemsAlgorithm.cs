@@ -435,7 +435,7 @@ namespace QuantConnect.Algorithm.CSharp
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
             foreach (var bar in history)
             {
-                groupIndicator.Update(bar.EndTime, bar.Close);
+                groupIndicator.Update(bar);
                 //currentSma.Update(bar.EndTime, bar.Close);
                 //distantSma.Update(bar.EndTime, bar.Close);
                 //_maximums[symbol].Update(bar.EndTime, bar.High);
@@ -602,9 +602,12 @@ namespace QuantConnect.Algorithm.CSharp
 
         public class GroupIndicator : WindowIndicator<IBaseDataBar>
         {
+            private RollingWindow<TradeBar> _window;
+
             public GroupIndicator(string name, int period)
             : base(name, period)
             {
+                _window = new RollingWindow<TradeBar>(period);
             }
 
             public GroupIndicator(int period)
@@ -612,9 +615,21 @@ namespace QuantConnect.Algorithm.CSharp
             {
             }
 
+            public override bool IsReady => _window.Count >= _window.Size;
+
+            /// <summary>
+            /// Resets this indicator to its initial state
+            /// </summary>
+            public override void Reset()
+            {
+                _window.Reset();
+                base.Reset();
+            }
+
             protected override decimal ComputeNextValue(IReadOnlyWindow<IBaseDataBar> window, IBaseDataBar input)
             {
-                throw new NotImplementedException();
+                _window.Add(input as TradeBar);
+                return 1m;
             }
         }
     }

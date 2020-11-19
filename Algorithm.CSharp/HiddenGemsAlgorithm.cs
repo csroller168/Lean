@@ -32,8 +32,7 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
-        //  live:  make sure we trade during trading hours
-        //  consider replacing multiple complex indicators with single sliding window collection
+        //  consider replacing multiple complex indicators with single WindowIndicator
         //      everything else can be derived manually from that,
         //      I can factor in today's opening
         //      might be faster
@@ -47,8 +46,6 @@ namespace QuantConnect.Algorithm.CSharp
         //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
         //      increase shorts when _momentums has more negatives than positives
-
-
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 102, 311 };
@@ -90,7 +87,7 @@ namespace QuantConnect.Algorithm.CSharp
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
-            _rebalanceMeter = new UpdateMeter(RebalancePeriod);
+            _rebalanceMeter = new UpdateMeter(RebalancePeriod, true, 9, 31, 4, 29);
 
             SetStartDate(2011, 1, 1);
             SetEndDate(2013, 1, 1);
@@ -532,16 +529,44 @@ namespace QuantConnect.Algorithm.CSharp
         {
             private readonly TimeSpan _frequency;
             private DateTime _lastUpdate = DateTime.MinValue;
-            public bool IsDue(DateTime now) => _lastUpdate.Add(_frequency) <= now;
+            private readonly bool _isRangeBound;
+            private readonly int _minHour;
+            private readonly int _minMinute;
+            private readonly int _maxHour;
+            private readonly int _maxMinute;
 
-            public UpdateMeter(TimeSpan frequency)
+            public UpdateMeter(
+                TimeSpan frequency,
+                bool isRangeBound = false,
+                int minHour = 0,
+                int minMinute = 0,
+                int maxHour = 23,
+                int maxMinute = 59)
             {
+                _isRangeBound = isRangeBound;
+                _minHour = minHour;
+                _minMinute = minMinute;
+                _maxHour = maxHour;
+                _maxMinute = maxMinute;
                 _frequency = frequency;
             }
 
             public void Update(DateTime now)
             {
                 _lastUpdate = now;
+            }
+
+            public bool IsDue(DateTime now)
+            {
+                if (_isRangeBound)
+                {
+                    var minAllowedTime = new DateTime(now.Year, now.Month, now.Day, _minHour, _minMinute, 0);
+                    var maxAllowedTime = new DateTime(now.Year, now.Month, now.Day, _maxHour, _maxMinute, 0);
+
+                    return now > minAllowedTime
+                        && now < maxAllowedTime;
+                }
+                return _lastUpdate.Add(_frequency) <= now;
             }
         }
 

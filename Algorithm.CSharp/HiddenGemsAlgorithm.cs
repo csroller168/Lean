@@ -32,15 +32,22 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
-        //  to speed up, maybe take top/bottom ~100-200 longs shorts ranked on some non-volatile company info metric
+        //  live:  make sure we trade during trading hours
+        //  consider replacing multiple complex indicators with single sliding window collection
+        //      everything else can be derived manually from that,
+        //      I can factor in today's opening
+        //      might be faster
+        //      I can calculate volatility easier
+        //      might make stop losses more effective
         //  reduce drawdown:
-        //      tune to the 1/17/08 (late) sell of aapl
-        //      test using a weighted average of current price and momentum values instead of just momentum
+        //      low volatility only
+        //          i seem to lose a lot on multiple buy high/sell low thrashings
+        //          smoothing this out will reduce order count and buffer these losses
         //      tune vix
         //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
         //      increase shorts when _momentums has more negatives than positives
-        //  live:  make sure we trade during trading hours
+
 
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
@@ -165,22 +172,7 @@ namespace QuantConnect.Algorithm.CSharp
                 return;
             }
 
-            var rawHistories = @"09/16/2020, 25.31, 26.59, 24.84, 26.04
-                09/17/2020, 28.22, 28.92, 26.26, 26.46
-                09/18/2020, 26.65, 28.10, 25.28, 25.83
-                09/21/2020, 28.04, 31.18, 27.39, 27.78
-                09/22/2020, 28.61, 28.78, 26.48, 26.86
-                09/23/2020, 27.02, 29.73, 25.19, 28.58
-                09/24/2020, 29.54, 30.49, 27.94, 28.51
-                09/25/2020, 28.17, 30.43, 26.02, 26.38
-                09/28/2020, 27.15, 27.19, 24.90, 26.19
-                09/29/2020, 26.81, 27.43, 25.98, 26.27
-                09/30/2020, 26.69, 27.12, 25.06, 26.37
-                10/01/2020, 25.78, 27.11, 25.33, 26.70
-                10/02/2020, 28.87, 29.90, 26.93, 27.63
-                10/05/2020, 29.52, 29.69, 27.27, 27.96
-                10/06/2020, 28.05, 30.00, 26.01, 29.48
-                10/07/2020, 29.26, 29.76, 27.94, 28.06
+            var rawHistories = @"10/07/2020, 29.26, 29.76, 27.94, 28.06
                 10/08/2020, 27.65, 27.99, 24.88, 26.36
                 10/09/2020, 26.20, 26.22, 24.03, 25.00
                 10/12/2020, 25.65, 25.65, 24.14, 25.07
@@ -202,7 +194,15 @@ namespace QuantConnect.Algorithm.CSharp
                 11/03/2020, 36.44, 36.44, 34.19, 35.55
                 11/04/2020, 36.79, 36.85, 28.03, 29.57
                 11/05/2020, 27.56, 28.14, 26.04, 27.58
-                11/06/2020, 27.87, 29.44, 24.56, 24.86";
+                11/06/2020, 27.87, 29.44, 24.56, 24.86
+                11/09/2020, 24.80, 25.82, 22.41, 25.75
+                11/10/2020, 25.36, 26.77, 24.35, 24.80
+                11/11/2020, 25.01, 25.12, 22.57, 23.45
+                11/12/2020, 24.39, 27.27, 23.53, 25.35
+                11/13/2020, 24.94, 25.03, 22.74, 23.10
+                11/16/2020, 23.66, 24.08, 22.43, 22.45
+                11/17/2020, 22.84, 24.09, 22.34, 22.71
+                11/18/2020, 22.86, 23.92, 21.66, 23.84";
             var cboe = new CBOE();
             var config = SubscriptionManager.SubscriptionDataConfigService.GetSubscriptionDataConfigs(_vixSymbol).First();
             rawHistories
@@ -276,6 +276,28 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void SetTargetCounts()
         {
+            //var numPosMomentum = (decimal)_momentums.Count(x => x.Value.Current > 1m);
+            //var numNegMomentum = (decimal)_momentums.Count(x => x.Value.Current < 1m);
+            //var mktStrength = numNegMomentum > 0 ? numPosMomentum / numNegMomentum : 100m;
+            //Plot("MarketStrength", "ratio", mktStrength);
+
+            //if (mktStrength > 5m)
+            //{
+            //    _targetLongCount = NumLong;
+            //    _targetShortCount = 0;
+            //}
+            //else if (mktStrength > 1m)
+            //{
+            //    _targetLongCount = NumLong;
+            //    _targetShortCount = NumShort;
+            //}
+            //else
+            //{
+            //    _targetLongCount = NumShort;
+            //    _targetShortCount = NumLong;
+            //}
+
+
             //if (_vixHistories.Count() >= 8)
             //{
             //    SendEmailNotification("We got vix histories!");
@@ -372,6 +394,7 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up)));
+                
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable

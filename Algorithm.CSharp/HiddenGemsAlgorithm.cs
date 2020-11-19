@@ -424,18 +424,20 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void InitIndicators(Symbol symbol)
         {
-            var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
-            var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
-            var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
-            var momentum = currentSma.Over(pastSma);
-            _momentums[symbol] = momentum;
+            var groupIndicator = GetIndicator(symbol, SmaDistantWindowDays, Resolution.Daily);
+            //var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
+            //var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
+            //var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
+            //var momentum = currentSma.Over(pastSma);
+            //_momentums[symbol] = momentum;
             //_maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
 
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
             foreach (var bar in history)
             {
-                currentSma.Update(bar.EndTime, bar.Close);
-                distantSma.Update(bar.EndTime, bar.Close);
+                groupIndicator.Update(bar.EndTime, bar.Close);
+                //currentSma.Update(bar.EndTime, bar.Close);
+                //distantSma.Update(bar.EndTime, bar.Close);
                 //_maximums[symbol].Update(bar.EndTime, bar.High);
             }
         }
@@ -446,6 +448,15 @@ namespace QuantConnect.Algorithm.CSharp
             Maximum unused2;
             _momentums.TryRemove(symbol, out unused);
             //_maximums.TryRemove(symbol, out unused2);
+        }
+
+        private GroupIndicator GetIndicator(Symbol symbol, int period, Resolution? resolution = null, Func<IBaseData, IBaseDataBar> selector = null)
+        {
+            var name = CreateIndicatorName(symbol, $"Group({period})", resolution);
+            var indicator = new GroupIndicator(name, period);
+            RegisterIndicator(symbol, indicator, resolution, selector);
+
+            return indicator;
         }
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)
@@ -586,6 +597,24 @@ namespace QuantConnect.Algorithm.CSharp
                         && !targets.Any(y => y.Symbol.Equals(x.Key)))
                     .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
                 base.Execute(algorithm, adjustedTargets.ToArray());
+            }
+        }
+
+        public class GroupIndicator : WindowIndicator<IBaseDataBar>
+        {
+            public GroupIndicator(string name, int period)
+            : base(name, period)
+            {
+            }
+
+            public GroupIndicator(int period)
+            : this($"Group({period})", period)
+            {
+            }
+
+            protected override decimal ComputeNextValue(IReadOnlyWindow<IBaseDataBar> window, IBaseDataBar input)
+            {
+                throw new NotImplementedException();
             }
         }
     }

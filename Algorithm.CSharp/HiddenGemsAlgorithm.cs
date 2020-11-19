@@ -39,6 +39,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      tune vix
         //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
+        //      increase shorts when _momentums has more negatives than positives
         //  live:  make sure we trade during trading hours
 
 
@@ -84,8 +85,8 @@ namespace QuantConnect.Algorithm.CSharp
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod);
 
-            SetStartDate(2006, 4, 1);
-            SetEndDate(2020, 1, 1);
+            SetStartDate(2011, 1, 1);
+            SetEndDate(2013, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;

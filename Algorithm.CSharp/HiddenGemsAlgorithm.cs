@@ -33,6 +33,7 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //  consider replacing multiple complex indicators with single WindowIndicator
+        //      ... implement like others (e.g. maximum, sma) and initialize per SMA().  
         //      everything else can be derived manually from that,
         //      I can factor in today's opening
         //      might be faster

@@ -63,8 +63,9 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
-        private readonly ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
-        private readonly ConcurrentDictionary<Symbol, Maximum> _maximums = new ConcurrentDictionary<Symbol, Maximum>();
+        private readonly ConcurrentDictionary<Symbol, GroupIndicator> _indicators = new ConcurrentDictionary<Symbol, GroupIndicator>();
+        //private readonly ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
+        //private readonly ConcurrentDictionary<Symbol, Maximum> _maximums = new ConcurrentDictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private readonly decimal VixMomentumThreshold = 1.4m;
         private readonly decimal MinOpRevenueGrowth = 0m;
@@ -109,6 +110,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 //HandleVixData(slice);
                 HandleSplits(slice);
+                UpdateIndicatorOpen(slice);
 
                 if (!_rebalanceMeter.IsDue(Time)
                     || slice.Count() == 0
@@ -131,6 +133,14 @@ namespace QuantConnect.Algorithm.CSharp
                 var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
                 Log(e.Message);
                 SendEmailNotification(e.Message);
+            }
+        }
+
+        private void UpdateIndicatorOpen(Slice slice)
+        {
+            foreach (var indicator in _indicators)
+            {
+                indicator.Value.UpdateOpen(slice[indicator.Key] as TradeBar);
             }
         }
 
@@ -352,7 +362,8 @@ namespace QuantConnect.Algorithm.CSharp
                 && (Time - _stopLosses[symbol]).Days < SmaRecentWindowDays)
                 return true;
 
-            var max = _maximums[symbol].Current;
+            //var max = _maximums[symbol].Current;
+            var max = _indicators[symbol].MaxHigh;
             var price = (slice[symbol] as BaseData).Price;
             var drawdown = (price - max) / max;
 
@@ -379,13 +390,17 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
-                        && _momentums.ContainsKey(x.Key)
-                        && _momentums[x.Key].IsReady
-                        && _momentums[x.Key].Current > MinLongMomentum
+                        //&& _momentums.ContainsKey(x.Key)
+                        //&& _momentums[x.Key].IsReady
+                        //&& _momentums[x.Key].Current > MinLongMomentum
+                        && _indicators.ContainsKey(x.Key)
+                        && _indicators[x.Key].IsReady
+                        && _indicators[x.Key].Momentum > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         && !StopLossTriggered(slice, x.Key)
                         )
-                    .OrderByDescending(x => _momentums[x.Key].Current)
+                    //.OrderByDescending(x => _momentums[x.Key].Current)
+                    .OrderByDescending(x => _indicators[x.Key].Momentum)
                     .Take(_targetLongCount)
                     .Select(x => new Insight(
                             x.Value.Symbol,
@@ -398,12 +413,16 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && !_longCandidates.Contains(x.Key)
-                        && _momentums.ContainsKey(x.Key)
-                        && _momentums[x.Key].IsReady
-                        && _momentums[x.Key].Current < MaxShortMomentum
+                        //&& _momentums.ContainsKey(x.Key)
+                        //&& _momentums[x.Key].IsReady
+                        //&& _momentums[x.Key].Current < MaxShortMomentum
+                        && _indicators.ContainsKey(x.Key)
+                        && _indicators[x.Key].IsReady
+                        && _indicators[x.Key].Momentum < MaxShortMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
-                    .OrderBy(x => _momentums[x.Key].Current)
+                    //.OrderBy(x => _momentums[x.Key].Current)
+                    .OrderBy(x => _indicators[x.Key].Momentum)
                     .Take(_targetShortCount)
                     .Select(x => new Insight(
                             x.Value.Symbol,
@@ -425,6 +444,7 @@ namespace QuantConnect.Algorithm.CSharp
         private void InitIndicators(Symbol symbol)
         {
             var groupIndicator = GetIndicator(symbol, SmaDistantWindowDays, Resolution.Daily);
+            _indicators[symbol] = groupIndicator;
             //var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
             //var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
             //var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
@@ -444,9 +464,11 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void ClearIndicators(Symbol symbol)
         {
-            CompositeIndicator<IndicatorDataPoint> unused;
-            Maximum unused2;
-            _momentums.TryRemove(symbol, out unused);
+            GroupIndicator unused;
+            _indicators.TryRemove(symbol, out unused);
+            //CompositeIndicator<IndicatorDataPoint> unused;
+            //Maximum unused2;
+            //_momentums.TryRemove(symbol, out unused);
             //_maximums.TryRemove(symbol, out unused2);
         }
 
@@ -603,6 +625,8 @@ namespace QuantConnect.Algorithm.CSharp
         public class GroupIndicator : WindowIndicator<IBaseDataBar>
         {
             private RollingWindow<TradeBar> _window;
+            public decimal MaxHigh { get; private set; } = 0m;
+            public decimal Momentum { get; private set; } = 1m;
 
             public GroupIndicator(string name, int period)
             : base(name, period)
@@ -615,7 +639,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
             }
 
-            public override bool IsReady => _window.Count >= _window.Size;
+            public override bool IsReady => _window.Samples >= _window.Size;
 
             /// <summary>
             /// Resets this indicator to its initial state
@@ -623,12 +647,29 @@ namespace QuantConnect.Algorithm.CSharp
             public override void Reset()
             {
                 _window.Reset();
+                MaxHigh = 0m;
                 base.Reset();
+            }
+
+            public void UpdateOpen(TradeBar bar)
+            {
+                MaxHigh = Math.Max(MaxHigh, bar.Price);
+                var numeratorSet = _window.Union(new List<TradeBar> { bar });
+                var momNumerator = numeratorSet.Average(x => x.Close);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Close);
+                Momentum = momNumerator / momDenominator;
             }
 
             protected override decimal ComputeNextValue(IReadOnlyWindow<IBaseDataBar> window, IBaseDataBar input)
             {
                 _window.Add(input as TradeBar);
+
+                if (_window.Samples > window.Size
+                    && _window.MostRecentlyRemoved.High >= MaxHigh)
+                {
+                    MaxHigh = _window.Max(x => x.High);
+                }
+
                 return 1m;
             }
         }

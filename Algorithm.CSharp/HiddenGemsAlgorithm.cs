@@ -89,7 +89,7 @@ namespace QuantConnect.Algorithm.CSharp
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
-            _rebalanceMeter = new UpdateMeter(RebalancePeriod, true, 9, 31, 4, 29);
+            _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 4, 29);
 
             SetStartDate(2011, 1, 1);
             SetEndDate(2013, 1, 1);
@@ -110,7 +110,6 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 //HandleVixData(slice);
                 HandleSplits(slice);
-                UpdateIndicatorOpen(slice);
 
                 if (!_rebalanceMeter.IsDue(Time)
                     || slice.Count() == 0
@@ -121,6 +120,7 @@ namespace QuantConnect.Algorithm.CSharp
                     return;
 
                 SendEmailNotification("Begin OnData()");
+                UpdateIndicatorOpen(slice);
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
@@ -472,7 +472,7 @@ namespace QuantConnect.Algorithm.CSharp
             //_maximums.TryRemove(symbol, out unused2);
         }
 
-        private GroupIndicator GetIndicator(Symbol symbol, int period, Resolution? resolution = null, Func<IBaseData, IBaseDataBar> selector = null)
+        private GroupIndicator GetIndicator(Symbol symbol, int period, Resolution? resolution = null, Func<IBaseData, TradeBar> selector = null)
         {
             var name = CreateIndicatorName(symbol, $"Group({period})", resolution);
             var indicator = new GroupIndicator(name, period);
@@ -622,7 +622,7 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        public class GroupIndicator : WindowIndicator<IBaseDataBar>
+        public class GroupIndicator : WindowIndicator<TradeBar>
         {
             private RollingWindow<TradeBar> _window;
             public decimal MaxHigh { get; private set; } = 0m;
@@ -653,16 +653,16 @@ namespace QuantConnect.Algorithm.CSharp
 
             public void UpdateOpen(TradeBar bar)
             {
-                MaxHigh = Math.Max(MaxHigh, bar.Price);
+                MaxHigh = Math.Max(MaxHigh, bar.High);
                 var numeratorSet = _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Average(x => x.Close);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Close);
+                var momNumerator = numeratorSet.Average(x => x.Low);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Low);
                 Momentum = momNumerator / momDenominator;
             }
 
-            protected override decimal ComputeNextValue(IReadOnlyWindow<IBaseDataBar> window, IBaseDataBar input)
+            protected override decimal ComputeNextValue(IReadOnlyWindow<TradeBar> window, TradeBar input)
             {
-                _window.Add(input as TradeBar);
+                _window.Add(input);
 
                 if (_window.Samples > window.Size
                     && _window.MostRecentlyRemoved.High >= MaxHigh)

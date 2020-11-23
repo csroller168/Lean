@@ -81,7 +81,7 @@ namespace QuantConnect.Algorithm.CSharp
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
-        
+
         public override void Initialize()
         {
             SendEmailNotification("Starting initialization");
@@ -128,7 +128,7 @@ namespace QuantConnect.Algorithm.CSharp
                 _rebalanceMeter.Update(Time);
                 SendEmailNotification("End OnData()");
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
                 Log(e.Message);
@@ -222,7 +222,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void HandleSplits(Slice slice)
         {
-            foreach(var split in slice.Splits)
+            foreach (var split in slice.Splits)
             {
                 ClearIndicators(split.Key);
                 InitIndicators(split.Key);
@@ -234,7 +234,7 @@ namespace QuantConnect.Algorithm.CSharp
             if (!LiveMode)
                 return true;
 
-            if(numAttemptsToTrade == 0)
+            if (numAttemptsToTrade == 0)
             {
                 SendEmailNotification("IsAllowedToTrade...");
             }
@@ -367,7 +367,7 @@ namespace QuantConnect.Algorithm.CSharp
             var price = (slice[symbol] as BaseData).Price;
             var drawdown = (price - max) / max;
 
-            if(drawdown < MaxDrawdown) // e.g. -0.3 < -0.1
+            if (drawdown < MaxDrawdown) // e.g. -0.3 < -0.1
             {
                 _stopLosses[symbol] = Time;
                 return true;
@@ -407,7 +407,7 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up)));
-                
+
 
                 insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
@@ -498,9 +498,9 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToList();
                 SendEmailNotification("End SelectCoarse()");
                 return eligibleCandidates;
-                
+
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 var msg = $"Exception: SelectCoarse: {e.Message}, {e.StackTrace}";
                 Log(msg);
@@ -540,7 +540,7 @@ namespace QuantConnect.Algorithm.CSharp
                 _universeMeter.Update(Time);
                 SendEmailNotification("End SelectFine()");
 
-                return _longCandidates.Union(shorts);                
+                return _longCandidates.Union(shorts);
             }
             catch (Exception e)
             {
@@ -654,9 +654,9 @@ namespace QuantConnect.Algorithm.CSharp
             public void UpdateOpen(TradeBar bar)
             {
                 MaxHigh = Math.Max(MaxHigh, bar.High);
-                var numeratorSet = _window.AsEnumerable<TradeBar>(); // _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Average(x => x.Close);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Close);
+                var numeratorSet = _window.Union(new List<TradeBar> { bar });
+                var momNumerator = numeratorSet.Average(x => x.Low);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Low);
                 Momentum = momNumerator / momDenominator;
             }
 

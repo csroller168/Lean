@@ -654,9 +654,9 @@ namespace QuantConnect.Algorithm.CSharp
             public void UpdateOpen(TradeBar bar)
             {
                 MaxHigh = Math.Max(MaxHigh, bar.High);
-                var numeratorSet = _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Average(x => x.Low);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Low);
+                var numeratorSet = _window.AsEnumerable<TradeBar>(); // _window.Union(new List<TradeBar> { bar });
+                var momNumerator = numeratorSet.Average(x => x.Close);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Close);
                 Momentum = momNumerator / momDenominator;
             }
 

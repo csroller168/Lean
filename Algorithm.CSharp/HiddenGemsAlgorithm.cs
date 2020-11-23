@@ -92,7 +92,8 @@ namespace QuantConnect.Algorithm.CSharp
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 4, 29);
 
             SetStartDate(2011, 1, 1);
-            SetEndDate(2013, 1, 1);
+            //SetEndDate(2013, 1, 1);
+            SetEndDate(2011, 1, 10);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -443,7 +444,7 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void InitIndicators(Symbol symbol)
         {
-            var groupIndicator = GetIndicator(symbol, SmaDistantWindowDays, Resolution.Daily);
+            var groupIndicator = GetIndicator(symbol, SmaLookbackDays, Resolution.Daily);
             _indicators[symbol] = groupIndicator;
             //var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
             //var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
@@ -654,9 +655,9 @@ namespace QuantConnect.Algorithm.CSharp
             public void UpdateOpen(TradeBar bar)
             {
                 MaxHigh = Math.Max(MaxHigh, bar.High);
-                var numeratorSet = _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Average(x => x.Low);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Low);
+                var numeratorSet = _window; // _window.Union(new List<TradeBar> { bar });
+                var momNumerator = numeratorSet.Take(SmaRecentWindowDays).Average(x => x.Close);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Close);
                 Momentum = momNumerator / momDenominator;
             }
 

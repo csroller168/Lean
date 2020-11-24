@@ -33,11 +33,7 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //  consider replacing multiple complex indicators with single WindowIndicator
-        //      optimize using LastRemoved if possible
-        //      optimize with parallel foreach in UpdateIndicatorOpen
         //      may need to go back to hourly resolution for it to really work
-        //      factor in the current value
-        //      test momentum calc with daily high and low values
         //  reduce drawdown:
         //      low volatility only
         //          i seem to lose a lot on multiple buy high/sell low thrashings
@@ -46,6 +42,10 @@ namespace QuantConnect.Algorithm.CSharp
         //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
         //      increase shorts when _momentums has more negatives than positives
+        //  multi-period momentum
+        //      calculate long recent/distant window momentum for long-term trend
+        //      calculate short recent/distant window (shorter lookback) for short-term trend
+        //      trade when both up
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 102, 311 };
@@ -84,15 +84,16 @@ namespace QuantConnect.Algorithm.CSharp
         public override void Initialize()
         {
             SendEmailNotification("Starting initialization");
-            UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Daily;
+            UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 4, 29);
 
-            SetStartDate(2011, 1, 1);
-            SetEndDate(2013, 1, 1);
-            //SetEndDate(2011, 1, 10);
+            SetStartDate(2006, 4, 1);
+            SetEndDate(2020, 1, 1);
+            //SetStartDate(2011, 1, 1);
+            //SetEndDate(2013, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -655,8 +656,8 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 MaxHigh = Math.Max(MaxHigh, bar.High);
                 var numeratorSet = _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Take(SmaRecentWindowDays).Average(x => x.High);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.High);
+                var momNumerator = numeratorSet.Take(SmaRecentWindowDays).Average(x => x.Low);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Low);
                 Momentum = momNumerator / momDenominator;
             }
 

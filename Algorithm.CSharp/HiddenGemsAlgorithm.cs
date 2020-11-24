@@ -33,12 +33,11 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //  consider replacing multiple complex indicators with single WindowIndicator
-        //      ... implement like others (e.g. maximum, sma) and initialize per SMA().  
-        //      everything else can be derived manually from that,
-        //      I can factor in today's opening
-        //      might be faster
-        //      I can calculate volatility easier
-        //      might make stop losses more effective
+        //      optimize using LastRemoved if possible
+        //      optimize with parallel foreach in UpdateIndicatorOpen
+        //      may need to go back to hourly resolution for it to really work
+        //      factor in the current value
+        //      test momentum calc with daily high and low values
         //  reduce drawdown:
         //      low volatility only
         //          i seem to lose a lot on multiple buy high/sell low thrashings
@@ -92,8 +91,8 @@ namespace QuantConnect.Algorithm.CSharp
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 4, 29);
 
             SetStartDate(2011, 1, 1);
-            //SetEndDate(2013, 1, 1);
-            SetEndDate(2011, 1, 10);
+            SetEndDate(2013, 1, 1);
+            //SetEndDate(2011, 1, 10);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -139,10 +138,10 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void UpdateIndicatorOpen(Slice slice)
         {
-            foreach (var indicator in _indicators)
+            Parallel.ForEach(_indicators, (indicator) =>
             {
-                indicator.Value.UpdateOpen(slice[indicator.Key] as TradeBar);
-            }
+                indicator.Value.UpdateOpen(slice[indicator.Key]);
+            });
         }
 
         public override void OnSecuritiesChanged(SecurityChanges changes)
@@ -655,9 +654,9 @@ namespace QuantConnect.Algorithm.CSharp
             public void UpdateOpen(TradeBar bar)
             {
                 MaxHigh = Math.Max(MaxHigh, bar.High);
-                var numeratorSet = _window; // _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Take(SmaRecentWindowDays).Average(x => x.Close);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Close);
+                var numeratorSet = _window.Union(new List<TradeBar> { bar });
+                var momNumerator = numeratorSet.Take(SmaRecentWindowDays).Average(x => x.High);
+                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.High);
                 Momentum = momNumerator / momDenominator;
             }
 

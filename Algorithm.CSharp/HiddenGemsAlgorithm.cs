@@ -32,6 +32,9 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
+        //  optimizations
+        //      make sure cast to TradeBar isn't slowing down
+        //      reduce linq with chain of rollingwindows and use of LastRemoved
         //  consider replacing multiple complex indicators with single WindowIndicator
         //      may need to go back to hourly resolution for it to really work
         //  reduce drawdown:

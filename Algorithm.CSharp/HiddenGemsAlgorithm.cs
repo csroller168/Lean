@@ -34,7 +34,7 @@ namespace QuantConnect.Algorithm.CSharp
         // TODOs:
         //  optimizations
         //      make sure cast to TradeBar isn't slowing down
-        //      reduce linq with chain of rollingwindows and use of LastRemoved
+        //      reduce linq with chain of rollingwindows (or queues) and use of LastRemoved
         //  consider replacing multiple complex indicators with single WindowIndicator
         //      may need to go back to hourly resolution for it to really work
         //  reduce drawdown:
@@ -228,7 +228,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             foreach (var split in slice.Splits)
             {
-                ClearIndicators(split.Key);
                 InitIndicators(split.Key);
             }
         }
@@ -449,20 +448,11 @@ namespace QuantConnect.Algorithm.CSharp
         {
             var groupIndicator = GetIndicator(symbol, SmaLookbackDays, Resolution.Daily);
             _indicators[symbol] = groupIndicator;
-            //var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
-            //var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
-            //var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
-            //var momentum = currentSma.Over(pastSma);
-            //_momentums[symbol] = momentum;
-            //_maximums[symbol] = MAX(symbol, SmaWindowDays, Resolution.Daily);
 
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
-            foreach (var bar in history)
+            foreach(var bar in history)
             {
                 groupIndicator.Update(bar);
-                //currentSma.Update(bar.EndTime, bar.Close);
-                //distantSma.Update(bar.EndTime, bar.Close);
-                //_maximums[symbol].Update(bar.EndTime, bar.High);
             }
         }
 
@@ -470,16 +460,12 @@ namespace QuantConnect.Algorithm.CSharp
         {
             GroupIndicator unused;
             _indicators.TryRemove(symbol, out unused);
-            //CompositeIndicator<IndicatorDataPoint> unused;
-            //Maximum unused2;
-            //_momentums.TryRemove(symbol, out unused);
-            //_maximums.TryRemove(symbol, out unused2);
         }
 
-        private GroupIndicator GetIndicator(Symbol symbol, int period, Resolution? resolution = null, Func<IBaseData, TradeBar> selector = null)
+        private GroupIndicator GetIndicator(Symbol symbol, int period, Resolution? resolution = null, Func<IBaseData, IBaseDataBar> selector = null)
         {
             var name = CreateIndicatorName(symbol, $"Group({period})", resolution);
-            var indicator = new GroupIndicator(name, period);
+            var indicator = new GroupIndicator(name);
             RegisterIndicator(symbol, indicator, resolution, selector);
 
             return indicator;
@@ -626,55 +612,82 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        public class GroupIndicator : WindowIndicator<TradeBar>
+        public class GroupIndicator : BarIndicator
         {
-            private RollingWindow<TradeBar> _window;
-            public decimal MaxHigh { get; private set; } = 0m;
-            public decimal Momentum { get; private set; } = 1m;
+            // TODO: UpdateOpen and MaxHigh
 
-            public GroupIndicator(string name, int period)
-            : base(name, period)
+
+            private static readonly int SkipDays = SmaLookbackDays - SmaRecentWindowDays - SmaDistantWindowDays;
+            private Queue<IBaseDataBar> _recentBars = new Queue<IBaseDataBar>(SmaRecentWindowDays);
+            private Queue<IBaseDataBar> _skipBars = new Queue<IBaseDataBar>(SkipDays);
+            private Queue<IBaseDataBar> _distantBars = new Queue<IBaseDataBar>(SmaDistantWindowDays);
+            private decimal _recentSma = decimal.MinValue;
+            private decimal _distantSma = decimal.MinValue;
+            public decimal Momentum { get; private set; } = 0m;
+
+            public GroupIndicator(string name)
+                : base(name) { }
+
+            public override bool IsReady
             {
-                _window = new RollingWindow<TradeBar>(period);
-            }
-
-            public GroupIndicator(int period)
-            : this($"Group({period})", period)
-            {
-            }
-
-            public override bool IsReady => _window.Samples >= _window.Size;
-
-            /// <summary>
-            /// Resets this indicator to its initial state
-            /// </summary>
-            public override void Reset()
-            {
-                _window.Reset();
-                MaxHigh = 0m;
-                base.Reset();
-            }
-
-            public void UpdateOpen(TradeBar bar)
-            {
-                MaxHigh = Math.Max(MaxHigh, bar.High);
-                var numeratorSet = _window.Union(new List<TradeBar> { bar });
-                var momNumerator = numeratorSet.Take(SmaRecentWindowDays).Average(x => x.Low);
-                var momDenominator = _window.OrderBy(x => x.Time).Take(SmaDistantWindowDays).Average(x => x.Low);
-                Momentum = momNumerator / momDenominator;
-            }
-
-            protected override decimal ComputeNextValue(IReadOnlyWindow<TradeBar> window, TradeBar input)
-            {
-                _window.Add(input);
-
-                if (_window.Samples > window.Size
-                    && _window.MostRecentlyRemoved.High >= MaxHigh)
+                get
                 {
-                    MaxHigh = _window.Max(x => x.High);
+                    return _distantBars.Count == SmaDistantWindowDays;
+                }
+            }
+
+            protected override decimal ComputeNextValue(IBaseDataBar input)
+            {
+                IBaseDataBar distantBarRemoved = null;
+                if (_distantBars.Count == SmaDistantWindowDays)
+                    distantBarRemoved = _distantBars.Dequeue();
+
+                IBaseDataBar distantBarAdded = null;
+                if (_skipBars.Count == SkipDays)
+                {
+                    distantBarAdded = _skipBars.Dequeue();
+                    _distantBars.Enqueue(distantBarAdded);
+
+                    if (distantBarRemoved != null)
+                    {
+                        _distantSma = _distantSma.Equals(decimal.MinValue)
+                            ? _distantBars.Average(x => Value(x))
+                            : ((_distantSma * SmaDistantWindowDays)
+                            - Value(distantBarRemoved)
+                            + Value(distantBarAdded))
+                            / SmaDistantWindowDays;
+                    }
                 }
 
-                return 1m;
+                IBaseDataBar recentBarRemoved = null;
+                if (_recentBars.Count == SmaRecentWindowDays)
+                {
+                    recentBarRemoved = _recentBars.Dequeue();
+                    _skipBars.Enqueue(recentBarRemoved);
+                }
+
+                if(recentBarRemoved != null)
+                {
+                    _recentSma = _recentSma.Equals(decimal.MinValue)
+                        ? _recentBars.Average(x => Value(x))
+                        : ((_recentSma * SmaRecentWindowDays)
+                        - Value(recentBarRemoved)
+                        + Value(input))
+                        / SmaRecentWindowDays;
+                }
+
+                Momentum = _recentSma / _distantSma;
+                return Momentum;
+            }
+
+            private decimal Value(IBaseDataBar bar)
+            {
+                return bar.High;
+            }
+
+            internal void UpdateOpen(IBaseDataBar bar)
+            {
+                throw new NotImplementedException();
             }
         }
     }

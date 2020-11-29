@@ -360,27 +360,25 @@ namespace QuantConnect.Algorithm.CSharp
 
         private bool StopLossTriggered(Slice slice, Symbol symbol)
         {
-            return false;
-            if (_stopLosses.ContainsKey(symbol)
-                && (Time - _stopLosses[symbol]).Days < SmaRecentWindowDays)
-                return true;
+            //if (_stopLosses.ContainsKey(symbol)
+            //    && (Time - _stopLosses[symbol]).Days < SmaRecentWindowDays)
+            //    return true;
 
-            //var max = _maximums[symbol].Current;
-            var max = _indicators[symbol].MaxHigh;
-            var price = (slice[symbol] as BaseData).Price;
-            var drawdown = (price - max) / max;
+            //var max = _indicators[symbol].MaxHigh;
+            //var price = (slice[symbol] as BaseData).Price;
+            //var drawdown = (price - max) / max;
 
-            if (drawdown < MaxDrawdown) // e.g. -0.3 < -0.1
-            {
-                _stopLosses[symbol] = Time;
-                return true;
-            }
+            //if (drawdown < MaxDrawdown) // e.g. -0.3 < -0.1
+            //{
+            //    _stopLosses[symbol] = Time;
+            //    return true;
+            //}
 
-            var toDelete = _stopLosses
-                .Where(x => (Time - x.Value).Days > SmaRecentWindowDays)
-                .Select(x => x.Key)
-                .ToList();
-            toDelete.ForEach(x => _stopLosses.Remove(x));
+            //var toDelete = _stopLosses
+            //    .Where(x => (Time - x.Value).Days > SmaRecentWindowDays)
+            //    .Select(x => x.Key)
+            //    .ToList();
+            //toDelete.ForEach(x => _stopLosses.Remove(x));
             return false;
         }
 
@@ -614,9 +612,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         public class GroupIndicator : BarIndicator
         {
-            // TODO: MaxHigh
-
-
             private static readonly int SkipDays = SmaLookbackDays - SmaRecentWindowDays - SmaDistantWindowDays;
             private Queue<IBaseDataBar> _recentBars = new Queue<IBaseDataBar>(SmaRecentWindowDays);
             private Queue<IBaseDataBar> _skipBars = new Queue<IBaseDataBar>(SkipDays);

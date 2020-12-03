@@ -32,15 +32,17 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
-        //  optimizations
-        //      make sure cast to TradeBar isn't slowing down
-        //      reduce linq with chain of rollingwindows (or queues) and use of LastRemoved
-        //  consider replacing multiple complex indicators with single WindowIndicator
-        //      may need to go back to hourly resolution for it to really work
         //  reduce drawdown:
         //      low volatility only
         //          i seem to lose a lot on multiple buy high/sell low thrashings
         //          smoothing this out will reduce order count and buffer these losses
+        //          i can calculate on rolling basis
+        //          either standard deviation of all returns or just negative returns
+        //              .. or some other volatility measure using whole bar
+        //          test ratio of pos/neg returns?
+        //          std deviation of daily high-low spreads
+        //          std deviation of daily (prev close)-low spreads
+        //      filter for low max drawdown
         //      tune vix
         //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
@@ -51,7 +53,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      trade when both up
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
-        private static readonly int[] SectorsAllowed = { 102, 311 };
+        private static readonly int[] SectorsAllowed = { 311 }; // { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;
@@ -612,12 +614,18 @@ namespace QuantConnect.Algorithm.CSharp
 
         public class GroupIndicator : BarIndicator
         {
+            // TODO: running maxDrawdown and stdDeviation
+            //    to do this, will need one full queue of daily returns
+            //    and the most recently updated non-open bar
+
             private static readonly int SkipDays = SmaLookbackDays - SmaRecentWindowDays - SmaDistantWindowDays;
             private Queue<IBaseDataBar> _recentBars = new Queue<IBaseDataBar>(SmaRecentWindowDays);
             private Queue<IBaseDataBar> _skipBars = new Queue<IBaseDataBar>(SkipDays);
             private Queue<IBaseDataBar> _distantBars = new Queue<IBaseDataBar>(SmaDistantWindowDays);
             private decimal _recentSma = decimal.MinValue;
             private decimal _distantSma = decimal.MinValue;
+            //private decimal _stdDeviation = decimal.MinValue;
+            //private decimal _maxDrawdown = decimal.MinValue;
             private decimal _openValue = 1m;
             public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
 
@@ -652,6 +660,7 @@ namespace QuantConnect.Algorithm.CSharp
                     recentBarRemoved = _recentBars.Dequeue();
                     _skipBars.Enqueue(recentBarRemoved);
                 }
+                _recentBars.Enqueue(input);
 
                 if(recentBarRemoved != null)
                 {

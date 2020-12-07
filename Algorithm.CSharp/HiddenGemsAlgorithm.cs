@@ -110,7 +110,7 @@ namespace QuantConnect.Algorithm.CSharp
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
 
-            _vixSymbol = AddData<CBOE>("VIX").Symbol;
+            //_vixSymbol = AddData<CBOE>("VIX").Symbol;
             //InitializeVixHistories();
             SendEmailNotification("Initialization complete");
         }

@@ -587,15 +587,16 @@ namespace QuantConnect.Algorithm.CSharp
 
             public bool IsDue(DateTime now)
             {
+                var inRange = true;
                 if (_isRangeBound)
                 {
                     var minAllowedTime = new DateTime(now.Year, now.Month, now.Day, _minHour, _minMinute, 0);
                     var maxAllowedTime = new DateTime(now.Year, now.Month, now.Day, _maxHour, _maxMinute, 0);
 
-                    return now > minAllowedTime
+                    inRange = now > minAllowedTime
                         && now < maxAllowedTime;
                 }
-                return _lastUpdate.Add(_frequency) <= now;
+                return inRange && _lastUpdate.Add(_frequency) <= now;
             }
         }
 

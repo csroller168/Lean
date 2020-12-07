@@ -32,6 +32,11 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
+        //  optimize execution performance
+        //      replace multiple queues in custom indicator with one list (this preserves insert order)
+        //      other groupIndicator todos
+        //
+        //  optimize return performance
         //  reduce drawdown:
         //      low volatility only
         //          i seem to lose a lot on multiple buy high/sell low thrashings
@@ -618,57 +623,46 @@ namespace QuantConnect.Algorithm.CSharp
             //    to do this, will need one full queue of daily returns
             //    and the most recently updated non-open bar
 
-            private static readonly int SkipDays = SmaLookbackDays - SmaRecentWindowDays - SmaDistantWindowDays;
-            private Queue<IBaseDataBar> _recentBars = new Queue<IBaseDataBar>(SmaRecentWindowDays);
-            private Queue<IBaseDataBar> _skipBars = new Queue<IBaseDataBar>(SkipDays);
-            private Queue<IBaseDataBar> _distantBars = new Queue<IBaseDataBar>(SmaDistantWindowDays);
+            private List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
             private decimal _recentSma = decimal.MinValue;
             private decimal _distantSma = decimal.MinValue;
             //private decimal _stdDeviation = decimal.MinValue;
             //private decimal _maxDrawdown = decimal.MinValue;
             private decimal _openValue = 1m;
-            public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
 
-            public override bool IsReady => _distantBars.Count == SmaDistantWindowDays;
+            public override bool IsReady => _bars.Count == SmaLookbackDays;
+
+            public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
 
             public GroupIndicator(string name)
                 : base(name) { }
 
             protected override decimal ComputeNextValue(IBaseDataBar input)
             {
-                IBaseDataBar distantBarRemoved = null;
-                if (_distantBars.Count == SmaDistantWindowDays)
-                    distantBarRemoved = _distantBars.Dequeue();
-
-                IBaseDataBar distantBarAdded = null;
-                if (_skipBars.Count == SkipDays)
+                IBaseDataBar lastRemovedBar = null;
+                if (IsReady)
                 {
-                    distantBarAdded = _skipBars.Dequeue();
-                    _distantBars.Enqueue(distantBarAdded);
+                    lastRemovedBar = _bars[0];
+                    _bars.RemoveAt(0);
+                }
+                _bars.Add(input);
 
-                    if (distantBarRemoved != null)
+                if (IsReady)
+                {
+                    if (lastRemovedBar == null)
                     {
-                        _distantSma = _distantSma.Equals(decimal.MinValue)
-                            ? _distantBars.Average(x => Value(x))
-                            : AdjustedAverage(_distantSma, SmaDistantWindowDays, Value(distantBarRemoved), Value(distantBarAdded));
+                        _recentSma = _bars.Skip(SmaLookbackDays - SmaRecentWindowDays).Average(x => Value(x));
+                        _distantSma = _bars.Take(SmaDistantWindowDays).Average(x => Value(x));
                     }
+                    else
+                    {
+                        _recentSma = AdjustedAverage(_recentSma, SmaRecentWindowDays, _bars[SmaLookbackDays - SmaRecentWindowDays - 1], input);
+                        _distantSma = AdjustedAverage(_distantSma, SmaDistantWindowDays, lastRemovedBar, _bars[SmaDistantWindowDays - 1]);
+                    }
+                    return Momentum;
                 }
 
-                IBaseDataBar recentBarRemoved = null;
-                if (_recentBars.Count == SmaRecentWindowDays)
-                {
-                    recentBarRemoved = _recentBars.Dequeue();
-                    _skipBars.Enqueue(recentBarRemoved);
-                }
-                _recentBars.Enqueue(input);
-
-                if(recentBarRemoved != null)
-                {
-                    _recentSma = _recentSma.Equals(decimal.MinValue)
-                        ? _recentBars.Average(x => Value(x))
-                        : AdjustedAverage(_recentSma, SmaRecentWindowDays, Value(recentBarRemoved), Value(input));
-                }
-                return _recentSma / _distantSma;
+                return 1m;
             }
 
             internal void UpdateOpen(IBaseDataBar bar)
@@ -679,6 +673,15 @@ namespace QuantConnect.Algorithm.CSharp
             private decimal Value(IBaseDataBar bar)
             {
                 return bar.High;
+            }
+
+            private decimal AdjustedAverage(
+                decimal currentAvg,
+                int numPeriods,
+                IBaseDataBar oldBar,
+                IBaseDataBar newBar)
+            {
+                return AdjustedAverage(currentAvg, numPeriods, Value(oldBar), Value(newBar));
             }
 
             private decimal AdjustedAverage(

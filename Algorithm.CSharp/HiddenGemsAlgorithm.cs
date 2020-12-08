@@ -32,12 +32,10 @@ namespace QuantConnect.Algorithm.CSharp
         // 
         //
         // TODOs:
-        //  optimize execution performance
-        //      replace multiple queues in custom indicator with one list (this preserves insert order)
-        //      other groupIndicator todos
         //
-        //  optimize return performance
+        //  === optimize return performance ===
         //  reduce drawdown:
+        //      filter for low max drawdown
         //      low volatility only
         //          i seem to lose a lot on multiple buy high/sell low thrashings
         //          smoothing this out will reduce order count and buffer these losses
@@ -47,7 +45,6 @@ namespace QuantConnect.Algorithm.CSharp
         //          test ratio of pos/neg returns?
         //          std deviation of daily high-low spreads
         //          std deviation of daily (prev close)-low spreads
-        //      filter for low max drawdown
         //      tune vix
         //      tune short blend
         //      test hedge with fixed bond fund/gld blend at varying %
@@ -56,6 +53,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      calculate long recent/distant window momentum for long-term trend
         //      calculate short recent/distant window (shorter lookback) for short-term trend
         //      trade when both up
+        //  try putting the other sector back in
+        //  consider high, low and range (high-low as % of low) simultaneously somehow
+        //      consider:  "price" isn't just daily closes, but a range over periods (daily, weekly, etc)
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 }; // { 102, 311 };
@@ -73,8 +73,6 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
         private readonly ConcurrentDictionary<Symbol, GroupIndicator> _indicators = new ConcurrentDictionary<Symbol, GroupIndicator>();
-        //private readonly ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
-        //private readonly ConcurrentDictionary<Symbol, Maximum> _maximums = new ConcurrentDictionary<Symbol, Maximum>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
         private readonly decimal VixMomentumThreshold = 1.4m;
         private readonly decimal MinOpRevenueGrowth = 0m;
@@ -620,15 +618,9 @@ namespace QuantConnect.Algorithm.CSharp
 
         public class GroupIndicator : BarIndicator
         {
-            // TODO: running maxDrawdown and stdDeviation
-            //    to do this, will need one full queue of daily returns
-            //    and the most recently updated non-open bar
-
             private List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
             private decimal _recentSma = decimal.MinValue;
             private decimal _distantSma = decimal.MinValue;
-            //private decimal _stdDeviation = decimal.MinValue;
-            //private decimal _maxDrawdown = decimal.MinValue;
             private decimal _openValue = 1m;
 
             public override bool IsReady => _bars.Count == SmaLookbackDays;

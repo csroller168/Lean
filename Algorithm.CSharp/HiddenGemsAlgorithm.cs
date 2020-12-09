@@ -96,7 +96,7 @@ namespace QuantConnect.Algorithm.CSharp
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
-            _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 4, 29);
+            _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
 
             //SetStartDate(2006, 4, 1);
             //SetEndDate(2020, 1, 1);

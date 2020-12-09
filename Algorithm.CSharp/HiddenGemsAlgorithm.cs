@@ -159,15 +159,15 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 SendEmailNotification("Start OnSecuritiesChanged()");
                 numAttemptsToTrade = 0;
-                Parallel.ForEach(changes.AddedSecurities, (addition) =>
-                {
-                    InitIndicators(addition.Symbol);
-                });
                 Parallel.ForEach(changes.RemovedSecurities, (removal) =>
                 {
                     ClearIndicators(removal.Symbol);
                 });
-
+                Parallel.ForEach(changes.AddedSecurities, (addition) =>
+                {
+                    InitIndicators(addition.Symbol);
+                });
+                
                 SendEmailNotification("End OnSecuritiesChanged()");
             }
             catch (Exception e)

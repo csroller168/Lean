@@ -33,10 +33,14 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // TODOs:
         //
+        //  === optimize operational performance ===
+        //  reduce number of active securities by putting selection criteria in selectfine/coarse
+        //     ** put try/catch inside each parallel foreach for debugging this and live integration
+        //
         //  === optimize return performance ===
         //  reduce drawdown:
         //      filter for low max drawdown
-        //      low volatility only
+        //      low volatility only or adjust minLongMomentum and maxShortMomentum
         //          i seem to lose a lot on multiple buy high/sell low thrashings
         //          smoothing this out will reduce order count and buffer these losses
         //          i can calculate on rolling basis
@@ -80,7 +84,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static TimeSpan RebalancePeriod;
         private UpdateMeter _universeMeter;
         private UpdateMeter _rebalanceMeter;
-        private List<Symbol> _longCandidates = new List<Symbol>();
+        private ConcurrentBag<Symbol> _longCandidates = new ConcurrentBag<Symbol>();
 
         //http://cache.quantconnect.com/alternative/cboe/vix.csv
         private List<TradeBar> _vixHistories = new List<TradeBar>();
@@ -141,7 +145,7 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
                 Log(e.Message);
-                SendEmailNotification(e.Message);
+                SendEmailNotification(msg);
             }
         }
 
@@ -149,7 +153,16 @@ namespace QuantConnect.Algorithm.CSharp
         {
             Parallel.ForEach(_indicators, (indicator) =>
             {
-                indicator.Value.UpdateOpen(slice[indicator.Key]);
+                try
+                {
+                    indicator.Value.UpdateOpen(slice[indicator.Key]);
+                }
+                catch(Exception e)
+                {
+                    var msg = $"Exception: UpdateIndicatorOpen: {e.Message}, {e.StackTrace}";
+                    Log(e.Message);
+                    SendEmailNotification(msg);
+                }
             });
         }
 
@@ -161,13 +174,23 @@ namespace QuantConnect.Algorithm.CSharp
                 numAttemptsToTrade = 0;
                 Parallel.ForEach(changes.RemovedSecurities, (removal) =>
                 {
-                    ClearIndicators(removal.Symbol);
+                    try
+                    {
+                        ClearIndicators(removal.Symbol);
+                    }
+                    catch(Exception e)
+                    {
+                        var msg = $"Exception: OnSecuritiesChanged(Parallel): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
                 });
-                Parallel.ForEach(changes.AddedSecurities, (addition) =>
-                {
-                    InitIndicators(addition.Symbol);
-                });
-                
+                //Parallel.ForEach(changes.AddedSecurities, (addition) =>
+                //{
+                //    InitIndicators(addition.Symbol);
+                //    RegisterIndicator(symbol, indicator, resolution, selector);
+                //});
+
                 SendEmailNotification("End OnSecuritiesChanged()");
             }
             catch (Exception e)
@@ -234,6 +257,7 @@ namespace QuantConnect.Algorithm.CSharp
             foreach (var split in slice.Splits)
             {
                 InitIndicators(split.Key);
+                RegisterIndicator(split.Key, _indicators[split.Key], Resolution.Daily, (Func<IBaseData, IBaseDataBar>)null);
             }
         }
 
@@ -387,6 +411,16 @@ namespace QuantConnect.Algorithm.CSharp
             return false;
         }
 
+        private bool MeetsLongCriteria(Symbol sym)
+        {
+            return _indicators[sym].Momentum > MinLongMomentum;
+        }
+
+        private bool MeetsShortCriteria(Symbol sym)
+        {
+            return _indicators[sym].Momentum < MaxShortMomentum;
+        }
+
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
@@ -401,7 +435,7 @@ namespace QuantConnect.Algorithm.CSharp
                         //&& _momentums[x.Key].Current > MinLongMomentum
                         && _indicators.ContainsKey(x.Key)
                         && _indicators[x.Key].IsReady
-                        && _indicators[x.Key].Momentum > MinLongMomentum
+                        && MeetsLongCriteria(x.Key)
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         && !StopLossTriggered(slice, x.Key)
                         )
@@ -424,7 +458,7 @@ namespace QuantConnect.Algorithm.CSharp
                         //&& _momentums[x.Key].Current < MaxShortMomentum
                         && _indicators.ContainsKey(x.Key)
                         && _indicators[x.Key].IsReady
-                        && _indicators[x.Key].Momentum < MaxShortMomentum
+                        && MeetsShortCriteria(x.Key)
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
                     //.OrderBy(x => _momentums[x.Key].Current)
@@ -469,7 +503,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             var name = CreateIndicatorName(symbol, $"Group({period})", resolution);
             var indicator = new GroupIndicator(name);
-            RegisterIndicator(symbol, indicator, resolution, selector);
 
             return indicator;
         }
@@ -511,7 +544,7 @@ namespace QuantConnect.Algorithm.CSharp
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
 
-                _longCandidates = candidates
+                var possibleLongs = candidates
                     .Where(
                         x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
@@ -521,19 +554,92 @@ namespace QuantConnect.Algorithm.CSharp
                     .Select(x => x.Symbol)
                     .ToList();
 
-                var shorts = candidates
+                var possibleShorts = candidates
                     .Where(
-                        x => !_longCandidates.Contains(x.Symbol)
+                        x => !possibleLongs.Contains(x.Symbol)
                         && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
                         && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
                         && x.MarketCap < MinMarketCap
                         && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
                         )
-                    .Select(x => x.Symbol);
+                    .Select(x => x.Symbol)
+                    .ToList();
+
+                var toRemove = new ConcurrentBag<Symbol>();
+                Parallel.ForEach(_indicators, (indicator) =>
+                {
+                    try
+                    {
+                        if (!possibleLongs.Contains(indicator.Key)
+                            && !possibleShorts.Contains(indicator.Key))
+                            toRemove.Add(indicator.Key);
+                    }
+                    catch (Exception e)
+                    {
+                        var msg = $"Exception: SelectFine foreach(a): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
+                });
+                Parallel.ForEach(toRemove, (removed) =>
+                {
+                    try
+                    {
+                        ClearIndicators(removed);
+                    }
+                    catch (Exception e)
+                    {
+                        var msg = $"Exception: SelectFine foreach(b): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
+                });
+
+                _longCandidates = new ConcurrentBag<Symbol>();
+                Parallel.ForEach(possibleLongs, (possibleLong) =>
+                {
+                    try
+                    {
+                        if (!_indicators.ContainsKey(possibleLong))
+                            InitIndicators(possibleLong);
+
+                        if (MeetsLongCriteria(possibleLong))
+                            _longCandidates.Add(possibleLong);
+                        else
+                            ClearIndicators(possibleLong);
+                    }
+                    catch (Exception e)
+                    {
+                        var msg = $"Exception: SelectFine foreach(c): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
+                });
+
+                Parallel.ForEach(possibleShorts, (possibleShort) =>
+                {
+                    try
+                    {
+                        if (!_indicators.ContainsKey(possibleShort))
+                            InitIndicators(possibleShort);
+
+                        if (MeetsShortCriteria(possibleShort))
+                            ClearIndicators(possibleShort);
+                    }
+                    catch (Exception e)
+                    {
+                        var msg = $"Exception: SelectFine foreach(d): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
+                });
+
                 _universeMeter.Update(Time);
                 SendEmailNotification("End SelectFine()");
 
-                return _longCandidates.Union(shorts);
+                var longs = _longCandidates.OrderByDescending(x => _indicators[x]).Take(NumLong);
+                var shorts = _indicators.Keys.Except(_longCandidates).OrderBy(x => _indicators[x]).Take(NumShort);
+                return longs.Union(shorts);
             }
             catch (Exception e)
             {
@@ -619,8 +725,8 @@ namespace QuantConnect.Algorithm.CSharp
         public class GroupIndicator : BarIndicator
         {
             private List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
-            private decimal _recentSma = decimal.MinValue;
-            private decimal _distantSma = decimal.MinValue;
+            private decimal _recentSma = 1m;
+            private decimal _distantSma = 1m;
             private decimal _openValue = 1m;
 
             public override bool IsReady => _bars.Count == SmaLookbackDays;

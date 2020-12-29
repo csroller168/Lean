@@ -117,17 +117,10 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification("Initialization complete");
         }
 
-        private int debug = 0;
         public override void OnData(Slice slice)
         {
             try
             {
-                if (debug < 5)
-                {
-                    var msg = $"slice count = {slice.Count()}, active count = {ActiveSecurities.Count()}, isdue = {_rebalanceMeter.IsDue(Time)}, isallowed = {IsAllowedToTrade(slice)}";
-                    SendEmailNotification(msg);
-                    debug++;
-                }
                 //HandleVixData(slice);
                 HandleSplits(slice);
 

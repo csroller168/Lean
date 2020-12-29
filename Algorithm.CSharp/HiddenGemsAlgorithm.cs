@@ -140,8 +140,8 @@ namespace QuantConnect.Algorithm.CSharp
             catch (Exception e)
             {
                 var msg = $"Exception: OnData: {e.Message}, {e.StackTrace}";
-                Log(e.Message);
-                SendEmailNotification(e.Message);
+                Log(msg);
+                SendEmailNotification(msg);
             }
         }
 
@@ -149,7 +149,16 @@ namespace QuantConnect.Algorithm.CSharp
         {
             Parallel.ForEach(_indicators, (indicator) =>
             {
-                indicator.Value.UpdateOpen(slice[indicator.Key]);
+                try
+                {
+                    indicator.Value.UpdateOpen(slice[indicator.Key]);
+                }
+                catch(Exception e)
+                {
+                    var msg = $"Exception: UpdateIndicatorOpen: {e.Message}, {e.StackTrace}";
+                    Log(msg);
+                    SendEmailNotification(msg);
+                }
             });
         }
 
@@ -161,11 +170,29 @@ namespace QuantConnect.Algorithm.CSharp
                 numAttemptsToTrade = 0;
                 Parallel.ForEach(changes.RemovedSecurities, (removal) =>
                 {
-                    ClearIndicators(removal.Symbol);
+                    try
+                    {
+                        ClearIndicators(removal.Symbol);
+                    }
+                    catch(Exception e)
+                    {
+                        var msg = $"Exception: OnSecuritiesChanged(removed): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
                 });
                 Parallel.ForEach(changes.AddedSecurities, (addition) =>
                 {
-                    InitIndicators(addition.Symbol);
+                    try
+                    {
+                        InitIndicators(addition.Symbol);
+                    }
+                    catch(Exception e)
+                    {
+                        var msg = $"Exception: OnSecuritiesChanged(added): {e.Message}, {e.StackTrace}";
+                        Log(msg);
+                        SendEmailNotification(msg);
+                    }
                 });
                 
                 SendEmailNotification("End OnSecuritiesChanged()");
@@ -619,8 +646,8 @@ namespace QuantConnect.Algorithm.CSharp
         public class GroupIndicator : BarIndicator
         {
             private List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
-            private decimal _recentSma = decimal.MinValue;
-            private decimal _distantSma = decimal.MinValue;
+            private decimal _recentSma = 1m;
+            private decimal _distantSma = 1m;
             private decimal _openValue = 1m;
 
             public override bool IsReady => _bars.Count == SmaLookbackDays;

@@ -30,11 +30,12 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider submit one for each sector
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
-        private static readonly int[] SectorsAllowed = { 102, 311 }; // { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;
         private static readonly int SmaExclusionDays = 100;
+        private static readonly int MaxSpreadLookbackDays = 90;
+        private static readonly decimal MaxDailySpread = 999m;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 0;
         private static readonly decimal MinDollarVolume = 500000m;
@@ -113,7 +114,8 @@ namespace QuantConnect.Algorithm.CSharp
             {
                 try
                 {
-                    indicator.Value.UpdateOpen(slice[indicator.Key]);
+                    if(slice.ContainsKey(indicator.Key))
+                        indicator.Value.UpdateOpen(slice[indicator.Key]);
                 }
                 catch(Exception e)
                 {
@@ -237,6 +239,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _indicators[x.Key].IsReady
                         && _indicators[x.Key].Momentum > MinLongMomentum
                         && !_indicators[x.Key].ExcludedBySma
+                        && !_indicators[x.Key].ExcludedBySpread
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
                     .OrderByDescending(x => _indicators[x.Key].Momentum)
@@ -246,24 +249,6 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up)));
-
-
-                insights.AddRange(ActiveSecurities
-                    .Where(x => x.Value.IsTradable
-                        && slice.ContainsKey(x.Key)
-                        && !_longCandidates.Contains(x.Key)
-                        && _indicators.ContainsKey(x.Key)
-                        && _indicators[x.Key].IsReady
-                        && _indicators[x.Key].Momentum < MaxShortMomentum
-                        && (slice[x.Key] as BaseData).Price >= MinPrice
-                        )
-                    .OrderBy(x => _indicators[x.Key].Momentum)
-                    .Take(_targetShortCount)
-                    .Select(x => new Insight(
-                            x.Value.Symbol,
-                            RebalancePeriod,
-                            InsightType.Price,
-                            InsightDirection.Down)));
 
                 return insights;
             }
@@ -313,9 +298,7 @@ namespace QuantConnect.Algorithm.CSharp
                     return Universe.Unchanged;
 
                 var eligibleCandidates = candidates
-                    .Where(x => x.HasFundamentalData
-                        //&& x.DollarVolume > MinDollarVolume
-                        )
+                    .Where(x => x.HasFundamentalData)
                     .OrderByDescending(x => x.Volume)
                     .Take(300)
                     .Select(x => x.Symbol)
@@ -345,24 +328,12 @@ namespace QuantConnect.Algorithm.CSharp
                 _longCandidates = candidates
                     .Where(
                         x =>
-                        //SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                        //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        //&&
                         x.MarketCap > MinMarketCap
                         && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)
                     .ToList();
 
-                //var shorts = candidates
-                //    .Where(
-                //        x => !_longCandidates.Contains(x.Symbol)
-                //        && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                //        && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                //        && x.MarketCap < MinMarketCap
-                //        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
-                //        )
-                //    .Select(x => x.Symbol);
                 var shorts = Enumerable.Empty<Symbol>();
                 _universeMeter.Update(Time);
                 SendEmailNotification("End SelectFine()");
@@ -452,16 +423,19 @@ namespace QuantConnect.Algorithm.CSharp
 
         public class GroupIndicator : BarIndicator
         {
-            private List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
+            private readonly List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
+            private readonly List<decimal> _spreads = new List<decimal>(MaxSpreadLookbackDays);
             private decimal _recentSma = 1m;
             private decimal _distantSma = 1m;
             private decimal _exclusionSma = 1m;
             private decimal _openValue = 1m;
+            private decimal _maxDailySpread = -1.0m;
 
             public override bool IsReady => _bars.Count == SmaLookbackDays;
 
             public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
             public bool ExcludedBySma => _openValue < _exclusionSma;
+            public bool ExcludedBySpread => _maxDailySpread > MaxDailySpread;
 
             public GroupIndicator(string name)
                 : base(name) { }
@@ -469,12 +443,19 @@ namespace QuantConnect.Algorithm.CSharp
             protected override decimal ComputeNextValue(IBaseDataBar input)
             {
                 IBaseDataBar lastRemovedBar = null;
+                decimal lastRemovedSpread = -1m;
                 if (IsReady)
                 {
                     lastRemovedBar = _bars[0];
                     _bars.RemoveAt(0);
                 }
+                if (_spreads.Count == MaxSpreadLookbackDays)
+                {
+                    lastRemovedSpread = _spreads[0];
+                    _spreads.Remove(0);
+                }
                 _bars.Add(input);
+                _spreads.Add((input.High - input.Low) / input.Low);
 
                 if (IsReady)
                 {
@@ -483,12 +464,14 @@ namespace QuantConnect.Algorithm.CSharp
                         _recentSma = _bars.Skip(SmaLookbackDays - SmaRecentWindowDays).Average(x => Value(x));
                         _distantSma = _bars.Take(SmaDistantWindowDays).Average(x => Value(x));
                         _exclusionSma = _bars.Skip(SmaLookbackDays - SmaExclusionDays).Average(x => Value(x));
+                        _maxDailySpread = _spreads.Skip(SmaLookbackDays - MaxSpreadLookbackDays).Max();
                     }
                     else
                     {
                         _recentSma = AdjustedAverage(_recentSma, SmaRecentWindowDays, _bars[SmaLookbackDays - SmaRecentWindowDays - 1], input);
                         _distantSma = AdjustedAverage(_distantSma, SmaDistantWindowDays, lastRemovedBar, _bars[SmaDistantWindowDays - 1]);
                         _exclusionSma = AdjustedAverage(_exclusionSma, SmaExclusionDays, _bars[SmaLookbackDays - SmaExclusionDays - 1], input);
+                        _maxDailySpread = AdjustedMax(_maxDailySpread, lastRemovedSpread, _spreads);
                     }
                     return Momentum;
                 }
@@ -525,6 +508,16 @@ namespace QuantConnect.Algorithm.CSharp
                     - oldVal
                     + newVal)
                     / numPeriods;
+            }
+
+            private decimal AdjustedMax(
+                decimal currentMax,
+                decimal oldVal,
+                List<decimal> spreads)
+            {
+                return oldVal < currentMax
+                    ? currentMax
+                    : spreads.Max();
             }
         }
     }

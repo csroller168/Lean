@@ -314,8 +314,10 @@ namespace QuantConnect.Algorithm.CSharp
 
                 var eligibleCandidates = candidates
                     .Where(x => x.HasFundamentalData
-                        && x.DollarVolume > MinDollarVolume
+                        //&& x.DollarVolume > MinDollarVolume
                         )
+                    .OrderByDescending(x => x.Volume)
+                    .Take(300)
                     .Select(x => x.Symbol)
                     .ToList();
                 SendEmailNotification("End SelectCoarse()");
@@ -342,23 +344,26 @@ namespace QuantConnect.Algorithm.CSharp
 
                 _longCandidates = candidates
                     .Where(
-                        x => SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                        && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        && x.MarketCap > MinMarketCap
+                        x =>
+                        //SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                        //&& ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                        //&&
+                        x.MarketCap > MinMarketCap
                         && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)
                     .ToList();
 
-                var shorts = candidates
-                    .Where(
-                        x => !_longCandidates.Contains(x.Symbol)
-                        && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
-                        && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
-                        && x.MarketCap < MinMarketCap
-                        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
-                        )
-                    .Select(x => x.Symbol);
+                //var shorts = candidates
+                //    .Where(
+                //        x => !_longCandidates.Contains(x.Symbol)
+                //        && SectorsAllowed.Contains(x.AssetClassification.MorningstarSectorCode)
+                //        && ExchangesAllowed.Contains(x.SecurityReference.ExchangeId)
+                //        && x.MarketCap < MinMarketCap
+                //        && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value < MinOpRevenueGrowth
+                //        )
+                //    .Select(x => x.Symbol);
+                var shorts = Enumerable.Empty<Symbol>();
                 _universeMeter.Update(Time);
                 SendEmailNotification("End SelectFine()");
 

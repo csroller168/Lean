@@ -15,7 +15,6 @@ using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
 using QuantConnect.Util;
 using QuantConnect.Data.Fundamental;
-using QuantConnect.Data.Custom.CBOE;
 using QuantConnect.Data.Market;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
@@ -30,41 +29,13 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector
         // 
-        //
-        // TODOs:
-        //
-        //  === optimize return performance ===
-        //  reduce drawdown:
-        //      filter for low max drawdown
-        //      low volatility only
-        //          i seem to lose a lot on multiple buy high/sell low thrashings
-        //          smoothing this out will reduce order count and buffer these losses
-        //          i can calculate on rolling basis
-        //          either standard deviation of all returns or just negative returns
-        //              .. or some other volatility measure using whole bar
-        //          test ratio of pos/neg returns?
-        //          std deviation of daily high-low spreads
-        //          std deviation of daily (prev close)-low spreads
-        //      tune vix
-        //      tune short blend
-        //      test hedge with fixed bond fund/gld blend at varying %
-        //      increase shorts when _momentums has more negatives than positives
-        //  multi-period momentum
-        //      calculate long recent/distant window momentum for long-term trend
-        //      calculate short recent/distant window (shorter lookback) for short-term trend
-        //      trade when both up
-        //  try putting the other sector back in
-        //  consider high, low and range (high-low as % of low) simultaneously somehow
-        //      consider:  "price" isn't just daily closes, but a range over periods (daily, weekly, etc)
-
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int[] SectorsAllowed = { 311 }; // { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;
         private static readonly int NumLong = 30;
-        private static readonly int NumShort = 5;
-        private static readonly int VixLookbackDays = 38;
+        private static readonly int NumShort = 0;
         private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap
         private static readonly decimal MaxDrawdown = -0.07m;
@@ -74,7 +45,6 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly object mutexLock = new object();
         private readonly ConcurrentDictionary<Symbol, GroupIndicator> _indicators = new ConcurrentDictionary<Symbol, GroupIndicator>();
         private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
-        private readonly decimal VixMomentumThreshold = 1.4m;
         private readonly decimal MinOpRevenueGrowth = 0m;
         private static TimeSpan RebuildUniversePeriod;
         private static TimeSpan RebalancePeriod;
@@ -82,9 +52,6 @@ namespace QuantConnect.Algorithm.CSharp
         private UpdateMeter _rebalanceMeter;
         private List<Symbol> _longCandidates = new List<Symbol>();
 
-        //http://cache.quantconnect.com/alternative/cboe/vix.csv
-        private List<TradeBar> _vixHistories = new List<TradeBar>();
-        private Symbol _vixSymbol;
         private int _targetLongCount;
         private int _targetShortCount;
         private int numAttemptsToTrade = 0;
@@ -98,8 +65,6 @@ namespace QuantConnect.Algorithm.CSharp
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
 
-            //SetStartDate(2006, 4, 1);
-            //SetEndDate(2020, 1, 1);
             SetStartDate(2011, 1, 1);
             SetEndDate(2013, 1, 1);
             SetCash(100000);
@@ -107,9 +72,6 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-
-            //_vixSymbol = AddData<CBOE>("VIX").Symbol;
-            //InitializeVixHistories();
             SendEmailNotification("Initialization complete");
         }
 
@@ -117,7 +79,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                //HandleVixData(slice);
                 HandleSplits(slice);
 
                 if (!_rebalanceMeter.IsDue(Time)
@@ -205,57 +166,6 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private void InitializeVixHistories()
-        {
-            if (!LiveMode)
-            {
-                _vixHistories = History<CBOE>(_vixSymbol, VixLookbackDays, Resolution.Daily)
-                    .Cast<TradeBar>()
-                    .ToList();
-
-                return;
-            }
-
-            var rawHistories = @"10/07/2020, 29.26, 29.76, 27.94, 28.06
-                10/08/2020, 27.65, 27.99, 24.88, 26.36
-                10/09/2020, 26.20, 26.22, 24.03, 25.00
-                10/12/2020, 25.65, 25.65, 24.14, 25.07
-                10/13/2020, 25.67, 26.93, 25.16, 26.07
-                10/14/2020, 25.72, 27.23, 25.53, 26.40
-                10/15/2020, 27.10, 29.06, 26.82, 26.97
-                10/16/2020, 27.16, 27.46, 26.19, 27.41
-                10/19/2020, 27.36, 29.69, 27.04, 29.18
-                10/20/2020, 28.81, 29.60, 28.29, 29.35
-                10/21/2020, 29.12, 30.55, 28.37, 28.65
-                10/22/2020, 30.10, 30.12, 27.68, 28.11
-                10/23/2020, 28.47, 28.67, 27.26, 27.55
-                10/26/2020, 29.38, 33.68, 29.22, 32.46
-                10/27/2020, 32.04, 33.77, 31.85, 33.35
-                10/28/2020, 34.69, 40.77, 34.68, 40.28
-                10/29/2020, 38.80, 41.16, 35.63, 37.59
-                10/30/2020, 40.81, 41.09, 36.50, 38.02
-                11/02/2020, 38.57, 38.78, 36.13, 37.13
-                11/03/2020, 36.44, 36.44, 34.19, 35.55
-                11/04/2020, 36.79, 36.85, 28.03, 29.57
-                11/05/2020, 27.56, 28.14, 26.04, 27.58
-                11/06/2020, 27.87, 29.44, 24.56, 24.86
-                11/09/2020, 24.80, 25.82, 22.41, 25.75
-                11/10/2020, 25.36, 26.77, 24.35, 24.80
-                11/11/2020, 25.01, 25.12, 22.57, 23.45
-                11/12/2020, 24.39, 27.27, 23.53, 25.35
-                11/13/2020, 24.94, 25.03, 22.74, 23.10
-                11/16/2020, 23.66, 24.08, 22.43, 22.45
-                11/17/2020, 22.84, 24.09, 22.34, 22.71
-                11/18/2020, 22.86, 23.92, 21.66, 23.84";
-            var cboe = new CBOE();
-            var config = SubscriptionManager.SubscriptionDataConfigService.GetSubscriptionDataConfigs(_vixSymbol).First();
-            rawHistories
-                .Split(new[] { '\n' })
-                .Select(x => cboe.Reader(config, x.Trim(), DateTime.MinValue, LiveMode))
-                .ToList()
-                .ForEach(x => _vixHistories.Add(x as TradeBar));
-        }
-
         private void HandleSplits(Slice slice)
         {
             foreach (var split in slice.Splits)
@@ -286,85 +196,8 @@ namespace QuantConnect.Algorithm.CSharp
             }
         }
 
-        private void HandleVixData(Slice slice)
-        {
-            if (!slice.ContainsKey(_vixSymbol))
-                return;
-
-            var vix = slice.Get<CBOE>(_vixSymbol);
-
-            _vixHistories.Add(vix);
-            if (_vixHistories.Count > VixLookbackDays)
-                _vixHistories.Remove(_vixHistories.Single(x => x.Time == _vixHistories.Min(y => y.Time)));
-
-            Plot("vix", "value", vix.Close);
-        }
-
-        private decimal VixMomentum(IEnumerable<TradeBar> vixHistories)
-        {
-            var momentum = vixHistories
-            .OrderByDescending(x => x.Time)
-            .Take(5)
-            .Select(x => x.Price)
-            .Average()
-            /
-            vixHistories
-            .OrderBy(x => x.Time)
-            .Take(5)
-            .Select(x => x.Price)
-            .Average();
-            Plot("vix", "momentum", momentum);
-            return momentum;
-        }
-
         private void SetTargetCounts()
         {
-            //var numPosMomentum = (decimal)_momentums.Count(x => x.Value.Current > 1m);
-            //var numNegMomentum = (decimal)_momentums.Count(x => x.Value.Current < 1m);
-            //var mktStrength = numNegMomentum > 0 ? numPosMomentum / numNegMomentum : 100m;
-            //Plot("MarketStrength", "ratio", mktStrength);
-
-            //if (mktStrength > 5m)
-            //{
-            //    _targetLongCount = NumLong;
-            //    _targetShortCount = 0;
-            //}
-            //else if (mktStrength > 1m)
-            //{
-            //    _targetLongCount = NumLong;
-            //    _targetShortCount = NumShort;
-            //}
-            //else
-            //{
-            //    _targetLongCount = NumShort;
-            //    _targetShortCount = NumLong;
-            //}
-
-
-            //if (_vixHistories.Count() >= 8)
-            //{
-            //    SendEmailNotification("We got vix histories!");
-            //    var pastMomentum = VixMomentum(_vixHistories.OrderBy(x => x.Time).Take(35));
-            //    var currentMomentum = VixMomentum(_vixHistories.OrderBy(x => x.Time).Skip(3));
-            //    Plot("vix", "momentum", currentMomentum);
-
-            //    if (currentMomentum > VixMomentumThreshold
-            //        && currentMomentum > pastMomentum)
-            //    {
-            //        _targetLongCount = NumShort;
-            //        _targetShortCount = NumLong;
-            //        return;
-            //    }
-
-            //    if (currentMomentum > VixMomentumThreshold
-            //        && currentMomentum < pastMomentum)
-            //    {
-            //        _targetLongCount = NumLong;
-            //        _targetShortCount = 0;
-            //        return;
-            //    }
-            //}
-
             _targetLongCount = NumLong;
             _targetShortCount = NumShort;
         }
@@ -390,30 +223,6 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification($"We have positions in: {targetsStr}");
         }
 
-        private bool StopLossTriggered(Slice slice, Symbol symbol)
-        {
-            //if (_stopLosses.ContainsKey(symbol)
-            //    && (Time - _stopLosses[symbol]).Days < SmaRecentWindowDays)
-            //    return true;
-
-            //var max = _indicators[symbol].MaxHigh;
-            //var price = (slice[symbol] as BaseData).Price;
-            //var drawdown = (price - max) / max;
-
-            //if (drawdown < MaxDrawdown) // e.g. -0.3 < -0.1
-            //{
-            //    _stopLosses[symbol] = Time;
-            //    return true;
-            //}
-
-            //var toDelete = _stopLosses
-            //    .Where(x => (Time - x.Value).Days > SmaRecentWindowDays)
-            //    .Select(x => x.Key)
-            //    .ToList();
-            //toDelete.ForEach(x => _stopLosses.Remove(x));
-            return false;
-        }
-
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
@@ -423,16 +232,11 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
-                        //&& _momentums.ContainsKey(x.Key)
-                        //&& _momentums[x.Key].IsReady
-                        //&& _momentums[x.Key].Current > MinLongMomentum
                         && _indicators.ContainsKey(x.Key)
                         && _indicators[x.Key].IsReady
                         && _indicators[x.Key].Momentum > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
-                        && !StopLossTriggered(slice, x.Key)
                         )
-                    //.OrderByDescending(x => _momentums[x.Key].Current)
                     .OrderByDescending(x => _indicators[x.Key].Momentum)
                     .Take(_targetLongCount)
                     .Select(x => new Insight(
@@ -446,15 +250,11 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && !_longCandidates.Contains(x.Key)
-                        //&& _momentums.ContainsKey(x.Key)
-                        //&& _momentums[x.Key].IsReady
-                        //&& _momentums[x.Key].Current < MaxShortMomentum
                         && _indicators.ContainsKey(x.Key)
                         && _indicators[x.Key].IsReady
                         && _indicators[x.Key].Momentum < MaxShortMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
-                    //.OrderBy(x => _momentums[x.Key].Current)
                     .OrderBy(x => _indicators[x.Key].Momentum)
                     .Take(_targetShortCount)
                     .Select(x => new Insight(

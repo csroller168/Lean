@@ -34,6 +34,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;
+        private static readonly int SmaExclusionDays = 100;
         private static readonly int NumLong = 30;
         private static readonly int NumShort = 0;
         private static readonly decimal MinDollarVolume = 500000m;
@@ -235,6 +236,7 @@ namespace QuantConnect.Algorithm.CSharp
                         && _indicators.ContainsKey(x.Key)
                         && _indicators[x.Key].IsReady
                         && _indicators[x.Key].Momentum > MinLongMomentum
+                        && !_indicators[x.Key].ExcludedBySma
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
                     .OrderByDescending(x => _indicators[x.Key].Momentum)
@@ -448,11 +450,13 @@ namespace QuantConnect.Algorithm.CSharp
             private List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
             private decimal _recentSma = 1m;
             private decimal _distantSma = 1m;
+            private decimal _exclusionSma = 1m;
             private decimal _openValue = 1m;
 
             public override bool IsReady => _bars.Count == SmaLookbackDays;
 
             public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
+            public bool ExcludedBySma => _openValue < _exclusionSma;
 
             public GroupIndicator(string name)
                 : base(name) { }
@@ -473,11 +477,13 @@ namespace QuantConnect.Algorithm.CSharp
                     {
                         _recentSma = _bars.Skip(SmaLookbackDays - SmaRecentWindowDays).Average(x => Value(x));
                         _distantSma = _bars.Take(SmaDistantWindowDays).Average(x => Value(x));
+                        _exclusionSma = _bars.Skip(SmaLookbackDays - SmaExclusionDays).Average(x => Value(x));
                     }
                     else
                     {
                         _recentSma = AdjustedAverage(_recentSma, SmaRecentWindowDays, _bars[SmaLookbackDays - SmaRecentWindowDays - 1], input);
                         _distantSma = AdjustedAverage(_distantSma, SmaDistantWindowDays, lastRemovedBar, _bars[SmaDistantWindowDays - 1]);
+                        _exclusionSma = AdjustedAverage(_exclusionSma, SmaExclusionDays, _bars[SmaLookbackDays - SmaExclusionDays - 1], input);
                     }
                     return Momentum;
                 }

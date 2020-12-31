@@ -30,7 +30,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider submit one for each sector
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
-        private static readonly int[] SectorsAllowed = { 311 }; // { 102, 311 };
+        private static readonly int[] SectorsAllowed = { 102, 311 }; // { 102, 311 };
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;

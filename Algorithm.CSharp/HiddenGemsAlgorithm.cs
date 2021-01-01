@@ -230,8 +230,7 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                var insights = new List<Insight>();
-                insights.AddRange(ActiveSecurities
+                var candidateLongs = ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
@@ -242,15 +241,31 @@ namespace QuantConnect.Algorithm.CSharp
                         && !_indicators[x.Key].ExcludedBySpread
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
-                    .OrderByDescending(x => _indicators[x.Key].Momentum)
-                    .Take(_targetLongCount)
+                    .Select(x => x.Key)
+                    .ToList();
+
+                var holdingRanks = Portfolio
+                    .Where(x => x.Value.Invested)
+                    .ToDictionary(
+                        x => x.Key,
+                        x => candidateLongs.FindIndex(y => y == x.Key));
+                var rankThreshold = NumLong;
+                var toSell = holdingRanks
+                    .Where(x => x.Value < 0 || x.Value > rankThreshold)
+                    .Select(x => x.Key);
+                var toHold = holdingRanks.Keys.Except(toSell);
+                var toBuy = candidateLongs
+                    .Where(x => !toHold.Contains(x))
+                    .OrderByDescending(x => _indicators[x].Momentum)
+                    .Take(NumLong - toHold.Count());
+
+                return toBuy
+                    .Union(toHold)
                     .Select(x => new Insight(
-                            x.Value.Symbol,
+                            x,
                             RebalancePeriod,
                             InsightType.Price,
-                            InsightDirection.Up)));
-
-                return insights;
+                            InsightDirection.Up));
             }
             catch (Exception e)
             {

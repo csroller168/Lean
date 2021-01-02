@@ -28,6 +28,11 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //      consider submit one for each sector
+        //
+        // debug
+        //      thoroughly test each feature - why so many trades?
+        //      universe selection, momentum calc, getting insights, making and executing targets
+        //      maybe do 5 stocks for 5-10 days with tons of logging to audit
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int SmaLookbackDays = 126;

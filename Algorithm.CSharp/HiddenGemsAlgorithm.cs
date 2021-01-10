@@ -33,6 +33,10 @@ namespace QuantConnect.Algorithm.CSharp
         //      thoroughly test each feature - why so many trades?
         //      universe selection, momentum calc, getting insights, making and executing targets
         //      maybe do 5 stocks for 5-10 days with tons of logging to audit
+        //
+        //      also, why do we trade at 3PM instead of morning?
+        //
+        //      **** why are we buying IVN?
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int SmaLookbackDays = 126;
@@ -73,7 +77,7 @@ namespace QuantConnect.Algorithm.CSharp
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
 
             SetStartDate(2011, 1, 1);
-            SetEndDate(2013, 1, 1);
+            SetEndDate(2011, 1, 10);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -226,7 +230,7 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("targetCounts", "active", ActiveSecurities.Count());
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
-            var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value)) : "nothing";
+            var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value).OrderBy(x => x)) : "nothing";
             Log(targetsStr);
             SendEmailNotification($"We have positions in: {targetsStr}");
         }
@@ -246,31 +250,47 @@ namespace QuantConnect.Algorithm.CSharp
                         && !_indicators[x.Key].ExcludedBySpread
                         && (slice[x.Key] as BaseData).Price >= MinPrice
                         )
+                    .OrderByDescending(x => _indicators[x.Key].Momentum)
                     .Select(x => x.Key)
                     .ToList();
+
+                for (var i = 0; i < candidateLongs.Count(); i++)
+                {
+                    Log($"{candidateLongs[i].ID.Symbol} {i}");
+                }
 
                 var holdingRanks = Portfolio
                     .Where(x => x.Value.Invested)
                     .ToDictionary(
                         x => x.Key,
                         x => candidateLongs.FindIndex(y => y == x.Key));
-                var rankThreshold = NumLong;
+                var rankThreshold = 40;
                 var toSell = holdingRanks
                     .Where(x => x.Value < 0 || x.Value > rankThreshold)
                     .Select(x => x.Key);
+
+                //foreach(var rank in holdingRanks.OrderByDescending(x => x.Value))
+                //{
+                //    Log($"{rank.Key.ID.Symbol} rank={rank.Value} mom={_indicators[rank.Key].Momentum}");
+                //}
+
                 var toHold = holdingRanks.Keys.Except(toSell);
                 var toBuy = candidateLongs
                     .Where(x => !toHold.Contains(x))
                     .OrderByDescending(x => _indicators[x].Momentum)
                     .Take(NumLong - toHold.Count());
 
-                return toBuy
+                var toOwn = toBuy
                     .Union(toHold)
                     .Select(x => new Insight(
                             x,
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up));
+
+                Log(string.Join(",", toOwn.Select(x => x.Symbol.ID.Symbol).OrderBy(x => x)));
+
+                return toOwn;
             }
             catch (Exception e)
             {

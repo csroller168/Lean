@@ -30,13 +30,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      consider submit one for each sector
         //
         // debug
-        //      thoroughly test each feature - why so many trades?
-        //      universe selection, momentum calc, getting insights, making and executing targets
-        //      maybe do 5 stocks for 5-10 days with tons of logging to audit
-        //
-        //      also, why do we trade at 3PM instead of morning?
-        //
-        //      **** why are we buying IVN?
+        //      ** for some reason, it's trading in things outside of insight collection!  debug that.
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int SmaLookbackDays = 126;
@@ -288,7 +282,7 @@ namespace QuantConnect.Algorithm.CSharp
                             InsightType.Price,
                             InsightDirection.Up));
 
-                Log(string.Join(",", toOwn.Select(x => x.Symbol.ID.Symbol).OrderBy(x => x)));
+                Log("expected: " + string.Join(",", toOwn.Select(x => x.Symbol.ID.Symbol).OrderBy(x => x)));
 
                 return toOwn;
             }

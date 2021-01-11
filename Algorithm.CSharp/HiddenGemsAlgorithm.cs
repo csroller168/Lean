@@ -250,7 +250,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToDictionary(
                         x => x.Key,
                         x => candidateLongs.FindIndex(y => y == x.Key));
-                var rankThreshold = 2 * NumLong;
+                var rankThreshold = 2.5 * NumLong;
                 var toSell = holdingRanks
                     .Where(x => x.Value < 0 || x.Value > rankThreshold)
                     .Select(x => x.Key);

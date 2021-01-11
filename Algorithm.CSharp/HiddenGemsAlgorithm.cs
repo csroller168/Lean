@@ -29,6 +29,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
+        private static readonly string AllowedCountry = "USA";
         private static readonly int SmaLookbackDays = 126;
         private static readonly int SmaRecentWindowDays = 5;
         private static readonly int SmaDistantWindowDays = 50;
@@ -249,7 +250,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .ToDictionary(
                         x => x.Key,
                         x => candidateLongs.FindIndex(y => y == x.Key));
-                var rankThreshold = NumLong;
+                var rankThreshold = 2 * NumLong;
                 var toSell = holdingRanks
                     .Where(x => x.Value < 0 || x.Value > rankThreshold)
                     .Select(x => x.Key);
@@ -347,6 +348,7 @@ namespace QuantConnect.Algorithm.CSharp
                     .Where(
                         x =>
                         x.MarketCap > MinMarketCap
+                        && x.CompanyReference.CountryId == AllowedCountry
                         && x.OperationRatios.OperationRevenueGrowth3MonthAvg.Value > MinOpRevenueGrowth
                         )
                     .Select(x => x.Symbol)

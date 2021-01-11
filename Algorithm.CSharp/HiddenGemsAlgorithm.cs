@@ -27,10 +27,6 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
-        //      consider submit one for each sector
-        //
-        // debug
-        //      ** for some reason, it's trading in things outside of insight collection!  debug that.
         // 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly int SmaLookbackDays = 126;
@@ -71,7 +67,7 @@ namespace QuantConnect.Algorithm.CSharp
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
 
             SetStartDate(2011, 1, 1);
-            SetEndDate(2011, 1, 10);
+            SetEndDate(2013, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;
@@ -248,25 +244,15 @@ namespace QuantConnect.Algorithm.CSharp
                     .Select(x => x.Key)
                     .ToList();
 
-                for (var i = 0; i < candidateLongs.Count(); i++)
-                {
-                    Log($"{candidateLongs[i].ID.Symbol} {i}");
-                }
-
                 var holdingRanks = Portfolio
                     .Where(x => x.Value.Invested)
                     .ToDictionary(
                         x => x.Key,
                         x => candidateLongs.FindIndex(y => y == x.Key));
-                var rankThreshold = 40;
+                var rankThreshold = NumLong;
                 var toSell = holdingRanks
                     .Where(x => x.Value < 0 || x.Value > rankThreshold)
                     .Select(x => x.Key);
-
-                //foreach(var rank in holdingRanks.OrderByDescending(x => x.Value))
-                //{
-                //    Log($"{rank.Key.ID.Symbol} rank={rank.Value} mom={_indicators[rank.Key].Momentum}");
-                //}
 
                 var toHold = holdingRanks.Keys.Except(toSell);
                 var toBuy = candidateLongs
@@ -281,8 +267,6 @@ namespace QuantConnect.Algorithm.CSharp
                             RebalancePeriod,
                             InsightType.Price,
                             InsightDirection.Up));
-
-                Log("expected: " + string.Join(",", toOwn.Select(x => x.Symbol.ID.Symbol).OrderBy(x => x)));
 
                 return toOwn;
             }

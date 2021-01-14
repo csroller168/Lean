@@ -67,8 +67,8 @@ namespace QuantConnect.Algorithm.CSharp
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
 
-            SetStartDate(2009, 11, 1);
-            SetEndDate(2012, 11, 1);
+            SetStartDate(2008, 1, 1);
+            SetEndDate(2013, 1, 1);
             SetCash(100000);
 
             UniverseSettings.FillForward = true;

@@ -226,11 +226,24 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification($"We have positions in: {targetsStr}");
         }
 
+        private IEnumerable<Symbol> RankSymbols(IEnumerable<Symbol> symbols)
+        {
+            var indicators = _indicators.Where(x => symbols.Contains(x.Key)).ToList();
+            var momentumOrder = indicators.OrderByDescending(x => x.Value.Momentum).ToList();
+            var spreadOrder = indicators.OrderBy(x => x.Value.MaxDailySpread).ToList();
+            var ranks = indicators.ToDictionary(
+                x => x.Key,
+                x =>
+                    0.55 * momentumOrder.FindIndex(y => x.Key == y.Key)
+                    + 0.45 * spreadOrder.FindIndex(y => x.Key == y.Key));
+            return symbols.OrderBy(x => ranks[x]);
+        }
+
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
             {
-                var candidateLongs = ActiveSecurities
+                var candidateLongs = RankSymbols(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
@@ -239,10 +252,8 @@ namespace QuantConnect.Algorithm.CSharp
                         && _indicators[x.Key].Momentum > MinLongMomentum
                         && !_indicators[x.Key].ExcludedBySma
                         && !_indicators[x.Key].ExcludedBySpread
-                        && (slice[x.Key] as BaseData).Price >= MinPrice
-                        )
-                    .OrderByDescending(x => _indicators[x.Key].Momentum)
-                    .Select(x => x.Key)
+                        && (slice[x.Key] as BaseData).Price >= MinPrice)
+                    .Select(x => x.Key))
                     .ToList();
 
                 var holdingRanks = Portfolio
@@ -454,6 +465,7 @@ namespace QuantConnect.Algorithm.CSharp
             public override bool IsReady => _bars.Count == SmaLookbackDays;
 
             public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
+            public decimal MaxDailySpread => _maxDailySpread;
             public bool ExcludedBySma => _openValue < _exclusionSma;
             public bool ExcludedBySpread => _maxDailySpread > MaxDailySpread;
 

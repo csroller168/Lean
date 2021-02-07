@@ -40,6 +40,8 @@ namespace QuantConnect.Lean.Engine.Setup
     /// </summary>
     public class BrokerageSetupHandler : ISetupHandler
     {
+        private bool _notifiedDefaultResolutionUsed;
+
         /// <summary>
         /// The worker thread instance the setup handler should use
         /// </summary>
@@ -195,13 +197,13 @@ namespace QuantConnect.Lean.Engine.Setup
                     return false;
                 }
 
-                var message = $"{brokerage.Name} account base currency: {brokerage.AccountBaseCurrency}";
+                var message = $"{brokerage.Name} account base currency: {brokerage.AccountBaseCurrency ?? algorithm.AccountCurrency}";
 
                 Log.Trace($"BrokerageSetupHandler.Setup(): {message}");
 
                 algorithm.Debug(message);
 
-                if (brokerage.AccountBaseCurrency != algorithm.AccountCurrency)
+                if (brokerage.AccountBaseCurrency != null && brokerage.AccountBaseCurrency != algorithm.AccountCurrency)
                 {
                     algorithm.SetAccountCurrency(brokerage.AccountBaseCurrency);
                 }
@@ -236,11 +238,21 @@ namespace QuantConnect.Lean.Engine.Setup
                         //Set the source impl for the event scheduling
                         algorithm.Schedule.SetEventSchedule(parameters.RealTimeHandler);
 
+                        var optionChainProvider = Composer.Instance.GetPart<IOptionChainProvider>();
+                        if (optionChainProvider == null)
+                        {
+                            optionChainProvider = new CachingOptionChainProvider(new LiveOptionChainProvider());
+                        }
                         // set the option chain provider
-                        algorithm.SetOptionChainProvider(new CachingOptionChainProvider(new LiveOptionChainProvider()));
+                        algorithm.SetOptionChainProvider(optionChainProvider);
 
+                        var futureChainProvider = Composer.Instance.GetPart<IFutureChainProvider>();
+                        if (futureChainProvider == null)
+                        {
+                            futureChainProvider = new CachingFutureChainProvider(new LiveFutureChainProvider());
+                        }
                         // set the future chain provider
-                        algorithm.SetFutureChainProvider(new CachingFutureChainProvider(new LiveFutureChainProvider()));
+                        algorithm.SetFutureChainProvider(futureChainProvider);
 
                         // set the object store
                         algorithm.SetObjectStore(parameters.ObjectStore);
@@ -271,7 +283,7 @@ namespace QuantConnect.Lean.Engine.Setup
                         AddInitializationError(err.ToString(), err);
                     }
                 }, controls.RamAllocation,
-                    sleepIntervalMillis: 50); // entire system is waiting on this, so be as fast as possible
+                    sleepIntervalMillis: 100); // entire system is waiting on this, so be as fast as possible
 
                 if (!initializeComplete)
                 {
@@ -300,14 +312,13 @@ namespace QuantConnect.Lean.Engine.Setup
 
                 var supportedSecurityTypes = new HashSet<SecurityType>
                 {
-                    SecurityType.Equity, SecurityType.Forex, SecurityType.Cfd, SecurityType.Option, SecurityType.Future, SecurityType.Crypto
+                    SecurityType.Equity, SecurityType.Forex, SecurityType.Cfd, SecurityType.Option, SecurityType.Future, SecurityType.FutureOption, SecurityType.Crypto
                 };
-                var minResolution = new Lazy<Resolution>(() => algorithm.Securities.Select(x => x.Value.Resolution).DefaultIfEmpty(Resolution.Second).Min());
 
                 Log.Trace("BrokerageSetupHandler.Setup(): Fetching open orders from brokerage...");
                 try
                 {
-                    GetOpenOrders(algorithm, parameters.ResultHandler, parameters.TransactionHandler, brokerage, supportedSecurityTypes, minResolution.Value);
+                    GetOpenOrders(algorithm, parameters.ResultHandler, parameters.TransactionHandler, brokerage, supportedSecurityTypes);
                 }
                 catch (Exception err)
                 {
@@ -340,7 +351,7 @@ namespace QuantConnect.Lean.Engine.Setup
                             continue;
                         }
 
-                        AddUnrequestedSecurity(algorithm, holding.Symbol, minResolution.Value);
+                        AddUnrequestedSecurity(algorithm, holding.Symbol);
 
                         var security = algorithm.Securities[holding.Symbol];
                         var exchangeTime = utcNow.ConvertFromUtc(security.Exchange.TimeZone);
@@ -399,26 +410,34 @@ namespace QuantConnect.Lean.Engine.Setup
             return Errors.Count == 0;
         }
 
-        private static void AddUnrequestedSecurity(IAlgorithm algorithm, Symbol symbol, Resolution minResolution)
+        private void AddUnrequestedSecurity(IAlgorithm algorithm, Symbol symbol)
         {
             if (!algorithm.Portfolio.ContainsKey(symbol))
             {
+                var resolution = algorithm.UniverseSettings.Resolution;
+                if (!_notifiedDefaultResolutionUsed)
+                {
+                    // let's just send the message once
+                    _notifiedDefaultResolutionUsed = true;
+                    algorithm.Debug($"Will use UniverseSettings.Resolution value '{resolution}' for automatically added securities for open orders and holdings.");
+                }
+
                 Log.Trace("BrokerageSetupHandler.Setup(): Adding unrequested security: " + symbol.Value);
 
-                if (symbol.SecurityType == SecurityType.Option)
+                if (symbol.SecurityType == SecurityType.Option || symbol.SecurityType == SecurityType.FutureOption)
                 {
                     // add current option contract to the system
-                    algorithm.AddOptionContract(symbol, minResolution, true, 1.0m);
+                    algorithm.AddOptionContract(symbol, resolution, true, 1.0m);
                 }
                 else if (symbol.SecurityType == SecurityType.Future)
                 {
                     // add current future contract to the system
-                    algorithm.AddFutureContract(symbol, minResolution, true, 1.0m);
+                    algorithm.AddFutureContract(symbol, resolution, true, 1.0m);
                 }
                 else
                 {
                     // for items not directly requested set leverage to 1 and at the min resolution
-                    algorithm.AddSecurity(symbol.SecurityType, symbol.Value, minResolution, symbol.ID.Market, true, 1.0m, false);
+                    algorithm.AddSecurity(symbol.SecurityType, symbol.Value, resolution, symbol.ID.Market, true, 1.0m, false);
                 }
             }
         }
@@ -431,9 +450,8 @@ namespace QuantConnect.Lean.Engine.Setup
         /// <param name="transactionHandler">The configurated transaction handler</param>
         /// <param name="brokerage">Brokerage output instance</param>
         /// <param name="supportedSecurityTypes">The list of supported security types</param>
-        /// <param name="minResolution">The resolution for the security to add, if required</param>
         protected void GetOpenOrders(IAlgorithm algorithm, IResultHandler resultHandler, ITransactionHandler transactionHandler, IBrokerage brokerage,
-            HashSet<SecurityType> supportedSecurityTypes, Resolution minResolution)
+            HashSet<SecurityType> supportedSecurityTypes)
         {
             // populate the algorithm with the account's outstanding orders
             var openOrders = brokerage.GetOpenOrders();
@@ -460,7 +478,7 @@ namespace QuantConnect.Lean.Engine.Setup
                     continue;
                 }
 
-                AddUnrequestedSecurity(algorithm, order.Symbol, minResolution);
+                AddUnrequestedSecurity(algorithm, order.Symbol);
             }
         }
 

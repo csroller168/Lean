@@ -45,8 +45,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
         private static readonly object mutexLock = new object();
-        private readonly ConcurrentDictionary<Symbol, GroupIndicator> _indicators = new ConcurrentDictionary<Symbol, GroupIndicator>();
-        private readonly Dictionary<Symbol, DateTime> _stopLosses = new Dictionary<Symbol, DateTime>();
+        private readonly ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly decimal MinOpRevenueGrowth = 0m;
         private static TimeSpan RebuildUniversePeriod;
         private static TimeSpan RebalancePeriod;
@@ -92,7 +91,6 @@ namespace QuantConnect.Algorithm.CSharp
                     return;
 
                 SendEmailNotification("Begin OnData()");
-                UpdateIndicatorOpen(slice);
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
@@ -106,24 +104,6 @@ namespace QuantConnect.Algorithm.CSharp
                 Log(msg);
                 SendEmailNotification(msg);
             }
-        }
-
-        private void UpdateIndicatorOpen(Slice slice)
-        {
-            Parallel.ForEach(_indicators, (indicator) =>
-            {
-                try
-                {
-                    if(slice.ContainsKey(indicator.Key))
-                        indicator.Value.UpdateOpen(slice[indicator.Key]);
-                }
-                catch(Exception e)
-                {
-                    var msg = $"Exception: UpdateIndicatorOpen: {e.Message}, {e.StackTrace}";
-                    Log(msg);
-                    SendEmailNotification(msg);
-                }
-            });
         }
 
         public override void OnSecuritiesChanged(SecurityChanges changes)
@@ -226,61 +206,82 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification($"We have positions in: {targetsStr}");
         }
 
-        private IEnumerable<Symbol> RankSymbols(IEnumerable<Symbol> symbols)
-        {
-            var indicators = _indicators.Where(x => symbols.Contains(x.Key)).ToList();
-            var momentumOrder = indicators.OrderByDescending(x => x.Value.Momentum).ToList();
-            var spreadOrder = indicators.OrderBy(x => x.Value.MaxDailySpread).ToList();
-            var ranks = indicators.ToDictionary(
-                x => x.Key,
-                x =>
-                    0.55 * momentumOrder.FindIndex(y => x.Key == y.Key)
-                    + 0.45 * spreadOrder.FindIndex(y => x.Key == y.Key));
-            return symbols.OrderBy(x => ranks[x]);
-        }
+        //private IEnumerable<Symbol> RankSymbols(IEnumerable<Symbol> symbols)
+        //{
+        //    var indicators = _indicators.Where(x => symbols.Contains(x.Key)).ToList();
+        //    var momentumOrder = indicators.OrderByDescending(x => x.Value.Momentum).ToList();
+        //    var spreadOrder = indicators.OrderBy(x => x.Value.MaxDailySpread).ToList();
+        //    var ranks = indicators.ToDictionary(
+        //        x => x.Key,
+        //        x =>
+        //            0.55 * momentumOrder.FindIndex(y => x.Key == y.Key)
+        //            + 0.45 * spreadOrder.FindIndex(y => x.Key == y.Key));
+        //    return symbols.OrderBy(x => ranks[x]);
+        //}
 
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
             {
-                var candidateLongs = RankSymbols(ActiveSecurities
+                var insights = new List<Insight>();
+                insights.AddRange(ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
-                        && _indicators.ContainsKey(x.Key)
-                        && _indicators[x.Key].IsReady
-                        && _indicators[x.Key].Momentum > MinLongMomentum
-                        && !_indicators[x.Key].ExcludedBySma
-                        && !_indicators[x.Key].ExcludedBySpread
+                        && _momentums.ContainsKey(x.Key)
+                        && _momentums[x.Key].IsReady
+                        && _momentums[x.Key].Current > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice)
-                    .Select(x => x.Key))
-                    .ToList();
+                    .OrderByDescending(x => _momentums[x.Key].Current)
+                    .Take(_targetLongCount)
+                        .Select(x => new Insight(
+                                x.Key,
+                                RebalancePeriod,
+                                InsightType.Price,
+                                InsightDirection.Up)));
+                return insights;
 
-                var holdingRanks = Portfolio
-                    .Where(x => x.Value.Invested)
-                    .ToDictionary(
-                        x => x.Key,
-                        x => candidateLongs.FindIndex(y => y == x.Key));
-                var rankThreshold = 2.5 * NumLong;
-                var toSell = holdingRanks
-                    .Where(x => x.Value < 0 || x.Value > rankThreshold)
-                    .Select(x => x.Key);
 
-                var toHold = holdingRanks.Keys.Except(toSell);
-                var toBuy = candidateLongs
-                    .Where(x => !toHold.Contains(x))
-                    .OrderByDescending(x => _indicators[x].Momentum)
-                    .Take(NumLong - toHold.Count());
 
-                var toOwn = toBuy
-                    .Union(toHold)
-                    .Select(x => new Insight(
-                            x,
-                            RebalancePeriod,
-                            InsightType.Price,
-                            InsightDirection.Up));
 
-                return toOwn;
+                //var candidateLongs = RankSymbols(ActiveSecurities
+                //    .Where(x => x.Value.IsTradable
+                //        && slice.ContainsKey(x.Key)
+                //        && _longCandidates.Contains(x.Key)
+                //        && _momentums.ContainsKey(x.Key)
+                //        && _indicators[x.Key].IsReady
+                //        && _indicators[x.Key].Momentum > MinLongMomentum
+                //        && !_indicators[x.Key].ExcludedBySma
+                //        && !_indicators[x.Key].ExcludedBySpread
+                //        && (slice[x.Key] as BaseData).Price >= MinPrice)
+                //    .Select(x => x.Key))
+                //    .ToList();
+
+                //var holdingRanks = Portfolio
+                //    .Where(x => x.Value.Invested)
+                //    .ToDictionary(
+                //        x => x.Key,
+                //        x => candidateLongs.FindIndex(y => y == x.Key));
+                //var rankThreshold = 2.5 * NumLong;
+                //var toSell = holdingRanks
+                //    .Where(x => x.Value < 0 || x.Value > rankThreshold)
+                //    .Select(x => x.Key);
+
+                //var toHold = holdingRanks.Keys.Except(toSell);
+                //var toBuy = candidateLongs
+                //    .Where(x => !toHold.Contains(x))
+                //    .OrderByDescending(x => _indicators[x].Momentum)
+                //    .Take(NumLong - toHold.Count());
+
+                //var toOwn = toBuy
+                //    .Union(toHold)
+                //    .Select(x => new Insight(
+                //            x,
+                //            RebalancePeriod,
+                //            InsightType.Price,
+                //            InsightDirection.Up));
+
+                //return toOwn;
             }
             catch (Exception e)
             {
@@ -293,29 +294,24 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void InitIndicators(Symbol symbol)
         {
-            var groupIndicator = GetIndicator(symbol, SmaLookbackDays, Resolution.Daily);
-            _indicators[symbol] = groupIndicator;
+            var currentSma = SMA(symbol, SmaRecentWindowDays, Resolution.Daily);
+            var distantSma = SMA(symbol, SmaDistantWindowDays, Resolution.Daily);
+            var pastSma = new Delay(SmaLookbackDays - SmaDistantWindowDays).Of(distantSma);
+            var momentum = currentSma.Over(pastSma);
+            _momentums[symbol] = momentum;
 
             var history = History(symbol, SmaLookbackDays, Resolution.Daily);
             foreach(var bar in history)
             {
-                groupIndicator.Update(bar);
+                currentSma.Update(bar.EndTime, bar.Close);
+                distantSma.Update(bar.EndTime, bar.Close);
             }
         }
 
         private void ClearIndicators(Symbol symbol)
         {
-            GroupIndicator unused;
-            _indicators.TryRemove(symbol, out unused);
-        }
-
-        private GroupIndicator GetIndicator(Symbol symbol, int period, Resolution? resolution = null, Func<IBaseData, IBaseDataBar> selector = null)
-        {
-            var name = CreateIndicatorName(symbol, $"Group({period})", resolution);
-            var indicator = new GroupIndicator(name);
-            RegisterIndicator(symbol, indicator, resolution, selector);
-
-            return indicator;
+            CompositeIndicator<IndicatorDataPoint> unused;
+            _momentums.TryRemove(symbol, out unused);
         }
 
         private IEnumerable<Symbol> SelectCoarse(IEnumerable<CoarseFundamental> candidates)
@@ -449,107 +445,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && !targets.Any(y => y.Symbol.Equals(x.Key)))
                     .Select(x => PortfolioTarget.Percent(algorithm, x.Key, 0)));
                 base.Execute(algorithm, adjustedTargets.ToArray());
-            }
-        }
-
-        public class GroupIndicator : BarIndicator
-        {
-            private readonly List<IBaseDataBar> _bars = new List<IBaseDataBar>(SmaLookbackDays);
-            private readonly List<decimal> _spreads = new List<decimal>(MaxSpreadLookbackDays);
-            private decimal _recentSma = 1m;
-            private decimal _distantSma = 1m;
-            private decimal _exclusionSma = 1m;
-            private decimal _openValue = 1m;
-            private decimal _maxDailySpread = -1.0m;
-
-            public override bool IsReady => _bars.Count == SmaLookbackDays;
-
-            public decimal Momentum => AdjustedAverage(_recentSma, SmaRecentWindowDays, 0m, _openValue) / _distantSma;
-            public decimal MaxDailySpread => _maxDailySpread;
-            public bool ExcludedBySma => _openValue < _exclusionSma;
-            public bool ExcludedBySpread => _maxDailySpread > MaxDailySpread;
-
-            public GroupIndicator(string name)
-                : base(name) { }
-
-            protected override decimal ComputeNextValue(IBaseDataBar input)
-            {
-                IBaseDataBar lastRemovedBar = null;
-                decimal lastRemovedSpread = -1m;
-                if (IsReady)
-                {
-                    lastRemovedBar = _bars[0];
-                    _bars.RemoveAt(0);
-                }
-                if (_spreads.Count == MaxSpreadLookbackDays)
-                {
-                    lastRemovedSpread = _spreads[0];
-                    _spreads.Remove(0);
-                }
-                _bars.Add(input);
-                _spreads.Add((input.High - input.Low) / input.Low);
-
-                if (IsReady)
-                {
-                    if (lastRemovedBar == null)
-                    {
-                        _recentSma = _bars.Skip(SmaLookbackDays - SmaRecentWindowDays).Average(x => Value(x));
-                        _distantSma = _bars.Take(SmaDistantWindowDays).Average(x => Value(x));
-                        _exclusionSma = _bars.Skip(SmaLookbackDays - SmaExclusionDays).Average(x => Value(x));
-                        _maxDailySpread = _spreads.Skip(SmaLookbackDays - MaxSpreadLookbackDays).Max();
-                    }
-                    else
-                    {
-                        _recentSma = AdjustedAverage(_recentSma, SmaRecentWindowDays, _bars[SmaLookbackDays - SmaRecentWindowDays - 1], input);
-                        _distantSma = AdjustedAverage(_distantSma, SmaDistantWindowDays, lastRemovedBar, _bars[SmaDistantWindowDays - 1]);
-                        _exclusionSma = AdjustedAverage(_exclusionSma, SmaExclusionDays, _bars[SmaLookbackDays - SmaExclusionDays - 1], input);
-                        _maxDailySpread = AdjustedMax(_maxDailySpread, lastRemovedSpread, _spreads);
-                    }
-                    return Momentum;
-                }
-
-                return 1m;
-            }
-
-            internal void UpdateOpen(IBaseDataBar bar)
-            {
-                _openValue = Value(bar);
-            }
-
-            private decimal Value(IBaseDataBar bar)
-            {
-                return bar.High;
-            }
-
-            private decimal AdjustedAverage(
-                decimal currentAvg,
-                int numPeriods,
-                IBaseDataBar oldBar,
-                IBaseDataBar newBar)
-            {
-                return AdjustedAverage(currentAvg, numPeriods, Value(oldBar), Value(newBar));
-            }
-
-            private decimal AdjustedAverage(
-                decimal currentAvg,
-                int numPeriods,
-                decimal oldVal,
-                decimal newVal)
-            {
-                return ((currentAvg * numPeriods)
-                    - oldVal
-                    + newVal)
-                    / numPeriods;
-            }
-
-            private decimal AdjustedMax(
-                decimal currentMax,
-                decimal oldVal,
-                List<decimal> spreads)
-            {
-                return oldVal < currentMax
-                    ? currentMax
-                    : spreads.Max();
             }
         }
     }

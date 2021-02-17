@@ -35,6 +35,7 @@ namespace QuantConnect.Algorithm.CSharp
         //      test more universe filters (market cap, dollar volume, volatility, etc.)
         //      open only when vix momentum < 2
         //      only open when most stocks >= SMA(100)
+        //      only buy once per week
         
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly string AllowedCountry = "USA";
@@ -52,6 +53,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly decimal MaxShortMomentum = 1m;
         private static readonly decimal MinLongMomentum = 1m;
         private static readonly decimal MinPrice = 5m;
+        private static readonly decimal RankSellMargin = 1.5m;
         private static readonly object mutexLock = new object();
         private readonly ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>> _momentums = new ConcurrentDictionary<Symbol, CompositeIndicator<IndicatorDataPoint>>();
         private readonly decimal MinOpRevenueGrowth = 0m;
@@ -214,25 +216,11 @@ namespace QuantConnect.Algorithm.CSharp
             SendEmailNotification($"We have positions in: {targetsStr}");
         }
 
-        //private IEnumerable<Symbol> RankSymbols(IEnumerable<Symbol> symbols)
-        //{
-        //    var indicators = _indicators.Where(x => symbols.Contains(x.Key)).ToList();
-        //    var momentumOrder = indicators.OrderByDescending(x => x.Value.Momentum).ToList();
-        //    var spreadOrder = indicators.OrderBy(x => x.Value.MaxDailySpread).ToList();
-        //    var ranks = indicators.ToDictionary(
-        //        x => x.Key,
-        //        x =>
-        //            0.55 * momentumOrder.FindIndex(y => x.Key == y.Key)
-        //            + 0.45 * spreadOrder.FindIndex(y => x.Key == y.Key));
-        //    return symbols.OrderBy(x => ranks[x]);
-        //}
-
         private IEnumerable<Insight> GetInsights(Slice slice)
         {
             try
             {
-                var insights = new List<Insight>();
-                insights.AddRange(ActiveSecurities
+                var candidateLongs = ActiveSecurities
                     .Where(x => x.Value.IsTradable
                         && slice.ContainsKey(x.Key)
                         && _longCandidates.Contains(x.Key)
@@ -241,55 +229,34 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].Current > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice)
                     .OrderByDescending(x => _momentums[x.Key].Current)
-                    .Take(_targetLongCount)
-                        .Select(x => new Insight(
-                                x.Key,
-                                RebalancePeriod,
-                                InsightType.Price,
-                                InsightDirection.Up)));
+
+                    .ToList();
+
+                var holdingRanks = Portfolio
+                    .Where(x => x.Value.Invested)
+                    .ToDictionary(
+                        x => x.Key,
+                        x => candidateLongs.FindIndex(y => y.Key == x.Key));
+                var rankThreshold = RankSellMargin * NumLong;
+                var toSell = holdingRanks
+                    .Where(x => x.Value < 0 || x.Value > rankThreshold)
+                    .Select(x => x.Key);
+                var toHold = holdingRanks.Keys.Except(toSell);
+                var toBuy = candidateLongs
+                    .Where(x => !toHold.Contains(x.Key))
+                    .OrderByDescending(x => _momentums[x.Key].Current)
+                    .Take(NumLong - toHold.Count())
+                    .Select(x => x.Key);
+
+                var insights = toBuy
+                    .Union(toHold)
+                    .Select(x => new Insight(
+                            x,
+                            RebalancePeriod,
+                            InsightType.Price,
+                            InsightDirection.Up));
+
                 return insights;
-
-
-
-
-                //var candidateLongs = RankSymbols(ActiveSecurities
-                //    .Where(x => x.Value.IsTradable
-                //        && slice.ContainsKey(x.Key)
-                //        && _longCandidates.Contains(x.Key)
-                //        && _momentums.ContainsKey(x.Key)
-                //        && _indicators[x.Key].IsReady
-                //        && _indicators[x.Key].Momentum > MinLongMomentum
-                //        && !_indicators[x.Key].ExcludedBySma
-                //        && !_indicators[x.Key].ExcludedBySpread
-                //        && (slice[x.Key] as BaseData).Price >= MinPrice)
-                //    .Select(x => x.Key))
-                //    .ToList();
-
-                //var holdingRanks = Portfolio
-                //    .Where(x => x.Value.Invested)
-                //    .ToDictionary(
-                //        x => x.Key,
-                //        x => candidateLongs.FindIndex(y => y == x.Key));
-                //var rankThreshold = 2.5 * NumLong;
-                //var toSell = holdingRanks
-                //    .Where(x => x.Value < 0 || x.Value > rankThreshold)
-                //    .Select(x => x.Key);
-
-                //var toHold = holdingRanks.Keys.Except(toSell);
-                //var toBuy = candidateLongs
-                //    .Where(x => !toHold.Contains(x))
-                //    .OrderByDescending(x => _indicators[x].Momentum)
-                //    .Take(NumLong - toHold.Count());
-
-                //var toOwn = toBuy
-                //    .Union(toHold)
-                //    .Select(x => new Insight(
-                //            x,
-                //            RebalancePeriod,
-                //            InsightType.Price,
-                //            InsightDirection.Up));
-
-                //return toOwn;
             }
             catch (Exception e)
             {

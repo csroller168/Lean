@@ -28,13 +28,13 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // short-term TODOs:
-        //      test hedge with shorts
+        //      tune static params
         //      test hedge with vix
-        //      test only sell with SPY > SMA(100)
-        //      test more universe filters (market cap, dollar volume, volatility, etc.)
+        //      test no buying when SPY < SMA(100)
+        //      test different universe filters(market cap, dollar volume, volatility, etc.)
         //      open only when vix momentum < 2
         //      only open when most stocks >= SMA(100)
-        
+
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly string AllowedCountry = "USA";
         private static readonly int SmaLookbackDays = 126;

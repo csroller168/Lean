@@ -28,7 +28,6 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // short-term TODOs:
-        //      tune static params
         //      test hedge with vix
         //      test no buying when SPY < SMA(100)
         //      test different universe filters(market cap, dollar volume, volatility, etc.)
@@ -63,7 +62,8 @@ namespace QuantConnect.Algorithm.CSharp
 
         private int _targetLongCount;
         private int _targetShortCount;
-        private int numAttemptsToTrade = 0;
+        private int _numAttemptsToTrade = 0;
+        private decimal _leverage = 1m;
 
         public override void Initialize()
         {
@@ -119,7 +119,7 @@ namespace QuantConnect.Algorithm.CSharp
             try
             {
                 SendEmailNotification("Start OnSecuritiesChanged()");
-                numAttemptsToTrade = 0;
+                _numAttemptsToTrade = 0;
                 Parallel.ForEach(changes.RemovedSecurities, (removal) =>
                 {
                     try
@@ -170,7 +170,7 @@ namespace QuantConnect.Algorithm.CSharp
             if (!LiveMode)
                 return true;
 
-            if (numAttemptsToTrade == 0)
+            if (_numAttemptsToTrade == 0)
             {
                 SendEmailNotification("IsAllowedToTrade...");
             }
@@ -178,9 +178,9 @@ namespace QuantConnect.Algorithm.CSharp
             lock (mutexLock)
             {
                 if (slice.Count < ActiveSecurities.Count
-                    && numAttemptsToTrade < NumLong / 3)
+                    && _numAttemptsToTrade < NumLong / 3)
                 {
-                    numAttemptsToTrade++;
+                    _numAttemptsToTrade++;
                     return false;
                 }
                 return true;
@@ -195,18 +195,25 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void Rebalance(Insight[] insights)
         {
+            var medianMomentum = _momentums.Values.Median(x => x.Current);
+            if (medianMomentum < 0.8m) _leverage = 0.2m;
+            else if (medianMomentum < 1m) _leverage = 0.6m;
+            else _leverage = 1m;
+
             var shortCount = insights.Count(x => x.Direction == InsightDirection.Down);
             var longTargets = insights
                 .Where(x => x.Direction == InsightDirection.Up)
-                .Select(x => PortfolioTarget.Percent(this, x.Symbol, 1.0m / (_targetLongCount + shortCount)));
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, _leverage / (_targetLongCount + shortCount)));
             var shortTargets = insights
                 .Where(x => x.Direction == InsightDirection.Down)
-                .Select(x => PortfolioTarget.Percent(this, x.Symbol, -1.0m / (NumLong + NumShort)));
+                .Select(x => PortfolioTarget.Percent(this, x.Symbol, -_leverage / (NumLong + NumShort)));
             var targets = longTargets.Union(shortTargets);
 
             Plot("targetCounts", "longs", longTargets.Count());
             Plot("targetCounts", "shorts", shortTargets.Count());
             Plot("targetCounts", "active", ActiveSecurities.Count());
+            Plot("momentum", "median", _momentums.Values.Median(x => x.Current));
+            Plot("momentum", "leverage", _leverage);
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value).OrderBy(x => x)) : "nothing";

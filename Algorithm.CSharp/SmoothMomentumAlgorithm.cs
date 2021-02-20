@@ -28,6 +28,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // short-term TODOs:
+        //      play more with momentum-based leverage
+        //          slope of median momentum instead of raw value
+        //          add a margin for change to avoid thrashing
         //      test hedge with vix
         //      test no buying when SPY < SMA(100)
         //      test different universe filters(market cap, dollar volume, volatility, etc.)

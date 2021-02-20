@@ -29,6 +29,8 @@ namespace QuantConnect.Algorithm.CSharp
         //
         // short-term TODOs:
         //      play more with momentum-based leverage
+        //          debug whether my execution method works
+        //              it needs special logic to force rebal on leverage change
         //          slope of median momentum instead of raw value
         //          add a margin for change to avoid thrashing
         //      test hedge with vix
@@ -196,13 +198,19 @@ namespace QuantConnect.Algorithm.CSharp
             _targetShortCount = NumShort;
         }
 
+        private bool SetLeverage()
+        {
+            var oldLeverage = _leverage;
+            var medianMomentum = _momentums.Values.Median(x => x.Current);
+            if (medianMomentum < 0.795m) _leverage = 0.2m;
+            else if (medianMomentum > 0.805m && medianMomentum < 0.995m) _leverage = 0.6m;
+            else if (medianMomentum > 1.05m) _leverage = 1m;
+            return oldLeverage != _leverage;
+        }
+
         private void Rebalance(Insight[] insights)
         {
-            var medianMomentum = _momentums.Values.Median(x => x.Current);
-            if (medianMomentum < 0.8m) _leverage = 0.2m;
-            else if (medianMomentum < 1m) _leverage = 0.6m;
-            else _leverage = 1m;
-
+            var leverageChanged = SetLeverage();
             var shortCount = insights.Count(x => x.Direction == InsightDirection.Down);
             var longTargets = insights
                 .Where(x => x.Direction == InsightDirection.Up)
@@ -218,7 +226,7 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("momentum", "median", _momentums.Values.Median(x => x.Current));
             Plot("momentum", "leverage", _leverage);
 
-            new SmartImmediateExecutionModel().Execute(this, targets.ToArray());
+            new SmartImmediateExecutionModel().Execute(this, targets.ToArray(), leverageChanged);
             var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value).OrderBy(x => x)) : "nothing";
             Log(targetsStr);
             SendEmailNotification($"We have positions in: {targetsStr}");
@@ -415,12 +423,15 @@ namespace QuantConnect.Algorithm.CSharp
 
         private class SmartImmediateExecutionModel : ImmediateExecutionModel
         {
-            public override void Execute(QCAlgorithm algorithm, IPortfolioTarget[] targets)
+            public void Execute(QCAlgorithm algorithm, IPortfolioTarget[] targets, bool forceRebalance)
             {
                 var adjustedTargets = targets.ToList();
-                adjustedTargets.RemoveAll(x =>
-                    algorithm.Portfolio.ContainsKey(x.Symbol)
-                    && algorithm.Portfolio[x.Symbol].Invested);
+                if (!forceRebalance)
+                {
+                    adjustedTargets.RemoveAll(x =>
+                        algorithm.Portfolio.ContainsKey(x.Symbol)
+                        && algorithm.Portfolio[x.Symbol].Invested);
+                }
                 adjustedTargets.AddRange(algorithm.ActiveSecurities
                     .Where(x =>
                         algorithm.Portfolio.ContainsKey(x.Key)

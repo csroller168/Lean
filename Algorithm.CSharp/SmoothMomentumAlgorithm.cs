@@ -28,16 +28,14 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // short-term TODOs:
-        //      play more with momentum-based leverage
-        //          debug whether my execution method works
-        //              it needs special logic to force rebal on leverage change
-        //          slope of median momentum instead of raw value
-        //          add a margin for change to avoid thrashing
-        //      test hedge with vix
         //      test no buying when SPY < SMA(100)
         //      test different universe filters(market cap, dollar volume, volatility, etc.)
+        //          especially sma parameters
         //      open only when vix momentum < 2
         //      only open when most stocks >= SMA(100)
+        //      shorts with strict criteria (mom < 0.9 and low op rev growth, low mkt cap)
+        //      stop loss
+        //      test hedge with vix momentum
 
         private static readonly string[] ExchangesAllowed = { "NYS", "NAS" };
         private static readonly string AllowedCountry = "USA";

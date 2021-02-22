@@ -62,6 +62,8 @@ namespace QuantConnect.Algorithm.CSharp
         private UpdateMeter _universeMeter;
         private UpdateMeter _rebalanceMeter;
         private List<Symbol> _longCandidates = new List<Symbol>();
+        private SimpleMovingAverage _spyMomentum;
+        private Symbol _spySymbol = QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA);
 
         private int _targetLongCount;
         private int _targetShortCount;
@@ -76,6 +78,9 @@ namespace QuantConnect.Algorithm.CSharp
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
+
+            AddSecurity(_spySymbol, Resolution.Hour);
+            _spyMomentum = SMA(_spySymbol, 100, Resolution.Daily);
 
             SetStartDate(2008, 1, 1);
             SetEndDate(2013, 1, 1);
@@ -243,7 +248,6 @@ namespace QuantConnect.Algorithm.CSharp
                         && _momentums[x.Key].Current > MinLongMomentum
                         && (slice[x.Key] as BaseData).Price >= MinPrice)
                     .OrderByDescending(x => _momentums[x.Key].Current)
-
                     .ToList();
 
                 var holdingRanks = Portfolio
@@ -261,6 +265,10 @@ namespace QuantConnect.Algorithm.CSharp
                     .OrderByDescending(x => _momentums[x.Key].Current)
                     .Take(NumLong - toHold.Count())
                     .Select(x => x.Key);
+
+                if (slice.ContainsKey(_spySymbol) &&
+                    (slice[_spySymbol] as BaseData).Price < _spyMomentum.Current)
+                    toBuy = Enumerable.Empty<Symbol>();
 
                 var insights = toBuy
                     .Union(toHold)

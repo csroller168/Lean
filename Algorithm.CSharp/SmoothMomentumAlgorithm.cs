@@ -43,7 +43,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static readonly int SmaExclusionDays = 100;
         private static readonly int MaxSpreadLookbackDays = 90;
         private static readonly decimal MaxDailySpread = 999m;
-        private static readonly int NumLong = 30;
+        private static readonly int NumLong = 12;
         private static readonly int NumShort = 0;
         private static readonly decimal MinDollarVolume = 500000m;
         private static readonly decimal MinMarketCap = 2000000000m; // mid-large cap

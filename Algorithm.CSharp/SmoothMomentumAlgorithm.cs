@@ -28,11 +28,9 @@ namespace QuantConnect.Algorithm.CSharp
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
         // short-term TODOs:
-        //      test no buying when SPY < SMA(100)
         //      test different universe filters(market cap, dollar volume, volatility, etc.)
         //          especially sma parameters
         //      open only when vix momentum < 2
-        //      only open when most stocks >= SMA(100)
         //      shorts with strict criteria (mom < 0.9 and low op rev growth, low mkt cap)
         //      stop loss
         //      test hedge with vix momentum

@@ -27,6 +27,9 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
+        // live bug fix:
+        //      see 2/26-3/1 selloff.  wait out periods of bad/missing data
+        //
         // short-term TODOs:
         //      test different universe filters(market cap, dollar volume, volatility, etc.)
         //          especially sma parameters
@@ -59,6 +62,7 @@ namespace QuantConnect.Algorithm.CSharp
         private static TimeSpan RebalancePeriod;
         private UpdateMeter _universeMeter;
         private UpdateMeter _rebalanceMeter;
+        private UpdateMeter _onDataMeter;
         private List<Symbol> _longCandidates = new List<Symbol>();
         private SimpleMovingAverage _spyMomentum;
         private Symbol _spySymbol = QuantConnect.Symbol.Create("SPY", SecurityType.Equity, Market.USA);
@@ -76,6 +80,7 @@ namespace QuantConnect.Algorithm.CSharp
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
+            _onDataMeter = new UpdateMeter(TimeSpan.FromMinutes(2));
 
             AddSecurity(_spySymbol, Resolution.Hour);
             _spyMomentum = SMA(_spySymbol, 100, Resolution.Daily);
@@ -97,6 +102,7 @@ namespace QuantConnect.Algorithm.CSharp
                 HandleSplits(slice);
 
                 if (!_rebalanceMeter.IsDue(Time)
+                    || !_onDataMeter.IsDue(Time)
                     || slice.Count() == 0
                     || !IsAllowedToTrade(slice))
                     return;
@@ -183,8 +189,12 @@ namespace QuantConnect.Algorithm.CSharp
 
             lock (mutexLock)
             {
-                if (slice.Count < ActiveSecurities.Count
-                    && _numAttemptsToTrade < NumLong / 3)
+                _onDataMeter.Update(Time);
+                if ((slice.Count < ActiveSecurities.Count
+                    || ActiveSecurities
+                        .Where(x=> x.Value.Invested)
+                        .Any(x => !slice.ContainsKey(x.Key)))
+                    && _numAttemptsToTrade < NumLong)
                 {
                     _numAttemptsToTrade++;
                     return false;

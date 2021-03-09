@@ -27,10 +27,10 @@ namespace QuantConnect.Algorithm.CSharp
         // long-term TODOS:
         //      submit alpha when done (https://www.youtube.com/watch?v=f1F4q4KsmAY)
         //
-        // live bug fix:
-        //      see 2/26-3/1 selloff.  wait out periods of bad/missing data
-        //
         // short-term TODOs:
+        //      evaluate efficacy of missing data bug fix
+        //      evaluate under-performing years (details)
+        //          these have very low leverage... consider other hedge strategies
         //      test different universe filters(market cap, dollar volume, volatility, etc.)
         //          especially sma parameters
         //      open only when vix momentum < 2

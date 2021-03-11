@@ -74,7 +74,6 @@ namespace QuantConnect.Algorithm.CSharp
 
         public override void Initialize()
         {
-            SendEmailNotification("Starting initialization");
             UniverseSettings.Resolution = LiveMode ? Resolution.Minute : Resolution.Hour;
             RebuildUniversePeriod = LiveMode ? TimeSpan.FromSeconds(1) : TimeSpan.FromDays(5);
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
@@ -92,7 +91,6 @@ namespace QuantConnect.Algorithm.CSharp
             UniverseSettings.FillForward = true;
             SetBrokerageModel(BrokerageName.AlphaStreams);
             AddUniverseSelection(new FineFundamentalUniverseSelectionModel(SelectCoarse, SelectFine));
-            SendEmailNotification("Initialization complete");
         }
 
         public override void OnData(Slice slice)
@@ -110,13 +108,11 @@ namespace QuantConnect.Algorithm.CSharp
                 if (!ActiveSecurities.Any())
                     return;
 
-                SendEmailNotification("Begin OnData()");
                 SetTargetCounts();
                 var insights = GetInsights(slice).ToArray();
                 EmitInsights(insights);
                 Rebalance(insights);
                 _rebalanceMeter.Update(Time);
-                SendEmailNotification("End OnData()");
             }
             catch (Exception e)
             {
@@ -130,7 +126,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                SendEmailNotification("Start OnSecuritiesChanged()");
                 _numAttemptsToTrade = 0;
                 Parallel.ForEach(changes.RemovedSecurities, (removal) =>
                 {
@@ -158,8 +153,6 @@ namespace QuantConnect.Algorithm.CSharp
                         SendEmailNotification(msg);
                     }
                 });
-                
-                SendEmailNotification("End OnSecuritiesChanged()");
             }
             catch (Exception e)
             {
@@ -181,11 +174,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             if (!LiveMode)
                 return true;
-
-            if (_numAttemptsToTrade == 0)
-            {
-                SendEmailNotification("IsAllowedToTrade...");
-            }
 
             lock (mutexLock)
             {
@@ -238,9 +226,21 @@ namespace QuantConnect.Algorithm.CSharp
             Plot("momentum", "leverage", _leverage);
 
             new SmartImmediateExecutionModel().Execute(this, targets.ToArray(), leverageChanged);
-            var targetsStr = targets.Any() ? string.Join(",", targets.Select(x => x.Symbol.Value).OrderBy(x => x)) : "nothing";
-            Log(targetsStr);
-            SendEmailNotification($"We have positions in: {targetsStr}");
+            var longs = targets.Any() ? string.Join(",",
+                targets
+                .Where(x => x.Quantity > 0)
+                .Select(x => x.Symbol.Value)
+                .OrderBy(x => x)) : "nothing";
+            var shorts = targets.Any() ? string.Join(",",
+                targets
+                .Where(x => x.Quantity < 0)
+                .Select(x => x.Symbol.Value)
+                .OrderBy(x => x)) : "nothing";
+            var longsStr = $"[CMS] LONGS: {longs}";
+            var shortsStr = $"[CMS] SHORTS: {shorts}";
+            Log(longsStr);
+            Log(shortsStr);
+            SendEmailNotification(longsStr + "\n" + shortsStr);
         }
 
         private IEnumerable<Insight> GetInsights(Slice slice)
@@ -323,8 +323,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                SendEmailNotification("Start SelectCoarse()");
-
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
 
@@ -334,7 +332,6 @@ namespace QuantConnect.Algorithm.CSharp
                     .Take(300)
                     .Select(x => x.Symbol)
                     .ToList();
-                SendEmailNotification("End SelectCoarse()");
                 return eligibleCandidates;
 
             }
@@ -351,8 +348,6 @@ namespace QuantConnect.Algorithm.CSharp
         {
             try
             {
-                SendEmailNotification("Start SelectFine()");
-
                 if (!_universeMeter.IsDue(Time))
                     return Universe.Unchanged;
 

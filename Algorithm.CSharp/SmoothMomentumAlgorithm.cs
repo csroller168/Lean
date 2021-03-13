@@ -79,7 +79,7 @@ namespace QuantConnect.Algorithm.CSharp
             RebalancePeriod = LiveMode ? TimeSpan.FromHours(12) : TimeSpan.FromDays(1);
             _universeMeter = new UpdateMeter(RebuildUniversePeriod);
             _rebalanceMeter = new UpdateMeter(RebalancePeriod, LiveMode, 9, 31, 16, 29);
-            _onDataMeter = new UpdateMeter(TimeSpan.FromMinutes(2));
+            _onDataMeter = new UpdateMeter(TimeSpan.FromMinutes(20));
 
             AddSecurity(_spySymbol, Resolution.Hour);
             _spyMomentum = SMA(_spySymbol, 100, Resolution.Daily);
@@ -178,7 +178,7 @@ namespace QuantConnect.Algorithm.CSharp
             lock (mutexLock)
             {
                 _onDataMeter.Update(Time);
-                if ((slice.Count < ActiveSecurities.Count
+                if ((slice.Count < NumLong
                     || ActiveSecurities
                         .Where(x=> x.Value.Invested)
                         .Any(x => !slice.ContainsKey(x.Key)))
